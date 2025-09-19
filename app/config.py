@@ -62,7 +62,6 @@ class Settings(BaseSettings):
     NOTIFICATION_CACHE_HOURS: int = 24  
     
     BASE_SUBSCRIPTION_PRICE: int = 50000
-
     AVAILABLE_SUBSCRIPTION_PERIODS: str = "14,30,60,90,180,360"
     AVAILABLE_RENEWAL_PERIODS: str = "30,90,180"
     PRICE_14_DAYS: int = 50000
@@ -134,6 +133,7 @@ class Settings(BaseSettings):
     YOOKASSA_WEBHOOK_SECRET: Optional[str] = None
     YOOKASSA_MIN_AMOUNT_KOPEKS: int = 5000
     YOOKASSA_MAX_AMOUNT_KOPEKS: int = 1000000
+    YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED: bool = False
     PAYMENT_BALANCE_DESCRIPTION: str = "Пополнение баланса"
     PAYMENT_SUBSCRIPTION_DESCRIPTION: str = "Оплата подписки"
     PAYMENT_SERVICE_NAME: str = "Интернет-сервис"
