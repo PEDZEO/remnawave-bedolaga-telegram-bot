@@ -159,7 +159,8 @@ async def add_user_balance(
     amount_kopeks: int,
     description: str = "Пополнение баланса",
     create_transaction: bool = True,
-    bot = None 
+    payment_method=None,
+    bot = None
 ) -> bool:
     try:
         old_balance = user.balance_kopeks
@@ -169,13 +170,14 @@ async def add_user_balance(
         if create_transaction:
             from app.database.crud.transaction import create_transaction as create_trans
             from app.database.models import TransactionType
-            
+
             await create_trans(
                 db=db,
                 user_id=user.id,
                 type=TransactionType.DEPOSIT,
                 amount_kopeks=amount_kopeks,
-                description=description
+                description=description,
+                payment_method=payment_method,
             )
         
         await db.commit()
@@ -211,10 +213,12 @@ async def add_user_balance_by_id(
 
 
 async def subtract_user_balance(
-    db: AsyncSession, 
-    user: User, 
-    amount_kopeks: int, 
-    description: str
+    db: AsyncSession,
+    user: User,
+    amount_kopeks: int,
+    description: str,
+    create_transaction: bool = False,
+    payment_method=None,
 ) -> bool:
     logger.error(f"💸 ОТЛАДКА subtract_user_balance:")
     logger.error(f"   👤 User ID: {user.id} (TG: {user.telegram_id})")
@@ -230,10 +234,27 @@ async def subtract_user_balance(
         old_balance = user.balance_kopeks
         user.balance_kopeks -= amount_kopeks
         user.updated_at = datetime.utcnow()
-        
-        await db.commit()
+
+        if create_transaction:
+            from app.database.crud.transaction import (
+                create_transaction as create_trans,
+            )
+            from app.database.models import PaymentMethod, TransactionType
+
+            payment_method = payment_method or PaymentMethod.MANUAL
+
+            await create_trans(
+                db=db,
+                user_id=user.id,
+                type=TransactionType.WITHDRAWAL,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                payment_method=payment_method,
+            )
+        else:
+            await db.commit()
         await db.refresh(user)
-        
+
         logger.error(f"   ✅ Средства списаны: {old_balance} → {user.balance_kopeks}")
         return True
         
