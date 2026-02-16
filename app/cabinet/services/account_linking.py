@@ -173,11 +173,6 @@ async def _check_confirm_attempts(code_hash: str, target_user_id: int) -> None:
 
 async def _is_merge_safe_user(db: AsyncSession, user: User) -> tuple[bool, str | None]:
     """Check whether account is clean enough to be secondary in auto-merge."""
-    if user.balance_kopeks > 0:
-        return False, 'Target account has non-zero balance'
-    if user.remnawave_uuid:
-        return False, 'Target account is already linked to remnawave profile'
-
     sub_result = await db.execute(
         select(Subscription.id).where(
             Subscription.user_id == user.id,
@@ -185,12 +180,12 @@ async def _is_merge_safe_user(db: AsyncSession, user: User) -> tuple[bool, str |
         )
     )
     if sub_result.scalar_one_or_none() is not None:
-        return False, 'Target account has a paid subscription'
+        return False, 'Account has a paid subscription'
 
     tx_result = await db.execute(select(func.count(Transaction.id)).where(Transaction.user_id == user.id))
     transaction_count = int(tx_result.scalar() or 0)
     if transaction_count > 0:
-        return False, 'Target account has transactions'
+        return False, 'Account has transactions'
     return True, None
 
 
@@ -321,6 +316,17 @@ async def confirm_link_code(db: AsyncSession, code: str, target_user: User) -> U
         primary_user.email = secondary_user.email
         primary_user.email_verified = True
         primary_user.email_verified_at = secondary_user.email_verified_at or _now_naive_utc()
+
+    # Preserve user funds on account merge.
+    if secondary_user.balance_kopeks > 0:
+        primary_user.balance_kopeks += secondary_user.balance_kopeks
+        secondary_user.balance_kopeks = 0
+
+    # Keep primary remnawave profile; if missing, adopt from secondary.
+    if secondary_user.remnawave_uuid:
+        if not primary_user.remnawave_uuid:
+            primary_user.remnawave_uuid = secondary_user.remnawave_uuid
+        secondary_user.remnawave_uuid = None
 
     primary_user.updated_at = _now_naive_utc()
     primary_user.cabinet_last_login = _now_naive_utc()
