@@ -10,9 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.user import (
     create_user_by_oauth,
-    get_user_by_email,
     get_user_by_oauth_provider,
-    set_user_oauth_provider_id,
 )
 from app.database.models import User
 
@@ -178,15 +176,7 @@ async def oauth_callback(
         logger.info('OAuth login via for existing user', provider=provider, user_id=user.id)
         return await _finalize_oauth_login(db, user, provider)
 
-    # 6. Find user by email (if verified) and link provider
-    if user_info.email and user_info.email_verified:
-        user = await get_user_by_email(db, user_info.email)
-        if user:
-            await set_user_oauth_provider_id(db, user, provider, user_info.provider_id)
-            logger.info('OAuth login via linked to existing email user', provider=provider, user_id=user.id)
-            return await _finalize_oauth_login(db, user, provider)
-
-    # 7. Create new user
+    # 6. Create new user
     user = await create_user_by_oauth(
         db=db,
         provider=provider,

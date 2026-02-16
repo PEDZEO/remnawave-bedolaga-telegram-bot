@@ -40,6 +40,7 @@ class OAuthTokenResponse(TypedDict, total=False):
     email: str
     user_id: int
     state: str
+    id_token: str
 
 
 class GoogleUserInfoResponse(TypedDict, total=False):
@@ -77,6 +78,9 @@ class VKIDUserData(TypedDict, total=False):
     first_name: str
     last_name: str
     avatar: str
+    firstName: str
+    lastName: str
+    avatar_url: str
 
 
 class VKIDUserInfoResponse(TypedDict, total=False):
@@ -369,6 +373,25 @@ class VKProvider(OAuthProvider):
     USERINFO_URL = 'https://id.vk.ru/oauth2/user_info'
     CODE_CHALLENGE_METHOD = 'S256'
 
+    @staticmethod
+    def _decode_id_token_payload(id_token: str | None) -> dict[str, str]:
+        """Decode JWT payload without verification for non-critical profile fallbacks."""
+        if not id_token:
+            return {}
+        try:
+            parts = id_token.split('.')
+            if len(parts) < 2:
+                return {}
+            payload_b64 = parts[1]
+            payload_b64 += '=' * (-len(payload_b64) % 4)
+            payload_json = base64.urlsafe_b64decode(payload_b64.encode()).decode()
+            payload = json.loads(payload_json)
+            if isinstance(payload, dict):
+                return payload
+        except Exception:
+            return {}
+        return {}
+
     def get_authorization_url(self, state: str, **kwargs: str) -> str:
         code_challenge = kwargs.get('code_challenge')
         if not code_challenge:
@@ -414,6 +437,7 @@ class VKProvider(OAuthProvider):
     async def get_user_info(self, token_data: OAuthTokenResponse) -> OAuthUserInfo:
         access_token = token_data['access_token']
         email: str | None = token_data.get('email')
+        id_token_claims = self._decode_id_token_payload(token_data.get('id_token'))
 
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
@@ -424,16 +448,43 @@ class VKProvider(OAuthProvider):
             data: VKIDUserInfoResponse = response.json()
 
         user_data: VKIDUserData = data.get('user', {}) or {}
-        provider_id = str(user_data.get('user_id') or token_data.get('user_id') or '')
+        provider_id = str(
+            user_data.get('user_id')
+            or token_data.get('user_id')
+            or id_token_claims.get('sub')
+            or '',
+        )
+        resolved_email = (
+            email
+            or user_data.get('email')
+            or id_token_claims.get('email')
+        )
+        first_name = (
+            user_data.get('first_name')
+            or user_data.get('firstName')
+            or id_token_claims.get('given_name')
+            or id_token_claims.get('first_name')
+        )
+        last_name = (
+            user_data.get('last_name')
+            or user_data.get('lastName')
+            or id_token_claims.get('family_name')
+            or id_token_claims.get('last_name')
+        )
+        avatar_url = (
+            user_data.get('avatar')
+            or user_data.get('avatar_url')
+            or id_token_claims.get('picture')
+        )
 
         return OAuthUserInfo(
             provider='vk',
             provider_id=provider_id,
-            email=email or user_data.get('email'),
-            email_verified=bool(email or user_data.get('email')),
-            first_name=user_data.get('first_name'),
-            last_name=user_data.get('last_name'),
-            avatar_url=user_data.get('avatar'),
+            email=resolved_email,
+            email_verified=bool(resolved_email),
+            first_name=first_name,
+            last_name=last_name,
+            avatar_url=avatar_url,
         )
 
 

@@ -23,6 +23,7 @@ from .admin_traffic import router as admin_traffic_router
 from .admin_updates import router as admin_updates_router
 from .admin_users import router as admin_users_router
 from .admin_wheel import router as admin_wheel_router
+from .account_linking import router as account_linking_router
 from .auth import router as auth_router
 from .balance import router as balance_router
 from .branding import router as branding_router
@@ -50,6 +51,7 @@ router = APIRouter(prefix='/cabinet', tags=['Cabinet'])
 
 # Include all sub-routers
 router.include_router(auth_router)
+router.include_router(account_linking_router)
 router.include_router(oauth_router)
 router.include_router(subscription_router)
 router.include_router(balance_router)
