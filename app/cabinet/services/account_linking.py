@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -201,6 +202,42 @@ def _apply_identity_value(source_user: User, target_user: User, attr_name: str, 
     setattr(target_user, attr_name, None)
 
 
+async def _ensure_no_external_identity_conflicts(db: AsyncSession, primary_user: User, secondary_user: User) -> None:
+    """Ensure moved identities are not already bound to another user outside merge pair."""
+    identity_attrs: tuple[tuple[str, str], ...] = (
+        ('telegram_id', 'telegram'),
+        ('google_id', 'google'),
+        ('yandex_id', 'yandex'),
+        ('discord_id', 'discord'),
+        ('vk_id', 'vk'),
+    )
+    pair_ids = (primary_user.id, secondary_user.id)
+
+    for attr_name, label in identity_attrs:
+        primary_value = getattr(primary_user, attr_name)
+        secondary_value = getattr(secondary_user, attr_name)
+
+        # Nothing to move, or both accounts already share the same identity.
+        if secondary_value is None or primary_value == secondary_value:
+            continue
+        # If primary already has different value, regular conflict handler will reject.
+        if primary_value is not None:
+            continue
+
+        stmt = (
+            select(User.id)
+            .where(getattr(User, attr_name) == secondary_value, User.id.notin_(pair_ids))
+            .limit(1)
+        )
+        result = await db.execute(stmt)
+        conflict_user_id = result.scalar_one_or_none()
+        if conflict_user_id is not None:
+            raise LinkCodeConflictError(
+                f'{label.capitalize()} identity is already linked to another account',
+                code='link_code_identity_conflict',
+            )
+
+
 async def confirm_link_code(db: AsyncSession, code: str, target_user: User) -> User:
     """Merge two accounts by moving identities from secondary account to primary account."""
     payload, code_hash = await _load_payload_by_code(code)
@@ -244,6 +281,8 @@ async def confirm_link_code(db: AsyncSession, code: str, target_user: User) -> U
     secondary_telegram_first_name = secondary_user.first_name
     secondary_telegram_last_name = secondary_user.last_name
 
+    await _ensure_no_external_identity_conflicts(db, primary_user, secondary_user)
+
     _apply_identity_value(primary_user, secondary_user, 'telegram_id', 'telegram')
     _apply_identity_value(primary_user, secondary_user, 'google_id', 'google')
     _apply_identity_value(primary_user, secondary_user, 'yandex_id', 'yandex')
@@ -277,7 +316,14 @@ async def confirm_link_code(db: AsyncSession, code: str, target_user: User) -> U
     secondary_user.password_hash = None
     secondary_user.updated_at = _now_naive_utc()
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise LinkCodeConflictError(
+            'Identity is already linked to another account',
+            code='link_code_identity_conflict',
+        ) from exc
 
     await cache.delete(_code_key(code_hash))
     await cache.delete(_source_pointer_key(payload.source_user_id))
