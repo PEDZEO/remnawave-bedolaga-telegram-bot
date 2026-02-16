@@ -18,9 +18,10 @@ from app.database.models import User
 
 from ..auth.oauth_providers import (
     OAuthUserInfo,
+    build_vk_pkce_payload,
+    consume_oauth_state,
     generate_oauth_state,
     get_provider,
-    validate_oauth_state,
 )
 from ..dependencies import get_cabinet_db
 from ..schemas.auth import AuthResponse
@@ -61,6 +62,8 @@ class OAuthAuthorizeResponse(BaseModel):
 class OAuthCallbackRequest(BaseModel):
     code: str = Field(..., description='Authorization code from provider')
     state: str = Field(..., description='CSRF state token')
+    device_id: str | None = Field(None, description='Device id returned by VK ID callback')
+    type: str | None = Field(None, description='OAuth response type from provider callback')
 
 
 # --- Endpoints ---
@@ -88,8 +91,13 @@ async def get_oauth_authorize_url(provider: str):
             detail=f'OAuth provider "{provider}" is not enabled',
         )
 
-    state = await generate_oauth_state(provider)
-    authorize_url = oauth_provider.get_authorization_url(state)
+    if provider == 'vk':
+        vk_payload, code_challenge = build_vk_pkce_payload()
+        state = await generate_oauth_state(provider, payload=vk_payload)
+        authorize_url = oauth_provider.get_authorization_url(state, code_challenge=code_challenge)
+    else:
+        state = await generate_oauth_state(provider)
+        authorize_url = oauth_provider.get_authorization_url(state)
 
     return OAuthAuthorizeResponse(authorize_url=authorize_url, state=state)
 
@@ -102,7 +110,8 @@ async def oauth_callback(
 ):
     """Handle OAuth callback: exchange code, find/create user, return JWT."""
     # 1. Validate CSRF state
-    if not await validate_oauth_state(request.state, provider):
+    state_payload = await consume_oauth_state(request.state, provider)
+    if not state_payload:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Invalid or expired OAuth state',
@@ -118,7 +127,34 @@ async def oauth_callback(
 
     # 3. Exchange code for tokens
     try:
-        token_data = await oauth_provider.exchange_code(request.code)
+        exchange_kwargs: dict[str, str] = {'state': request.state}
+        if provider == 'vk':
+            if request.type and request.type != 'code_v2':
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Unsupported VK OAuth response type',
+                )
+            if not request.device_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Missing VK device_id in callback',
+                )
+            code_verifier = state_payload.get('code_verifier')
+            if not code_verifier:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Missing VK PKCE verifier',
+                )
+            exchange_kwargs.update(
+                {
+                    'device_id': request.device_id,
+                    'code_verifier': code_verifier,
+                },
+            )
+
+        token_data = await oauth_provider.exchange_code(request.code, **exchange_kwargs)
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error('OAuth code exchange failed for', provider=provider, exc=exc)
         raise HTTPException(

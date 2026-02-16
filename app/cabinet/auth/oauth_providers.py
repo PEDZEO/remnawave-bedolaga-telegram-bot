@@ -1,8 +1,11 @@
 """OAuth 2.0 provider implementations for cabinet authentication."""
 
+import base64
+import hashlib
+import json
 import secrets
 from abc import ABC, abstractmethod
-from typing import Any, TypedDict
+from typing import TypedDict
 
 import httpx
 import structlog
@@ -33,9 +36,10 @@ class OAuthTokenResponse(TypedDict, total=False):
     expires_in: int
     refresh_token: str
     scope: str
-    # VK-specific: email and user_id come in token response
+    # VK-specific: email and user_id can be included
     email: str
     user_id: int
+    state: str
 
 
 class GoogleUserInfoResponse(TypedDict, total=False):
@@ -67,15 +71,21 @@ class DiscordUserInfoResponse(TypedDict, total=False):
     avatar: str
 
 
-class VKUserInfoItem(TypedDict, total=False):
-    id: int
+class VKIDUserData(TypedDict, total=False):
+    user_id: str | int
+    email: str
     first_name: str
     last_name: str
-    photo_200: str
+    avatar: str
 
 
-class VKUserInfoResponse(TypedDict, total=False):
-    response: list[VKUserInfoItem]
+class VKIDUserInfoResponse(TypedDict, total=False):
+    user: VKIDUserData
+
+
+class OAuthStatePayload(TypedDict, total=False):
+    provider: str
+    code_verifier: str
 
 
 # --- Models ---
@@ -97,23 +107,45 @@ class OAuthUserInfo(BaseModel):
 # --- CSRF state management (Redis) ---
 
 
-async def generate_oauth_state(provider: str) -> str:
+def _build_pkce_pair() -> tuple[str, str]:
+    """Build PKCE code verifier/challenge pair (S256)."""
+    verifier = secrets.token_urlsafe(64)
+    digest = hashlib.sha256(verifier.encode()).digest()
+    challenge = base64.urlsafe_b64encode(digest).decode().rstrip('=')
+    return verifier, challenge
+
+
+async def generate_oauth_state(provider: str, payload: OAuthStatePayload | None = None) -> str:
     """Generate a CSRF state token for OAuth flow. Stored in Redis with TTL."""
     state = secrets.token_urlsafe(32)
-    await cache.set(cache_key('oauth_state', state), provider, expire=STATE_TTL_SECONDS)
+    state_payload: OAuthStatePayload = {'provider': provider}
+    if payload:
+        state_payload.update(payload)
+    await cache.set(cache_key('oauth_state', state), json.dumps(state_payload), expire=STATE_TTL_SECONDS)
     return state
+
+
+async def consume_oauth_state(state: str, provider: str) -> OAuthStatePayload | None:
+    """Validate and consume a CSRF state token from Redis."""
+    key = cache_key('oauth_state', state)
+    stored_value: str | None = await cache.get(key)
+    if stored_value is None:
+        return None
+    await cache.delete(key)
+    try:
+        payload: OAuthStatePayload = json.loads(stored_value)
+    except json.JSONDecodeError:
+        # Backward compatibility: old cache value was plain provider string
+        payload = {'provider': stored_value}
+    if payload.get('provider') != provider:
+        return None
+    return payload
 
 
 async def validate_oauth_state(state: str, provider: str) -> bool:
     """Validate and consume a CSRF state token from Redis."""
-    key = cache_key('oauth_state', state)
-    stored_provider: str | None = await cache.get(key)
-    if stored_provider is None:
-        return False
-    await cache.delete(key)
-    if stored_provider != provider:
-        return False
-    return True
+    payload = await consume_oauth_state(state, provider)
+    return payload is not None
 
 
 # --- Provider implementations ---
@@ -131,11 +163,11 @@ class OAuthProvider(ABC):
         self.redirect_uri = redirect_uri
 
     @abstractmethod
-    def get_authorization_url(self, state: str) -> str:
+    def get_authorization_url(self, state: str, **kwargs: str) -> str:
         """Build the authorization URL for the provider."""
 
     @abstractmethod
-    async def exchange_code(self, code: str) -> OAuthTokenResponse:
+    async def exchange_code(self, code: str, **kwargs: str) -> OAuthTokenResponse:
         """Exchange authorization code for tokens."""
 
     @abstractmethod
@@ -151,7 +183,7 @@ class GoogleProvider(OAuthProvider):
     TOKEN_URL = 'https://oauth2.googleapis.com/token'
     USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo'
 
-    def get_authorization_url(self, state: str) -> str:
+    def get_authorization_url(self, state: str, **kwargs: str) -> str:
         params: dict[str, str] = {
             'client_id': self.client_id,
             'redirect_uri': self.redirect_uri,
@@ -164,7 +196,7 @@ class GoogleProvider(OAuthProvider):
         request = httpx.Request('GET', self.AUTHORIZE_URL, params=params)
         return str(request.url)
 
-    async def exchange_code(self, code: str) -> OAuthTokenResponse:
+    async def exchange_code(self, code: str, **kwargs: str) -> OAuthTokenResponse:
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 self.TOKEN_URL,
@@ -209,7 +241,7 @@ class YandexProvider(OAuthProvider):
     TOKEN_URL = 'https://oauth.yandex.com/token'
     USERINFO_URL = 'https://login.yandex.ru/info'
 
-    def get_authorization_url(self, state: str) -> str:
+    def get_authorization_url(self, state: str, **kwargs: str) -> str:
         params: dict[str, str] = {
             'client_id': self.client_id,
             'redirect_uri': self.redirect_uri,
@@ -221,7 +253,7 @@ class YandexProvider(OAuthProvider):
         request = httpx.Request('GET', self.AUTHORIZE_URL, params=params)
         return str(request.url)
 
-    async def exchange_code(self, code: str) -> OAuthTokenResponse:
+    async def exchange_code(self, code: str, **kwargs: str) -> OAuthTokenResponse:
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 self.TOKEN_URL,
@@ -275,7 +307,7 @@ class DiscordProvider(OAuthProvider):
     TOKEN_URL = 'https://discord.com/api/oauth2/token'
     USERINFO_URL = 'https://discord.com/api/v10/users/@me'
 
-    def get_authorization_url(self, state: str) -> str:
+    def get_authorization_url(self, state: str, **kwargs: str) -> str:
         params: dict[str, str] = {
             'client_id': self.client_id,
             'redirect_uri': self.redirect_uri,
@@ -287,7 +319,7 @@ class DiscordProvider(OAuthProvider):
         request = httpx.Request('GET', self.AUTHORIZE_URL, params=params)
         return str(request.url)
 
-    async def exchange_code(self, code: str) -> OAuthTokenResponse:
+    async def exchange_code(self, code: str, **kwargs: str) -> OAuthTokenResponse:
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 self.TOKEN_URL,
@@ -332,33 +364,48 @@ class VKProvider(OAuthProvider):
     name = 'vk'
     display_name = 'VK'
 
-    AUTHORIZE_URL = 'https://oauth.vk.com/authorize'
-    TOKEN_URL = 'https://oauth.vk.com/access_token'
-    USERINFO_URL = 'https://api.vk.com/method/users.get'
-    API_VERSION = '5.131'
+    AUTHORIZE_URL = 'https://id.vk.ru/authorize'
+    TOKEN_URL = 'https://id.vk.ru/oauth2/auth'
+    USERINFO_URL = 'https://id.vk.ru/oauth2/user_info'
+    CODE_CHALLENGE_METHOD = 'S256'
 
-    def get_authorization_url(self, state: str) -> str:
+    def get_authorization_url(self, state: str, **kwargs: str) -> str:
+        code_challenge = kwargs.get('code_challenge')
+        if not code_challenge:
+            raise ValueError('Missing VK PKCE code challenge')
         params: dict[str, str] = {
+            'app_id': self.client_id,
             'client_id': self.client_id,
             'redirect_uri': self.redirect_uri,
             'response_type': 'code',
             'scope': 'email',
+            'code_challenge': code_challenge,
+            'code_challenge_method': self.CODE_CHALLENGE_METHOD,
             'state': state,
-            'v': self.API_VERSION,
         }
         request = httpx.Request('GET', self.AUTHORIZE_URL, params=params)
         return str(request.url)
 
-    async def exchange_code(self, code: str) -> OAuthTokenResponse:
+    async def exchange_code(self, code: str, **kwargs: str) -> OAuthTokenResponse:
+        device_id = kwargs.get('device_id')
+        code_verifier = kwargs.get('code_verifier')
+        request_state = kwargs.get('state')
+        if not device_id or not code_verifier:
+            raise ValueError('Missing VK device_id or code_verifier')
+
+        query_params = {
+            'grant_type': 'authorization_code',
+            'redirect_uri': self.redirect_uri,
+            'client_id': self.client_id,
+            'code_verifier': code_verifier,
+            'device_id': device_id,
+            'state': request_state or '',
+        }
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(
+            response = await client.post(
                 self.TOKEN_URL,
-                params={
-                    'client_id': self.client_id,
-                    'client_secret': self.client_secret,
-                    'code': code,
-                    'redirect_uri': self.redirect_uri,
-                },
+                params=query_params,
+                data={'code': code},
             )
             response.raise_for_status()
             data: OAuthTokenResponse = response.json()
@@ -366,33 +413,27 @@ class VKProvider(OAuthProvider):
 
     async def get_user_info(self, token_data: OAuthTokenResponse) -> OAuthUserInfo:
         access_token = token_data['access_token']
-        user_id: int | None = token_data.get('user_id')
-        # VK returns email in token response, not in userinfo
         email: str | None = token_data.get('email')
 
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(
+            response = await client.post(
                 self.USERINFO_URL,
-                params={
-                    'access_token': access_token,
-                    'fields': 'photo_200',
-                    'v': self.API_VERSION,
-                },
+                data={'access_token': access_token},
             )
             response.raise_for_status()
-            data: VKUserInfoResponse = response.json()
+            data: VKIDUserInfoResponse = response.json()
 
-        users: list[Any] = data.get('response', [])
-        user_data: VKUserInfoItem = users[0] if users else {}  # type: ignore[assignment]
+        user_data: VKIDUserData = data.get('user', {}) or {}
+        provider_id = str(user_data.get('user_id') or token_data.get('user_id') or '')
 
         return OAuthUserInfo(
             provider='vk',
-            provider_id=str(user_id or user_data.get('id', '')),
-            email=email,
-            email_verified=bool(email),
+            provider_id=provider_id,
+            email=email or user_data.get('email'),
+            email_verified=bool(email or user_data.get('email')),
             first_name=user_data.get('first_name'),
             last_name=user_data.get('last_name'),
-            avatar_url=user_data.get('photo_200'),
+            avatar_url=user_data.get('avatar'),
         )
 
 
@@ -427,3 +468,12 @@ def get_provider(name: str) -> OAuthProvider | None:
         client_secret=config['client_secret'],
         redirect_uri=redirect_uri,
     )
+
+
+def build_vk_pkce_payload() -> tuple[OAuthStatePayload, str]:
+    """Generate extra OAuth state payload for VK ID PKCE flow."""
+    code_verifier, code_challenge = _build_pkce_pair()
+    return {
+        'code_verifier': code_verifier,
+        'provider': 'vk',
+    }, code_challenge
