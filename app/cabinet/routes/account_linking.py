@@ -61,6 +61,9 @@ UNLINK_CONFIRM_TTL_SECONDS = 10 * 60
 UNLINK_COOLDOWN_SECONDS = 24 * 60 * 60
 UNLINK_OTP_LENGTH = 6
 UNLINK_OTP_MAX_ATTEMPTS = 5
+UNLINK_OTP_SEND_COOLDOWN_SECONDS = 60
+UNLINK_OTP_SEND_WINDOW_SECONDS = 60 * 60
+UNLINK_OTP_SEND_MAX_PER_WINDOW = 5
 
 _UNLINK_PROVIDER_ATTRS: dict[str, str] = {
     'telegram': 'telegram_id',
@@ -81,6 +84,18 @@ def _unlink_cooldown_key(user_id: int, provider: str) -> str:
 
 def _unlink_otp_attempts_key(token: str) -> str:
     return cache_key('cabinet', 'unlink_identity', 'otp_attempts', token)
+
+
+def _unlink_otp_send_cooldown_key(user_id: int, provider: str) -> str:
+    return cache_key('cabinet', 'unlink_identity', 'otp_send_cooldown', user_id, provider)
+
+
+def _unlink_otp_send_counter_key(user_id: int, provider: str) -> str:
+    return cache_key('cabinet', 'unlink_identity', 'otp_send_counter', user_id, provider)
+
+
+def _unlink_otp_send_block_key(user_id: int, provider: str) -> str:
+    return cache_key('cabinet', 'unlink_identity', 'otp_send_block', user_id, provider)
 
 
 def _unlink_otp_hash(otp_code: str) -> str:
@@ -200,6 +215,49 @@ async def request_unlink_identity(
             detail={'code': 'unlink_not_allowed', 'reason': reason, 'message': 'Unlink is not allowed for this identity'},
         )
 
+    cooldown_payload = await cache.get(_unlink_otp_send_cooldown_key(user.id, normalized_provider))
+    if isinstance(cooldown_payload, dict) and cooldown_payload.get('active'):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                'code': 'unlink_otp_resend_cooldown',
+                'message': 'Please wait before requesting another OTP code',
+                'retry_after_seconds': UNLINK_OTP_SEND_COOLDOWN_SECONDS,
+            },
+        )
+
+    blocked_payload = await cache.get(_unlink_otp_send_block_key(user.id, normalized_provider))
+    if isinstance(blocked_payload, dict) and blocked_payload.get('active'):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                'code': 'unlink_otp_rate_limited',
+                'message': 'Too many OTP requests for this identity. Try again later.',
+            },
+        )
+
+    send_count = await cache.increment(_unlink_otp_send_counter_key(user.id, normalized_provider), 1)
+    if send_count is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={'code': 'unlink_otp_counter_error', 'message': 'Failed to validate OTP request limit'},
+        )
+    if send_count == 1:
+        await cache.expire(_unlink_otp_send_counter_key(user.id, normalized_provider), UNLINK_OTP_SEND_WINDOW_SECONDS)
+    if send_count > UNLINK_OTP_SEND_MAX_PER_WINDOW:
+        await cache.set(
+            _unlink_otp_send_block_key(user.id, normalized_provider),
+            {'active': True},
+            expire=UNLINK_OTP_SEND_WINDOW_SECONDS,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                'code': 'unlink_otp_rate_limited',
+                'message': 'Too many OTP requests for this identity. Try again later.',
+            },
+        )
+
     request_token = secrets.token_urlsafe(24)
     otp_code = _generate_otp_code()
     payload = {
@@ -230,6 +288,8 @@ async def request_unlink_identity(
         await _send_unlink_otp_to_telegram(user.telegram_id, normalized_provider, otp_code)
     except Exception as exc:
         await cache.delete(_unlink_request_key(request_token))
+        # Roll back counter effect when delivery fails.
+        await cache.increment(_unlink_otp_send_counter_key(user.id, normalized_provider), -1)
         logger.warning(
             'Failed to send unlink OTP to telegram',
             user_id=user.id,
@@ -240,6 +300,12 @@ async def request_unlink_identity(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={'code': 'unlink_otp_delivery_failed', 'message': 'Failed to send OTP to Telegram'},
         ) from exc
+
+    await cache.set(
+        _unlink_otp_send_cooldown_key(user.id, normalized_provider),
+        {'active': True},
+        expire=UNLINK_OTP_SEND_COOLDOWN_SECONDS,
+    )
 
     return UnlinkIdentityRequestResponse(
         provider=normalized_provider,
