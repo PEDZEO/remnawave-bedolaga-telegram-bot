@@ -165,21 +165,22 @@ async def _check_confirm_attempts(code_hash: str, target_user_id: int) -> None:
         raise LinkCodeAttemptsExceededError('Too many code attempts')
 
 
-async def _ensure_user_is_merge_safe(db: AsyncSession, user: User) -> None:
-    """Allow auto-link only for clean secondary account to avoid unsafe data merges."""
+async def _is_merge_safe_user(db: AsyncSession, user: User) -> tuple[bool, str | None]:
+    """Check whether account is clean enough to be secondary in auto-merge."""
     if user.balance_kopeks > 0:
-        raise LinkCodeConflictError('Target account has non-zero balance')
+        return False, 'Target account has non-zero balance'
     if user.remnawave_uuid:
-        raise LinkCodeConflictError('Target account is already linked to remnawave profile')
+        return False, 'Target account is already linked to remnawave profile'
 
     sub_result = await db.execute(select(Subscription.id).where(Subscription.user_id == user.id))
     if sub_result.scalar_one_or_none() is not None:
-        raise LinkCodeConflictError('Target account has a subscription')
+        return False, 'Target account has a subscription'
 
     tx_result = await db.execute(select(func.count(Transaction.id)).where(Transaction.user_id == user.id))
     transaction_count = int(tx_result.scalar() or 0)
     if transaction_count > 0:
-        raise LinkCodeConflictError('Target account has transactions')
+        return False, 'Target account has transactions'
+    return True, None
 
 
 def _apply_identity_value(source_user: User, target_user: User, attr_name: str, label: str) -> None:
@@ -197,7 +198,7 @@ def _apply_identity_value(source_user: User, target_user: User, attr_name: str, 
 
 
 async def confirm_link_code(db: AsyncSession, code: str, target_user: User) -> User:
-    """Move login identities from target user into source user."""
+    """Merge two accounts by moving identities from secondary account to primary account."""
     payload, code_hash = await _load_payload_by_code(code)
     await _check_confirm_attempts(code_hash, target_user.id)
 
@@ -216,56 +217,73 @@ async def confirm_link_code(db: AsyncSession, code: str, target_user: User) -> U
     if locked_target_user.status != UserStatus.ACTIVE.value:
         raise LinkCodeConflictError('Target account is not active')
 
-    await _ensure_user_is_merge_safe(db, locked_target_user)
+    # Primary account: one that keeps subscription/balance/history.
+    # Secondary account: must be "clean" and can be absorbed safely.
+    source_safe, source_reason = await _is_merge_safe_user(db, source_user)
+    target_safe, target_reason = await _is_merge_safe_user(db, locked_target_user)
 
-    had_target_telegram = locked_target_user.telegram_id is not None
-    target_telegram_username = locked_target_user.username
-    target_telegram_first_name = locked_target_user.first_name
-    target_telegram_last_name = locked_target_user.last_name
+    primary_user = source_user
+    secondary_user = locked_target_user
+    if not target_safe and source_safe:
+        # User entered code in their "main" account (telegram with subscription),
+        # and code was generated on clean account -> auto-reverse merge direction.
+        primary_user = locked_target_user
+        secondary_user = source_user
+    elif not source_safe and not target_safe:
+        raise LinkCodeConflictError(
+            f'Both accounts have data and require manual merge ({source_reason or "source busy"}, {target_reason or "target busy"})'
+        )
 
-    _apply_identity_value(source_user, locked_target_user, 'telegram_id', 'telegram')
-    _apply_identity_value(source_user, locked_target_user, 'google_id', 'google')
-    _apply_identity_value(source_user, locked_target_user, 'yandex_id', 'yandex')
-    _apply_identity_value(source_user, locked_target_user, 'discord_id', 'discord')
-    _apply_identity_value(source_user, locked_target_user, 'vk_id', 'vk')
+    had_secondary_telegram = secondary_user.telegram_id is not None
+    secondary_telegram_username = secondary_user.username
+    secondary_telegram_first_name = secondary_user.first_name
+    secondary_telegram_last_name = secondary_user.last_name
+
+    _apply_identity_value(primary_user, secondary_user, 'telegram_id', 'telegram')
+    _apply_identity_value(primary_user, secondary_user, 'google_id', 'google')
+    _apply_identity_value(primary_user, secondary_user, 'yandex_id', 'yandex')
+    _apply_identity_value(primary_user, secondary_user, 'discord_id', 'discord')
+    _apply_identity_value(primary_user, secondary_user, 'vk_id', 'vk')
 
     # If Telegram identity was linked, make profile canonical for Telegram login UX.
-    if had_target_telegram and source_user.telegram_id is not None:
-        if target_telegram_username:
-            source_user.username = target_telegram_username
-        if not source_user.first_name and target_telegram_first_name:
-            source_user.first_name = target_telegram_first_name
-        if not source_user.last_name and target_telegram_last_name:
-            source_user.last_name = target_telegram_last_name
-        source_user.auth_type = 'telegram'
+    if had_secondary_telegram and primary_user.telegram_id is not None:
+        if secondary_telegram_username:
+            primary_user.username = secondary_telegram_username
+        if not primary_user.first_name and secondary_telegram_first_name:
+            primary_user.first_name = secondary_telegram_first_name
+        if not primary_user.last_name and secondary_telegram_last_name:
+            primary_user.last_name = secondary_telegram_last_name
+        primary_user.auth_type = 'telegram'
 
-    if source_user.email is None and locked_target_user.email and locked_target_user.email_verified:
-        source_user.email = locked_target_user.email
-        source_user.email_verified = True
-        source_user.email_verified_at = locked_target_user.email_verified_at or _now_naive_utc()
+    if primary_user.email is None and secondary_user.email and secondary_user.email_verified:
+        primary_user.email = secondary_user.email
+        primary_user.email_verified = True
+        primary_user.email_verified_at = secondary_user.email_verified_at or _now_naive_utc()
 
-    source_user.updated_at = _now_naive_utc()
-    source_user.cabinet_last_login = _now_naive_utc()
+    primary_user.updated_at = _now_naive_utc()
+    primary_user.cabinet_last_login = _now_naive_utc()
 
-    # Disable target account as standalone login profile.
-    locked_target_user.auth_type = 'merged'
-    locked_target_user.status = UserStatus.DELETED.value
-    locked_target_user.email = None
-    locked_target_user.email_verified = False
-    locked_target_user.email_verified_at = None
-    locked_target_user.password_hash = None
-    locked_target_user.updated_at = _now_naive_utc()
+    # Disable secondary account as standalone login profile.
+    secondary_user.auth_type = 'merged'
+    secondary_user.status = UserStatus.DELETED.value
+    secondary_user.email = None
+    secondary_user.email_verified = False
+    secondary_user.email_verified_at = None
+    secondary_user.password_hash = None
+    secondary_user.updated_at = _now_naive_utc()
 
     await db.commit()
 
     await cache.delete(_code_key(code_hash))
-    await cache.delete(_source_pointer_key(source_user.id))
+    await cache.delete(_source_pointer_key(payload.source_user_id))
     await cache.delete(_attempts_key(code_hash, target_user.id))
 
     logger.info(
         'Account linking confirmed',
         source_user_id=source_user.id,
         target_user_id=target_user.id,
-        source_identities=get_user_identity_hints(source_user),
+        primary_user_id=primary_user.id,
+        secondary_user_id=secondary_user.id,
+        source_identities=get_user_identity_hints(primary_user),
     )
-    return source_user
+    return primary_user
