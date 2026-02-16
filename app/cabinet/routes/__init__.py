@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from .admin_apps import router as admin_apps_router
+from .admin_account_linking import router as admin_account_linking_router
 from .admin_ban_system import router as admin_ban_system_router
 from .admin_broadcasts import router as admin_broadcasts_router
 from .admin_button_styles import router as admin_button_styles_router
@@ -76,6 +77,7 @@ router.include_router(admin_ticket_notifications_router)
 router.include_router(admin_tickets_router)
 router.include_router(admin_settings_router)
 router.include_router(admin_apps_router)
+router.include_router(admin_account_linking_router)
 router.include_router(admin_wheel_router)
 router.include_router(admin_tariffs_router)
 router.include_router(admin_servers_router)

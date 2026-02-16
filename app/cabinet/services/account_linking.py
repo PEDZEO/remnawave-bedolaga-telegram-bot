@@ -240,44 +240,8 @@ async def _ensure_no_external_identity_conflicts(db: AsyncSession, primary_user:
             )
 
 
-async def confirm_link_code(db: AsyncSession, code: str, target_user: User) -> User:
-    """Merge two accounts by moving identities from secondary account to primary account."""
-    payload, code_hash = await _load_payload_by_code(code)
-    await _check_confirm_attempts(code_hash, target_user.id)
-
-    stmt = select(User).where(User.id.in_([payload.source_user_id, target_user.id])).with_for_update()
-    users_result = await db.execute(stmt)
-    users = {user.id: user for user in users_result.scalars().all()}
-    source_user = users.get(payload.source_user_id)
-    locked_target_user = users.get(target_user.id)
-
-    if source_user is None or locked_target_user is None:
-        raise LinkCodeInvalidError('Source or target account not found', code='link_code_user_not_found')
-    if source_user.id == locked_target_user.id:
-        raise LinkCodeConflictError('Cannot link account to itself', code='link_code_same_account')
-    if source_user.status != UserStatus.ACTIVE.value:
-        raise LinkCodeConflictError('Source account is not active', code='link_code_source_inactive')
-    if locked_target_user.status != UserStatus.ACTIVE.value:
-        raise LinkCodeConflictError('Target account is not active', code='link_code_target_inactive')
-
-    # Primary account: one that keeps subscription/balance/history.
-    # Secondary account: must be "clean" and can be absorbed safely.
-    source_safe, source_reason = await _is_merge_safe_user(db, source_user)
-    target_safe, target_reason = await _is_merge_safe_user(db, locked_target_user)
-
-    primary_user = source_user
-    secondary_user = locked_target_user
-    if not target_safe and source_safe:
-        # User entered code in their "main" account (telegram with subscription),
-        # and code was generated on clean account -> auto-reverse merge direction.
-        primary_user = locked_target_user
-        secondary_user = source_user
-    elif not source_safe and not target_safe:
-        raise LinkCodeConflictError(
-            f'Both accounts have data and require manual merge ({source_reason or "source busy"}, {target_reason or "target busy"})',
-            code='manual_merge_required',
-        )
-
+async def _merge_users_locked(primary_user: User, secondary_user: User, db: AsyncSession) -> None:
+    """Apply merge from secondary user into primary user. Users must be locked in transaction."""
     had_secondary_telegram = secondary_user.telegram_id is not None
     secondary_telegram_username = secondary_user.username
     secondary_telegram_first_name = secondary_user.first_name
@@ -340,6 +304,47 @@ async def confirm_link_code(db: AsyncSession, code: str, target_user: User) -> U
     secondary_user.password_hash = None
     secondary_user.updated_at = _now_naive_utc()
 
+
+async def confirm_link_code(db: AsyncSession, code: str, target_user: User) -> User:
+    """Merge two accounts by moving identities from secondary account to primary account."""
+    payload, code_hash = await _load_payload_by_code(code)
+    await _check_confirm_attempts(code_hash, target_user.id)
+
+    stmt = select(User).where(User.id.in_([payload.source_user_id, target_user.id])).with_for_update()
+    users_result = await db.execute(stmt)
+    users = {user.id: user for user in users_result.scalars().all()}
+    source_user = users.get(payload.source_user_id)
+    locked_target_user = users.get(target_user.id)
+
+    if source_user is None or locked_target_user is None:
+        raise LinkCodeInvalidError('Source or target account not found', code='link_code_user_not_found')
+    if source_user.id == locked_target_user.id:
+        raise LinkCodeConflictError('Cannot link account to itself', code='link_code_same_account')
+    if source_user.status != UserStatus.ACTIVE.value:
+        raise LinkCodeConflictError('Source account is not active', code='link_code_source_inactive')
+    if locked_target_user.status != UserStatus.ACTIVE.value:
+        raise LinkCodeConflictError('Target account is not active', code='link_code_target_inactive')
+
+    # Primary account: one that keeps subscription/balance/history.
+    # Secondary account: must be "clean" and can be absorbed safely.
+    source_safe, source_reason = await _is_merge_safe_user(db, source_user)
+    target_safe, target_reason = await _is_merge_safe_user(db, locked_target_user)
+
+    primary_user = source_user
+    secondary_user = locked_target_user
+    if not target_safe and source_safe:
+        # User entered code in their "main" account (telegram with subscription),
+        # and code was generated on clean account -> auto-reverse merge direction.
+        primary_user = locked_target_user
+        secondary_user = source_user
+    elif not source_safe and not target_safe:
+        raise LinkCodeConflictError(
+            f'Both accounts have data and require manual merge ({source_reason or "source busy"}, {target_reason or "target busy"})',
+            code='manual_merge_required',
+        )
+
+    await _merge_users_locked(primary_user=primary_user, secondary_user=secondary_user, db=db)
+
     try:
         await db.commit()
     except IntegrityError as exc:
@@ -359,6 +364,51 @@ async def confirm_link_code(db: AsyncSession, code: str, target_user: User) -> U
         target_user_id=target_user.id,
         primary_user_id=primary_user.id,
         secondary_user_id=secondary_user.id,
+        source_identities=get_user_identity_hints(primary_user),
+    )
+    return primary_user
+
+
+async def manual_merge_users(
+    db: AsyncSession,
+    *,
+    primary_user_id: int,
+    secondary_user_id: int,
+    commit: bool = True,
+) -> User:
+    """Manual merge for disputed accounts approved by admin."""
+    if primary_user_id == secondary_user_id:
+        raise LinkCodeConflictError('Cannot merge account into itself', code='link_code_same_account')
+
+    stmt = select(User).where(User.id.in_([primary_user_id, secondary_user_id])).with_for_update()
+    users_result = await db.execute(stmt)
+    users = {user.id: user for user in users_result.scalars().all()}
+    primary_user = users.get(primary_user_id)
+    secondary_user = users.get(secondary_user_id)
+
+    if primary_user is None or secondary_user is None:
+        raise LinkCodeInvalidError('Source or target account not found', code='link_code_user_not_found')
+    if primary_user.status != UserStatus.ACTIVE.value:
+        raise LinkCodeConflictError('Primary account is not active', code='link_code_source_inactive')
+    if secondary_user.status != UserStatus.ACTIVE.value:
+        raise LinkCodeConflictError('Secondary account is not active', code='link_code_target_inactive')
+
+    await _merge_users_locked(primary_user=primary_user, secondary_user=secondary_user, db=db)
+
+    if commit:
+        try:
+            await db.commit()
+        except IntegrityError as exc:
+            await db.rollback()
+            raise LinkCodeConflictError(
+                'Identity is already linked to another account',
+                code='link_code_identity_conflict',
+            ) from exc
+
+    logger.info(
+        'Manual account merge confirmed by admin',
+        primary_user_id=primary_user_id,
+        secondary_user_id=secondary_user_id,
         source_identities=get_user_identity_hints(primary_user),
     )
     return primary_user
