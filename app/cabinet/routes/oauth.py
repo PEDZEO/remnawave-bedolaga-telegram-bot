@@ -40,6 +40,30 @@ async def _finalize_oauth_login(db: AsyncSession, user: User, provider: str) -> 
     return auth_response
 
 
+def _fill_missing_profile_fields(user: User, user_info: OAuthUserInfo) -> bool:
+    """Backfill missing profile fields from OAuth provider payload."""
+    updated = False
+
+    if not user.first_name and user_info.first_name:
+        user.first_name = user_info.first_name
+        updated = True
+    if not user.last_name and user_info.last_name:
+        user.last_name = user_info.last_name
+        updated = True
+    if not user.username and user_info.username:
+        user.username = user_info.username
+        updated = True
+    if not user.email and user_info.email and user_info.email_verified:
+        user.email = user_info.email
+        user.email_verified = True
+        user.email_verified_at = datetime.now(UTC).replace(tzinfo=None)
+        updated = True
+
+    if updated:
+        user.updated_at = datetime.now(UTC).replace(tzinfo=None)
+    return updated
+
+
 # --- Schemas ---
 
 
@@ -173,6 +197,8 @@ async def oauth_callback(
     # 5. Find user by provider ID
     user = await get_user_by_oauth_provider(db, provider, user_info.provider_id)
     if user:
+        if _fill_missing_profile_fields(user, user_info):
+            await db.commit()
         logger.info('OAuth login via for existing user', provider=provider, user_id=user.id)
         return await _finalize_oauth_login(db, user, provider)
 
