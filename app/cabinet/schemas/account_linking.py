@@ -33,3 +33,18 @@ class LinkCodeConfirmRequest(BaseModel):
 class LinkCodeConfirmResponse(BaseModel):
     message: str = Field(..., description='Confirmation message')
     source_user_id: int = Field(..., description='Target source account id after linking')
+
+
+class ManualMergeRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=32, description='One-time account link code')
+    comment: str | None = Field(
+        None,
+        min_length=0,
+        max_length=1000,
+        description='Optional user comment for admin manual merge review',
+    )
+
+
+class ManualMergeResponse(BaseModel):
+    message: str = Field(..., description='Manual merge request status')
+    ticket_id: int = Field(..., description='Created support ticket id')

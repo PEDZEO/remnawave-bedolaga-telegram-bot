@@ -40,6 +40,10 @@ class LinkCodePayload:
 class LinkCodeError(ValueError):
     """Base link-code error."""
 
+    def __init__(self, message: str, code: str = 'link_code_error'):
+        super().__init__(message)
+        self.code = code
+
 
 class LinkCodeInvalidError(LinkCodeError):
     """Code is invalid or expired."""
@@ -126,7 +130,7 @@ async def create_link_code(source_user: User) -> str:
             code_hash = candidate_hash
             break
     if not saved:
-        raise LinkCodeError('Failed to allocate unique link code')
+        raise LinkCodeError('Failed to allocate unique link code', code='link_code_storage_error')
     await cache.set(pointer_key, code_hash, expire=LINK_CODE_TTL_SECONDS)
 
     logger.info('Account link code created', source_user_id=source_user.id)
@@ -137,11 +141,11 @@ async def _load_payload_by_code(code: str) -> tuple[LinkCodePayload, str]:
     code_hash = _hash_code(code)
     raw_payload = await cache.get(_code_key(code_hash))
     if not isinstance(raw_payload, dict):
-        raise LinkCodeInvalidError('Code is invalid or expired')
+        raise LinkCodeInvalidError('Code is invalid or expired', code='link_code_invalid')
     source_user_id = raw_payload.get('source_user_id')
     created_at = raw_payload.get('created_at')
     if not isinstance(source_user_id, int) or not isinstance(created_at, str):
-        raise LinkCodeInvalidError('Code payload is invalid')
+        raise LinkCodeInvalidError('Code payload is invalid', code='link_code_invalid')
     return LinkCodePayload(source_user_id=source_user_id, created_at=created_at), code_hash
 
 
@@ -150,7 +154,7 @@ async def preview_link_code(code: str, target_user_id: int) -> int:
     payload, _ = await _load_payload_by_code(code)
 
     if payload.source_user_id == target_user_id:
-        raise LinkCodeConflictError('Cannot link account to itself')
+        raise LinkCodeConflictError('Cannot link account to itself', code='link_code_same_account')
     return payload.source_user_id
 
 
@@ -158,11 +162,11 @@ async def _check_confirm_attempts(code_hash: str, target_user_id: int) -> None:
     attempts_key = _attempts_key(code_hash, target_user_id)
     attempts = await cache.increment(attempts_key, 1)
     if attempts is None:
-        raise LinkCodeError('Failed to validate attempts')
+        raise LinkCodeError('Failed to validate attempts', code='link_code_attempts_error')
     if attempts == 1:
         await cache.expire(attempts_key, LINK_CODE_TTL_SECONDS)
     if attempts > LINK_CODE_MAX_ATTEMPTS:
-        raise LinkCodeAttemptsExceededError('Too many code attempts')
+        raise LinkCodeAttemptsExceededError('Too many code attempts', code='link_code_attempts_exceeded')
 
 
 async def _is_merge_safe_user(db: AsyncSession, user: User) -> tuple[bool, str | None]:
@@ -193,7 +197,7 @@ def _apply_identity_value(source_user: User, target_user: User, attr_name: str, 
         setattr(target_user, attr_name, None)
         return
     if source_value != target_value:
-        raise LinkCodeConflictError(f'Conflict for {label} identity')
+        raise LinkCodeConflictError(f'Conflict for {label} identity', code='link_code_identity_conflict')
     setattr(target_user, attr_name, None)
 
 
@@ -209,13 +213,13 @@ async def confirm_link_code(db: AsyncSession, code: str, target_user: User) -> U
     locked_target_user = users.get(target_user.id)
 
     if source_user is None or locked_target_user is None:
-        raise LinkCodeInvalidError('Source or target account not found')
+        raise LinkCodeInvalidError('Source or target account not found', code='link_code_user_not_found')
     if source_user.id == locked_target_user.id:
-        raise LinkCodeConflictError('Cannot link account to itself')
+        raise LinkCodeConflictError('Cannot link account to itself', code='link_code_same_account')
     if source_user.status != UserStatus.ACTIVE.value:
-        raise LinkCodeConflictError('Source account is not active')
+        raise LinkCodeConflictError('Source account is not active', code='link_code_source_inactive')
     if locked_target_user.status != UserStatus.ACTIVE.value:
-        raise LinkCodeConflictError('Target account is not active')
+        raise LinkCodeConflictError('Target account is not active', code='link_code_target_inactive')
 
     # Primary account: one that keeps subscription/balance/history.
     # Secondary account: must be "clean" and can be absorbed safely.
@@ -231,7 +235,8 @@ async def confirm_link_code(db: AsyncSession, code: str, target_user: User) -> U
         secondary_user = source_user
     elif not source_safe and not target_safe:
         raise LinkCodeConflictError(
-            f'Both accounts have data and require manual merge ({source_reason or "source busy"}, {target_reason or "target busy"})'
+            f'Both accounts have data and require manual merge ({source_reason or "source busy"}, {target_reason or "target busy"})',
+            code='manual_merge_required',
         )
 
     had_secondary_telegram = secondary_user.telegram_id is not None
