@@ -76,6 +76,9 @@ class DiscordUserInfoResponse(TypedDict, total=False):
 class VKIDUserData(TypedDict, total=False):
     user_id: str | int
     email: str
+    nickname: str
+    screen_name: str
+    domain: str
     first_name: str
     last_name: str
     avatar: str
@@ -532,6 +535,18 @@ class VKProvider(OAuthProvider):
             or id_token_claims.get('family_name')
             or id_token_claims.get('last_name')
         )
+        username = (
+            user_data.get('screen_name')
+            or user_data.get('nickname')
+            or user_data.get('domain')
+            or id_token_claims.get('preferred_username')
+        )
+        if not username and resolved_email:
+            username = resolved_email.split('@')[0]
+        if not username and provider_id:
+            username = f'vk_{provider_id}'
+        if not first_name and username:
+            first_name = username
         avatar_url = (
             user_data.get('avatar')
             or user_data.get('avatar_url')
@@ -545,6 +560,7 @@ class VKProvider(OAuthProvider):
             email_verified=bool(resolved_email),
             first_name=first_name,
             last_name=last_name,
+            username=username,
             avatar_url=avatar_url,
         )
 

@@ -1308,6 +1308,16 @@ async def create_user_by_oauth(
 
     column_name = _OAUTH_PROVIDER_COLUMNS.get(provider)
     provider_value: str | int = int(provider_id) if provider == 'vk' else provider_id
+    safe_username = sanitize_telegram_name(username) if username else None
+    safe_first_name = sanitize_telegram_name(first_name) if first_name else None
+    safe_last_name = sanitize_telegram_name(last_name) if last_name else None
+
+    if not safe_username and email:
+        safe_username = sanitize_telegram_name(email.split('@')[0])
+    if not safe_username:
+        safe_username = f'{provider}_{provider_id}'
+    if not safe_first_name:
+        safe_first_name = safe_username
 
     user = User(
         telegram_id=None,
@@ -1315,9 +1325,9 @@ async def create_user_by_oauth(
         email=email,
         email_verified=email_verified,
         password_hash=None,
-        username=sanitize_telegram_name(username) if username else None,
-        first_name=sanitize_telegram_name(first_name) if first_name else None,
-        last_name=sanitize_telegram_name(last_name) if last_name else None,
+        username=safe_username,
+        first_name=safe_first_name,
+        last_name=safe_last_name,
         language=normalized_language,
         referral_code=referral_code,
         balance_kopeks=0,
