@@ -6,6 +6,7 @@ import hashlib
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 from sqlalchemy import func, select
@@ -177,9 +178,14 @@ async def _is_merge_safe_user(db: AsyncSession, user: User) -> tuple[bool, str |
     if user.remnawave_uuid:
         return False, 'Target account is already linked to remnawave profile'
 
-    sub_result = await db.execute(select(Subscription.id).where(Subscription.user_id == user.id))
+    sub_result = await db.execute(
+        select(Subscription.id).where(
+            Subscription.user_id == user.id,
+            Subscription.is_trial.is_(False),
+        )
+    )
     if sub_result.scalar_one_or_none() is not None:
-        return False, 'Target account has a subscription'
+        return False, 'Target account has a paid subscription'
 
     tx_result = await db.execute(select(func.count(Transaction.id)).where(Transaction.user_id == user.id))
     transaction_count = int(tx_result.scalar() or 0)
@@ -188,18 +194,19 @@ async def _is_merge_safe_user(db: AsyncSession, user: User) -> tuple[bool, str |
     return True, None
 
 
-def _apply_identity_value(source_user: User, target_user: User, attr_name: str, label: str) -> None:
-    source_value = getattr(source_user, attr_name)
-    target_value = getattr(target_user, attr_name)
-    if target_value is None:
-        return
-    if source_value is None:
-        setattr(source_user, attr_name, target_value)
-        setattr(target_user, attr_name, None)
-        return
-    if source_value != target_value:
+def _stage_identity_transfer(primary_user: User, secondary_user: User, attr_name: str, label: str) -> Any | None:
+    """Prepare identity move and clear secondary value first to avoid transient unique conflicts."""
+    primary_value = getattr(primary_user, attr_name)
+    secondary_value = getattr(secondary_user, attr_name)
+    if secondary_value is None:
+        return None
+    if primary_value is None:
+        setattr(secondary_user, attr_name, None)
+        return secondary_value
+    if primary_value != secondary_value:
         raise LinkCodeConflictError(f'Conflict for {label} identity', code='link_code_identity_conflict')
-    setattr(target_user, attr_name, None)
+    setattr(secondary_user, attr_name, None)
+    return None
 
 
 async def _ensure_no_external_identity_conflicts(db: AsyncSession, primary_user: User, secondary_user: User) -> None:
@@ -283,11 +290,22 @@ async def confirm_link_code(db: AsyncSession, code: str, target_user: User) -> U
 
     await _ensure_no_external_identity_conflicts(db, primary_user, secondary_user)
 
-    _apply_identity_value(primary_user, secondary_user, 'telegram_id', 'telegram')
-    _apply_identity_value(primary_user, secondary_user, 'google_id', 'google')
-    _apply_identity_value(primary_user, secondary_user, 'yandex_id', 'yandex')
-    _apply_identity_value(primary_user, secondary_user, 'discord_id', 'discord')
-    _apply_identity_value(primary_user, secondary_user, 'vk_id', 'vk')
+    staged_moves: dict[str, Any] = {}
+    for attr_name, label in (
+        ('telegram_id', 'telegram'),
+        ('google_id', 'google'),
+        ('yandex_id', 'yandex'),
+        ('discord_id', 'discord'),
+        ('vk_id', 'vk'),
+    ):
+        move_value = _stage_identity_transfer(primary_user, secondary_user, attr_name, label)
+        if move_value is not None:
+            staged_moves[attr_name] = move_value
+
+    # Flush nulling first so unique OAuth/telegram indexes are released before assigning to primary.
+    await db.flush()
+    for attr_name, value in staged_moves.items():
+        setattr(primary_user, attr_name, value)
 
     # If Telegram identity was linked, make profile canonical for Telegram login UX.
     if had_secondary_telegram and primary_user.telegram_id is not None:
