@@ -1,5 +1,6 @@
 """OAuth 2.0 provider implementations for cabinet authentication."""
 
+import asyncio
 import base64
 import hashlib
 import json
@@ -244,6 +245,25 @@ class YandexProvider(OAuthProvider):
     AUTHORIZE_URL = 'https://oauth.yandex.com/authorize'
     TOKEN_URL = 'https://oauth.yandex.com/token'
     USERINFO_URL = 'https://login.yandex.ru/info'
+    TOKEN_URLS = ('https://oauth.yandex.com/token', 'https://oauth.yandex.ru/token')
+    USERINFO_URLS = ('https://login.yandex.ru/info', 'https://login.yandex.com/info')
+
+    @staticmethod
+    def _is_retryable_http_error(exc: Exception) -> bool:
+        if isinstance(
+            exc,
+            (
+                httpx.ConnectError,
+                httpx.ConnectTimeout,
+                httpx.ReadTimeout,
+                httpx.WriteTimeout,
+                httpx.RemoteProtocolError,
+            ),
+        ):
+            return True
+        if isinstance(exc, httpx.HTTPStatusError):
+            return exc.response.status_code >= 500
+        return False
 
     def get_authorization_url(self, state: str, **kwargs: str) -> str:
         params: dict[str, str] = {
@@ -258,30 +278,71 @@ class YandexProvider(OAuthProvider):
         return str(request.url)
 
     async def exchange_code(self, code: str, **kwargs: str) -> OAuthTokenResponse:
+        data = {
+            'client_id': self.client_id,
+            'client_secret': self.client_secret,
+            'code': code,
+            'grant_type': 'authorization_code',
+        }
+        last_error: Exception | None = None
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(
-                self.TOKEN_URL,
-                data={
-                    'client_id': self.client_id,
-                    'client_secret': self.client_secret,
-                    'code': code,
-                    'grant_type': 'authorization_code',
-                },
-            )
-            response.raise_for_status()
-            data: OAuthTokenResponse = response.json()
-            return data
+            for token_url in self.TOKEN_URLS:
+                for attempt in range(3):
+                    try:
+                        response = await client.post(token_url, data=data)
+                        response.raise_for_status()
+                        return response.json()
+                    except Exception as exc:
+                        last_error = exc
+                        if not self._is_retryable_http_error(exc):
+                            raise
+                        if attempt < 2:
+                            await asyncio.sleep(0.4 * (attempt + 1))
+                            continue
+                        logger.warning(
+                            'Yandex token exchange retry exhausted for endpoint',
+                            endpoint=token_url,
+                            attempt=attempt + 1,
+                            exc=exc,
+                        )
+        if last_error:
+            raise last_error
+        raise RuntimeError('Yandex token exchange failed without explicit error')
 
     async def get_user_info(self, token_data: OAuthTokenResponse) -> OAuthUserInfo:
         access_token = token_data['access_token']
+        last_error: Exception | None = None
+        headers = {'Authorization': f'OAuth {access_token}'}
+        params = {'format': 'json'}
+
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(
-                self.USERINFO_URL,
-                params={'format': 'json'},
-                headers={'Authorization': f'OAuth {access_token}'},
-            )
-            response.raise_for_status()
-            data: YandexUserInfoResponse = response.json()
+            for userinfo_url in self.USERINFO_URLS:
+                for attempt in range(3):
+                    try:
+                        response = await client.get(userinfo_url, params=params, headers=headers)
+                        response.raise_for_status()
+                        data: YandexUserInfoResponse = response.json()
+                        break
+                    except Exception as exc:
+                        last_error = exc
+                        if not self._is_retryable_http_error(exc):
+                            raise
+                        if attempt < 2:
+                            await asyncio.sleep(0.4 * (attempt + 1))
+                            continue
+                        logger.warning(
+                            'Yandex user info retry exhausted for endpoint',
+                            endpoint=userinfo_url,
+                            attempt=attempt + 1,
+                            exc=exc,
+                        )
+                else:
+                    continue
+                break
+            else:
+                if last_error:
+                    raise last_error
+                raise RuntimeError('Yandex user info fetch failed without explicit error')
 
         default_email = data.get('default_email')
         emails = data.get('emails', [])
