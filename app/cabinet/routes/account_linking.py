@@ -59,6 +59,7 @@ router = APIRouter(prefix='/auth', tags=['Cabinet Account Linking'])
 
 UNLINK_CONFIRM_TTL_SECONDS = 10 * 60
 UNLINK_COOLDOWN_SECONDS = 24 * 60 * 60
+TELEGRAM_RELINK_COOLDOWN_SECONDS = 30 * 24 * 60 * 60
 UNLINK_OTP_LENGTH = 6
 UNLINK_OTP_MAX_ATTEMPTS = 5
 UNLINK_OTP_SEND_COOLDOWN_SECONDS = 60
@@ -96,6 +97,14 @@ def _unlink_otp_send_counter_key(user_id: int, provider: str) -> str:
 
 def _unlink_otp_send_block_key(user_id: int, provider: str) -> str:
     return cache_key('cabinet', 'unlink_identity', 'otp_send_block', user_id, provider)
+
+
+def _telegram_relink_cooldown_key(user_id: int) -> str:
+    return cache_key('cabinet', 'telegram_relink', 'cooldown', user_id)
+
+
+def _telegram_unlink_marker_key(user_id: int) -> str:
+    return cache_key('cabinet', 'telegram_relink', 'unlink_marker', user_id)
 
 
 def _unlink_otp_hash(otp_code: str) -> str:
@@ -181,6 +190,33 @@ def _link_error_to_http(exc: Exception) -> HTTPException:
     }:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+
+async def _ensure_telegram_relink_allowed(target_user: User, source_user: User) -> None:
+    """Guard Telegram account replacement and enforce relink cooldown."""
+    if source_user.telegram_id is None:
+        return
+
+    if target_user.telegram_id is not None and target_user.telegram_id != source_user.telegram_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                'code': 'telegram_relink_requires_unlink',
+                'message': 'To link another Telegram account, unlink current Telegram first',
+            },
+        )
+
+    if target_user.telegram_id is None:
+        cooldown_payload = await cache.get(_telegram_relink_cooldown_key(target_user.id))
+        if isinstance(cooldown_payload, dict) and cooldown_payload.get('active'):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={
+                    'code': 'telegram_relink_cooldown_active',
+                    'message': 'Telegram account can be changed only once per 30 days',
+                    'retry_after_seconds': TELEGRAM_RELINK_COOLDOWN_SECONDS,
+                },
+            )
 
 
 @router.get('/identities', response_model=LinkedIdentitiesResponse)
@@ -393,6 +429,12 @@ async def confirm_unlink_identity(
         {'active': True},
         expire=UNLINK_COOLDOWN_SECONDS,
     )
+    if normalized_provider == 'telegram':
+        await cache.set(
+            _telegram_unlink_marker_key(user.id),
+            {'active': True},
+            expire=TELEGRAM_RELINK_COOLDOWN_SECONDS,
+        )
 
     logger.info('Identity unlinked', user_id=user.id, provider=normalized_provider)
     return UnlinkIdentityResponse(message='Identity unlinked successfully', provider=normalized_provider)
@@ -437,6 +479,7 @@ async def preview_account_link_code(
             status_code=status.HTTP_409_CONFLICT,
             detail={'code': 'link_code_source_inactive', 'message': 'Source account is not active'},
         )
+    await _ensure_telegram_relink_allowed(user, source_user)
 
     return LinkCodePreviewResponse(
         source_user_id=source_user.id,
@@ -452,6 +495,23 @@ async def confirm_account_link_code(
 ):
     """Confirm linking: move identities to source account and return new auth session for source."""
     try:
+        source_user_id = await preview_link_code(request.code, user.id)
+    except LinkCodeAttemptsExceededError as exc:
+        raise _link_error_to_http(exc) from exc
+    except LinkCodeInvalidError as exc:
+        raise _link_error_to_http(exc) from exc
+    except LinkCodeConflictError as exc:
+        raise _link_error_to_http(exc) from exc
+
+    source_user_for_guard = await get_user_by_id(db, source_user_id)
+    if not source_user_for_guard:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={'code': 'link_code_user_not_found', 'message': 'Source account not found'},
+        )
+    await _ensure_telegram_relink_allowed(user, source_user_for_guard)
+
+    try:
         source_user = await confirm_link_code(db, request.code, user)
     except LinkCodeAttemptsExceededError as exc:
         raise _link_error_to_http(exc) from exc
@@ -466,6 +526,18 @@ async def confirm_account_link_code(
     await _store_refresh_token(db, source_user.id, auth_response.refresh_token, device_info='account-linking')
 
     logger.info('Account linking auth session switched to source account', source_user_id=source_user.id)
+
+    # If user had recently unlinked Telegram and then linked another one, start 30-day change cooldown.
+    if source_user.id == user.id and source_user.telegram_id is not None:
+        unlink_marker = await cache.get(_telegram_unlink_marker_key(user.id))
+        if isinstance(unlink_marker, dict) and unlink_marker.get('active'):
+            await cache.set(
+                _telegram_relink_cooldown_key(user.id),
+                {'active': True},
+                expire=TELEGRAM_RELINK_COOLDOWN_SECONDS,
+            )
+            await cache.delete(_telegram_unlink_marker_key(user.id))
+
     return auth_response
 
 
@@ -493,6 +565,7 @@ async def request_manual_merge(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={'code': 'link_code_user_not_found', 'message': 'Source account not found'},
         )
+    await _ensure_telegram_relink_allowed(user, source_user)
 
     message_text = build_manual_merge_ticket_message(
         current_user_id=user.id,

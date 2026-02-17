@@ -11,6 +11,12 @@ MANUAL_MERGE_MARKER = '[MANUAL_MERGE_V1]'
 MANUAL_MERGE_RESOLUTION_MARKER = '[MANUAL_MERGE_RESOLUTION_V1]'
 
 
+def _format_identity_hints(hints: dict[str, str]) -> str:
+    if not hints:
+        return 'нет данных'
+    return ', '.join(f'{provider}: {masked_id}' for provider, masked_id in sorted(hints.items()))
+
+
 def build_manual_merge_ticket_message(
     *,
     current_user_id: int,
@@ -26,12 +32,14 @@ def build_manual_merge_ticket_message(
         f'source_user_id={source_user_id}',
         f'created_at={datetime.now(UTC).isoformat()}',
         '',
-        'User requested manual merge for disputed account-linking case.',
-        f'Current user identities: {current_user_hints}',
-        f'Source user identities: {source_user_hints}',
+        'Заявка на ручную проверку объединения аккаунтов.',
+        f'Текущий пользователь (куда зашли): ID {current_user_id}',
+        f'Идентификаторы текущего: {_format_identity_hints(current_user_hints)}',
+        f'Пользователь по коду: ID {source_user_id}',
+        f'Идентификаторы по коду: {_format_identity_hints(source_user_hints)}',
     ]
     if comment:
-        lines.append(f'User comment: {comment}')
+        lines.append(f'Комментарий пользователя: {comment}')
     return '\n'.join(lines)
 
 
@@ -106,4 +114,3 @@ def parse_manual_merge_resolution(message_text: str) -> dict[str, str | int] | N
     if comment_match:
         parsed['comment'] = comment_match.group(1).strip()
     return parsed
-

@@ -76,8 +76,11 @@ def _to_item(ticket: Ticket, source_user: User | None = None) -> AdminManualMerg
 
     for message in ticket.messages:
         text = message.message_text or ''
-        if 'User comment:' in text and not user_comment:
-            user_comment = text.split('User comment:', 1)[1].strip()
+        if not user_comment:
+            if 'User comment:' in text:
+                user_comment = text.split('User comment:', 1)[1].strip()
+            elif 'Комментарий пользователя:' in text:
+                user_comment = text.split('Комментарий пользователя:', 1)[1].strip()
         resolution = parse_manual_merge_resolution(text)
         if resolution and resolution.get('comment'):
             resolution_comment = str(resolution['comment'])
