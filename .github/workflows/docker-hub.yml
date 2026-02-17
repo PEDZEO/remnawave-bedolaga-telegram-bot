@@ -29,39 +29,42 @@ jobs:
         echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
         
         echo "build_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+        IMAGE_REPO=$(echo "${GITHUB_REPOSITORY_OWNER}/remnawave-bedolaga-telegram-bot" | tr '[:upper:]' '[:lower:]')
+        echo "image_repo=$IMAGE_REPO" >> $GITHUB_OUTPUT
         
         # Определяем версию и теги
         if [[ $GITHUB_REF == refs/tags/* ]]; then
           VERSION=${GITHUB_REF#refs/tags/}
-          TAGS="fr1ngg/remnawave-bedolaga-telegram-bot:latest,fr1ngg/remnawave-bedolaga-telegram-bot:${VERSION}"
+          TAGS="${IMAGE_REPO}:latest,${IMAGE_REPO}:${VERSION}"
           echo "🏷️ Собираем релизную версию: $VERSION"
         elif [[ $GITHUB_REF == refs/heads/main ]]; then
           VERSION="v3.7.0-$(git rev-parse --short HEAD)" # x-release-please-version
-          TAGS="fr1ngg/remnawave-bedolaga-telegram-bot:latest,fr1ngg/remnawave-bedolaga-telegram-bot:${VERSION}"
+          TAGS="${IMAGE_REPO}:latest,${IMAGE_REPO}:${VERSION}"
           echo "🚀 Собираем версию из main: $VERSION"
         elif [[ $GITHUB_REF == refs/heads/dev ]]; then
           VERSION="v3.7.0-dev-$(git rev-parse --short HEAD)" # x-release-please-version
-          TAGS="fr1ngg/remnawave-bedolaga-telegram-bot:dev,fr1ngg/remnawave-bedolaga-telegram-bot:${VERSION}"
+          TAGS="${IMAGE_REPO}:dev,${IMAGE_REPO}:${VERSION}"
           echo "🧪 Собираем dev версию: $VERSION"
         else
           VERSION="v3.7.0-pr-$(git rev-parse --short HEAD)" # x-release-please-version
-          TAGS="fr1ngg/remnawave-bedolaga-telegram-bot:pr-$(git rev-parse --short HEAD)"
+          TAGS="${IMAGE_REPO}:pr-$(git rev-parse --short HEAD)"
           echo "🔀 Собираем PR версию: $VERSION"
         fi
         
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "tags=$TAGS" >> $GITHUB_OUTPUT
-        echo "should_push=${{ github.event_name != 'pull_request' }}" >> $GITHUB_OUTPUT
+        echo "has_docker_secrets=${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}" >> $GITHUB_OUTPUT
+        echo "should_push=${{ github.event_name != 'pull_request' && secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}" >> $GITHUB_OUTPUT
         
         echo "=== Информация о сборке ==="
         echo "Версия: $VERSION"
         echo "Коммит: $(git rev-parse --short HEAD)"
         echo "Теги: $TAGS"
-        echo "Push: ${{ github.event_name != 'pull_request' }}"
+        echo "Push: ${{ github.event_name != 'pull_request' && secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}"
         echo "==========================="
 
     - name: Login to Docker Hub
-      if: github.event_name != 'pull_request'
+      if: steps.version.outputs.should_push == 'true'
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
@@ -108,4 +111,4 @@ jobs:
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 🔗 Ссылки:" >> $GITHUB_STEP_SUMMARY
-        echo "- [Docker Hub Repository](https://hub.docker.com/r/fr1ngg/remnawave-bedolaga-telegram-bot)" >> $GITHUB_STEP_SUMMARY
+        echo "- [Docker Hub Repository](https://hub.docker.com/r/${{ steps.version.outputs.image_repo }})" >> $GITHUB_STEP_SUMMARY
