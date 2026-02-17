@@ -513,16 +513,9 @@ class VKProvider(OAuthProvider):
 
         user_data: VKIDUserData = data.get('user', {}) or {}
         provider_id = str(
-            user_data.get('user_id')
-            or token_data.get('user_id')
-            or id_token_claims.get('sub')
-            or '',
+            user_data.get('user_id') or token_data.get('user_id') or id_token_claims.get('sub') or '',
         )
-        resolved_email = (
-            email
-            or user_data.get('email')
-            or id_token_claims.get('email')
-        )
+        resolved_email = email or user_data.get('email') or id_token_claims.get('email')
         first_name = (
             user_data.get('first_name')
             or user_data.get('firstName')
@@ -547,11 +540,7 @@ class VKProvider(OAuthProvider):
             username = f'vk_{provider_id}'
         if not first_name and username:
             first_name = username
-        avatar_url = (
-            user_data.get('avatar')
-            or user_data.get('avatar_url')
-            or id_token_claims.get('picture')
-        )
+        avatar_url = user_data.get('avatar') or user_data.get('avatar_url') or id_token_claims.get('picture')
 
         return OAuthUserInfo(
             provider='vk',

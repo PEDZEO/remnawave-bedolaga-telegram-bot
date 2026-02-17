@@ -245,7 +245,11 @@ async def request_unlink_identity(
         status_code = status.HTTP_409_CONFLICT if reason != 'provider_not_supported' else status.HTTP_400_BAD_REQUEST
         raise HTTPException(
             status_code=status_code,
-            detail={'code': 'unlink_not_allowed', 'reason': reason, 'message': 'Unlink is not allowed for this identity'},
+            detail={
+                'code': 'unlink_not_allowed',
+                'reason': reason,
+                'message': 'Unlink is not allowed for this identity',
+            },
         )
 
     cooldown_payload = await cache.get(_unlink_otp_send_cooldown_key(user.id, normalized_provider))
@@ -366,7 +370,10 @@ async def confirm_unlink_identity(
     if payload.get('user_id') != user.id or payload.get('provider') != normalized_provider:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'unlink_request_mismatch', 'message': 'Unlink request does not match current user/provider'},
+            detail={
+                'code': 'unlink_request_mismatch',
+                'message': 'Unlink request does not match current user/provider',
+            },
         )
 
     otp_hash = payload.get('otp_hash')
@@ -400,7 +407,11 @@ async def confirm_unlink_identity(
     if reason:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={'code': 'unlink_not_allowed', 'reason': reason, 'message': 'Unlink is not allowed for this identity'},
+            detail={
+                'code': 'unlink_not_allowed',
+                'reason': reason,
+                'message': 'Unlink is not allowed for this identity',
+            },
         )
 
     attr_name = _UNLINK_PROVIDER_ATTRS[normalized_provider]

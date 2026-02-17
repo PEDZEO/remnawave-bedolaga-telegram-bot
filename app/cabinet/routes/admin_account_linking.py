@@ -275,9 +275,7 @@ async def resolve_manual_merge(
         source_result = await db.execute(select(User).where(User.id == source_user_id))
         source_user = source_result.scalar_one_or_none()
     messages_result = await db.execute(
-        select(Ticket)
-        .where(Ticket.id == ticket.id)
-        .options(selectinload(Ticket.messages), selectinload(Ticket.user))
+        select(Ticket).where(Ticket.id == ticket.id).options(selectinload(Ticket.messages), selectinload(Ticket.user))
     )
     fresh_ticket = messages_result.scalar_one()
     return _to_item(fresh_ticket, source_user=source_user)

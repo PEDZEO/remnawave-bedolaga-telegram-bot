@@ -226,11 +226,7 @@ async def _ensure_no_external_identity_conflicts(db: AsyncSession, primary_user:
         if primary_value is not None:
             continue
 
-        stmt = (
-            select(User.id)
-            .where(getattr(User, attr_name) == secondary_value, User.id.notin_(pair_ids))
-            .limit(1)
-        )
+        stmt = select(User.id).where(getattr(User, attr_name) == secondary_value, User.id.notin_(pair_ids)).limit(1)
         result = await db.execute(stmt)
         conflict_user_id = result.scalar_one_or_none()
         if conflict_user_id is not None:
