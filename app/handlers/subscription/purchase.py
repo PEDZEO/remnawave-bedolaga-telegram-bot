@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -206,7 +206,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     await db.refresh(subscription)
     await db.refresh(db_user)
 
-    current_time = datetime.utcnow()
+    current_time = datetime.now(UTC)
 
     if subscription.status == 'expired' or subscription.end_date <= current_time:
         actual_status = 'expired'
@@ -348,10 +348,8 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                         tariff_info_lines.append('⏸️ <b>Подписка приостановлена</b>')
                         # Показываем оставшееся время даже при паузе
                         if last_charge:
-                            from datetime import timedelta
-
                             next_charge = last_charge + timedelta(hours=24)
-                            now = datetime.utcnow()
+                            now = datetime.now(UTC)
                             if next_charge > now:
                                 time_until = next_charge - now
                                 hours_left = time_until.seconds // 3600
@@ -359,10 +357,8 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                                 tariff_info_lines.append(f'⏳ Осталось: {hours_left}ч {minutes_left}мин')
                                 tariff_info_lines.append('💤 Списание приостановлено')
                     elif last_charge:
-                        from datetime import timedelta
-
                         next_charge = last_charge + timedelta(hours=24)
-                        now = datetime.utcnow()
+                        now = datetime.now(UTC)
 
                         if next_charge > now:
                             time_until = next_charge - now
@@ -470,7 +466,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 
         from app.database.models import TrafficPurchase
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         purchases_query = (
             sql_select(TrafficPurchase)
             .where(TrafficPurchase.subscription_id == subscription.id)
@@ -1547,7 +1543,7 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
             # Проверяем, суточный ли тариф — у суточных нет period_prices, продление через resume
             from app.database.crud.tariff import get_tariff_by_id
 
-            tariff = getattr(subscription, 'tariff', None) or await get_tariff_by_id(db, subscription.tariff_id)
+            tariff = await get_tariff_by_id(db, subscription.tariff_id)
             if tariff and getattr(tariff, 'is_daily', False):
                 # Суточный тариф: перенаправляем на страницу подписки (там кнопка «Возобновить»)
                 await show_subscription_info(callback, db_user, db)
@@ -1970,7 +1966,7 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
             await callback.answer('⚠ Ошибка списания средств', show_alert=True)
             return
 
-        current_time = datetime.utcnow()
+        current_time = datetime.now(UTC)
 
         if subscription.end_date > current_time:
             new_end_date = subscription.end_date + timedelta(days=days)
@@ -2589,7 +2585,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
         should_update_devices = selected_devices is not None
 
         was_trial_conversion = False
-        current_time = datetime.utcnow()
+        current_time = datetime.now(UTC)
 
         if existing_subscription:
             logger.info('Обновляем существующую подписку пользователя', telegram_id=db_user.telegram_id)
@@ -4311,7 +4307,7 @@ async def _extend_existing_subscription(
     squad_uuid: str,
 ):
     """Продлевает существующую подписку."""
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
     from app.database.crud.transaction import create_transaction
     from app.database.crud.user import subtract_user_balance
@@ -4408,7 +4404,7 @@ async def _extend_existing_subscription(
         return
 
     # Обновляем параметры подписки
-    current_time = datetime.utcnow()
+    current_time = datetime.now(UTC)
     old_end_date = current_subscription.end_date
 
     # Обновляем параметры в зависимости от типа текущей подписки

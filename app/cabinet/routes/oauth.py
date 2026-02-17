@@ -10,7 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.user import (
     create_user_by_oauth,
+    get_user_by_email,
     get_user_by_oauth_provider,
+    set_user_oauth_provider_id,
 )
 from app.database.models import User
 
@@ -23,7 +25,7 @@ from ..auth.oauth_providers import (
 )
 from ..dependencies import get_cabinet_db
 from ..schemas.auth import AuthResponse
-from .auth import _create_auth_response, _store_refresh_token
+from .auth import _create_auth_response, _process_campaign_bonus, _store_refresh_token
 
 
 logger = structlog.get_logger(__name__)
@@ -31,12 +33,22 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix='/auth/oauth', tags=['Cabinet OAuth'])
 
 
-async def _finalize_oauth_login(db: AsyncSession, user: User, provider: str) -> AuthResponse:
+async def _finalize_oauth_login(
+    db: AsyncSession,
+    user: User,
+    provider: str,
+    campaign_slug: str | None = None,
+) -> AuthResponse:
     """Update last login, create tokens, store refresh token."""
-    user.cabinet_last_login = datetime.now(UTC).replace(tzinfo=None)
+    user.cabinet_last_login = datetime.now(UTC)
     await db.commit()
     auth_response = _create_auth_response(user)
     await _store_refresh_token(db, user.id, auth_response.refresh_token, device_info=f'oauth:{provider}')
+    auth_response.campaign_bonus = await _process_campaign_bonus(db, user, campaign_slug)
+    if auth_response.campaign_bonus:
+        from .auth import _user_to_response
+
+        auth_response.user = _user_to_response(user)
     return auth_response
 
 
@@ -86,6 +98,9 @@ class OAuthCallbackRequest(BaseModel):
     state: str = Field(..., description='CSRF state token')
     device_id: str | None = Field(None, description='Device id returned by VK ID callback')
     type: str | None = Field(None, description='OAuth response type from provider callback')
+    campaign_slug: str | None = Field(
+        None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
+    )
 
 
 # --- Endpoints ---
@@ -200,9 +215,17 @@ async def oauth_callback(
         if _fill_missing_profile_fields(user, user_info):
             await db.commit()
         logger.info('OAuth login via for existing user', provider=provider, user_id=user.id)
-        return await _finalize_oauth_login(db, user, provider)
+        return await _finalize_oauth_login(db, user, provider, request.campaign_slug)
 
-    # 6. Create new user
+    # 6. Find user by email (if verified) and link provider
+    if user_info.email and user_info.email_verified:
+        user = await get_user_by_email(db, user_info.email)
+        if user:
+            await set_user_oauth_provider_id(db, user, provider, user_info.provider_id)
+            logger.info('OAuth login via linked to existing email user', provider=provider, user_id=user.id)
+            return await _finalize_oauth_login(db, user, provider, request.campaign_slug)
+
+    # 7. Create new user
     user = await create_user_by_oauth(
         db=db,
         provider=provider,
@@ -214,4 +237,4 @@ async def oauth_callback(
         username=user_info.username,
     )
     logger.info('OAuth new user created via with id', provider=provider, user_id=user.id)
-    return await _finalize_oauth_login(db, user, provider)
+    return await _finalize_oauth_login(db, user, provider, request.campaign_slug)
