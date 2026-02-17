@@ -75,18 +75,25 @@ def build_manual_merge_resolution_message(
     comment: str | None = None,
 ) -> str:
     """Build machine-readable admin resolution message."""
+    action_label = 'Одобрено' if action == 'approve' else 'Отклонено'
     lines = [
         MANUAL_MERGE_RESOLUTION_MARKER,
         f'action={action}',
         f'admin_user_id={admin_user_id}',
         f'resolved_at={datetime.now(UTC).isoformat()}',
+        '',
+        f'Решение по заявке: {action_label}',
+        f'ID администратора: {admin_user_id}',
     ]
     if primary_user_id is not None:
         lines.append(f'primary_user_id={primary_user_id}')
+        lines.append(f'Основной аккаунт после решения: ID {primary_user_id}')
     if secondary_user_id is not None:
         lines.append(f'secondary_user_id={secondary_user_id}')
+        lines.append(f'Второй аккаунт: ID {secondary_user_id}')
     if comment:
         lines.append(f'comment={comment}')
+        lines.append(f'Комментарий администратора: {comment}')
     return '\n'.join(lines)
 
 
