@@ -525,15 +525,15 @@ async def confirm_account_link_code(
     logger.info('Account linking auth session switched to source account', source_user_id=source_user.id)
 
     # If user had recently unlinked Telegram and then linked another one, start 30-day change cooldown.
-    if source_user.id == user.id and source_user.telegram_id is not None:
-        unlink_marker = await cache.get(_telegram_unlink_marker_key(user.id))
+    if source_user.telegram_id is not None:
+        unlink_marker = await cache.get(_telegram_unlink_marker_key(source_user.id))
         if isinstance(unlink_marker, dict) and unlink_marker.get('active'):
             await cache.set(
-                _telegram_relink_cooldown_key(user.id),
+                _telegram_relink_cooldown_key(source_user.id),
                 {'active': True},
                 expire=TELEGRAM_RELINK_COOLDOWN_SECONDS,
             )
-            await cache.delete(_telegram_unlink_marker_key(user.id))
+            await cache.delete(_telegram_unlink_marker_key(source_user.id))
 
     return auth_response
 
