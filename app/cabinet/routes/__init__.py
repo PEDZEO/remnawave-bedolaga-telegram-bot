@@ -2,8 +2,9 @@
 
 from fastapi import APIRouter
 
-from .admin_apps import router as admin_apps_router
+from .account_linking import router as account_linking_router
 from .admin_account_linking import router as admin_account_linking_router
+from .admin_apps import router as admin_apps_router
 from .admin_ban_system import router as admin_ban_system_router
 from .admin_broadcasts import router as admin_broadcasts_router
 from .admin_button_styles import router as admin_button_styles_router
@@ -24,7 +25,6 @@ from .admin_traffic import router as admin_traffic_router
 from .admin_updates import router as admin_updates_router
 from .admin_users import router as admin_users_router
 from .admin_wheel import router as admin_wheel_router
-from .account_linking import router as account_linking_router
 from .auth import router as auth_router
 from .balance import router as balance_router
 from .branding import router as branding_router

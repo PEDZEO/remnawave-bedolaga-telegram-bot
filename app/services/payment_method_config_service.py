@@ -134,7 +134,7 @@ def _get_platega_sub_options() -> list[dict] | None:
                     'name': info.get('title') or info.get('name') or f'Platega {method_code}',
                 }
             )
-        return options if options else None
+        return options or None
     except Exception:
         return None
 

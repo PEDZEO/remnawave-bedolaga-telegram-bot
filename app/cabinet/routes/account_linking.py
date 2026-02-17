@@ -21,10 +21,6 @@ from app.utils.cache import cache, cache_key
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.account_linking import (
-    UnlinkIdentityConfirmRequest,
-    UnlinkIdentityRequestResponse,
-    UnlinkIdentityResponse,
-    ManualMergeTicketStatusResponse,
     LinkCodeConfirmRequest,
     LinkCodeCreateResponse,
     LinkCodePreviewRequest,
@@ -33,6 +29,10 @@ from ..schemas.account_linking import (
     LinkedIdentity,
     ManualMergeRequest,
     ManualMergeResponse,
+    ManualMergeTicketStatusResponse,
+    UnlinkIdentityConfirmRequest,
+    UnlinkIdentityRequestResponse,
+    UnlinkIdentityResponse,
 )
 from ..schemas.auth import AuthResponse
 from ..services.account_linking import (
@@ -588,8 +588,8 @@ async def request_manual_merge(
         title=MANUAL_MERGE_TICKET_TITLE,
         status='open',
         priority='high',
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     db.add(ticket)
     await db.flush()
@@ -599,7 +599,7 @@ async def request_manual_merge(
         user_id=user.id,
         message_text=message_text,
         is_from_admin=False,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
     )
     db.add(initial_message)
     await db.commit()

@@ -699,7 +699,7 @@ async def main():
 
         timeline.log_section(
             'Активные webhook endpoints',
-            webhook_lines if webhook_lines else ['Нет активных endpoints'],
+            webhook_lines or ['Нет активных endpoints'],
             icon='🎯',
         )
 

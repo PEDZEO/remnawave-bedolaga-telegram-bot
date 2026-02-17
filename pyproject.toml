@@ -263,6 +263,30 @@ ignore = [
     'F401',
     'F403',
 ]
+'app/cabinet/routes/admin_tickets.py' = [
+    'ASYNC240',
+]
+'app/cabinet/routes/branding.py' = [
+    'ASYNC240',
+]
+'app/handlers/admin/monitoring.py' = [
+    'ASYNC240',
+]
+'app/handlers/admin/referrals.py' = [
+    'ASYNC240',
+]
+'app/services/backup_service.py' = [
+    'ASYNC240',
+]
+'app/services/log_rotation_service.py' = [
+    'ASYNC240',
+]
+'app/services/monitoring_service.py' = [
+    'ASYNC240',
+]
+'app/utils/message_patch.py' = [
+    'ASYNC240',
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ['app']

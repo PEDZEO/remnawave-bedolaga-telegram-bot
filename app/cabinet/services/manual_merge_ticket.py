@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import re
+from datetime import UTC, datetime
 
 
 MANUAL_MERGE_TICKET_TITLE = 'Manual account merge request'

@@ -358,7 +358,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
                 # Уведомляем пользователя о деактивации
                 try:
-                    texts = get_texts(user.language if user.language else DEFAULT_LANGUAGE)
+                    texts = get_texts(user.language or DEFAULT_LANGUAGE)
                     notification_text = texts.t(
                         'SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE',
                         '🚫 Ваша подписка приостановлена, так как вы отписались от канала.\n\n'
@@ -430,7 +430,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
                 # Уведомляем пользователя о реактивации
                 try:
-                    texts = get_texts(user.language if user.language else DEFAULT_LANGUAGE)
+                    texts = get_texts(user.language or DEFAULT_LANGUAGE)
                     notification_text = texts.t(
                         'SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE',
                         '✅ Ваша подписка восстановлена!\n\nСпасибо, что подписались на канал. VPN снова работает.',
