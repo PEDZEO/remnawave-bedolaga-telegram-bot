@@ -29,29 +29,23 @@ jobs:
         echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
         
         echo "build_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
-
-        DOCKER_NAMESPACE="${{ secrets.DOCKER_USERNAME }}"
-        if [ -z "$DOCKER_NAMESPACE" ]; then
-          DOCKER_NAMESPACE="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
-        fi
-        IMAGE_REPO="${DOCKER_NAMESPACE}/remnawave-bedolaga-telegram-bot"
         
         # Определяем версию и теги
         if [[ $GITHUB_REF == refs/tags/* ]]; then
           VERSION=${GITHUB_REF#refs/tags/}
-          TAGS="${IMAGE_REPO}:latest,${IMAGE_REPO}:${VERSION}"
+          TAGS="fr1ngg/remnawave-bedolaga-telegram-bot:latest,fr1ngg/remnawave-bedolaga-telegram-bot:${VERSION}"
           echo "🏷️ Собираем релизную версию: $VERSION"
         elif [[ $GITHUB_REF == refs/heads/main ]]; then
           VERSION="v3.7.0-$(git rev-parse --short HEAD)" # x-release-please-version
-          TAGS="${IMAGE_REPO}:latest,${IMAGE_REPO}:${VERSION}"
+          TAGS="fr1ngg/remnawave-bedolaga-telegram-bot:latest,fr1ngg/remnawave-bedolaga-telegram-bot:${VERSION}"
           echo "🚀 Собираем версию из main: $VERSION"
         elif [[ $GITHUB_REF == refs/heads/dev ]]; then
           VERSION="v3.7.0-dev-$(git rev-parse --short HEAD)" # x-release-please-version
-          TAGS="${IMAGE_REPO}:dev,${IMAGE_REPO}:${VERSION}"
+          TAGS="fr1ngg/remnawave-bedolaga-telegram-bot:dev,fr1ngg/remnawave-bedolaga-telegram-bot:${VERSION}"
           echo "🧪 Собираем dev версию: $VERSION"
         else
           VERSION="v3.7.0-pr-$(git rev-parse --short HEAD)" # x-release-please-version
-          TAGS="${IMAGE_REPO}:pr-$(git rev-parse --short HEAD)"
+          TAGS="fr1ngg/remnawave-bedolaga-telegram-bot:pr-$(git rev-parse --short HEAD)"
           echo "🔀 Собираем PR версию: $VERSION"
         fi
         
@@ -114,4 +108,4 @@ jobs:
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 🔗 Ссылки:" >> $GITHUB_STEP_SUMMARY
-        echo "- [Docker Hub Repository](https://hub.docker.com/r/${{ secrets.DOCKER_USERNAME }}/remnawave-bedolaga-telegram-bot)" >> $GITHUB_STEP_SUMMARY
+        echo "- [Docker Hub Repository](https://hub.docker.com/r/fr1ngg/remnawave-bedolaga-telegram-bot)" >> $GITHUB_STEP_SUMMARY
