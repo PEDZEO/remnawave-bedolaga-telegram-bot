@@ -156,9 +156,6 @@ async def _get_unlink_block_reason(user: User, provider: str) -> str | None:
     if linked_count <= 1:
         return 'last_identity'
 
-    if user.auth_type == provider:
-        return 'current_auth_provider'
-
     if user.telegram_id is None:
         return 'telegram_required'
 
