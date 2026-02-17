@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.16.1](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.16.0...v3.16.1) (2026-02-17)
+
+
+### Bug Fixes
+
+* resolve ruff lint violations and align lint config ([c7b456e](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/c7b456efbba9498400fb0efeb401299787656fec))
+
 ## [3.16.0](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.15.1...v3.16.0) (2026-02-17)
 
 
