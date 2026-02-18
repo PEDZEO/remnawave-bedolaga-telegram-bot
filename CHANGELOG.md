@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.17.1](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.17.0...v3.17.1) (2026-02-18)
+
+
+### Bug Fixes
+
+* **account-linking:** humanize manual merge ticket messages in russian ([90ca1ab](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/90ca1ab380e643310833afe4877cc9daa9f461ce))
+* **account-linking:** humanize manual merge ticket messages in russian ([eddc04b](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/eddc04b05aa708e6b9b3bda9196d003a65f9a41d))
+
 ## [3.17.0](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.16.1...v3.17.0) (2026-02-18)
 
 
