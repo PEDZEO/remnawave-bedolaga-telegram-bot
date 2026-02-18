@@ -103,7 +103,11 @@ class MonitoringService:
             logger.debug('Пропуск уведомления: chat_id не указан (email-пользователь)')
             return None
 
-        if settings.ENABLE_LOGO_MODE and LOGO_PATH.exists() and (text is None or len(text) <= 1000):
+        if (
+            settings.ENABLE_LOGO_MODE
+            and await asyncio.to_thread(LOGO_PATH.exists)
+            and (text is None or len(text) <= 1000)
+        ):
             try:
                 from app.utils.message_patch import _cache_logo_file_id, get_logo_media
 
@@ -1644,8 +1648,6 @@ class MonitoringService:
                 return
             if not settings.is_admin_notifications_enabled():
                 return
-
-            from datetime import UTC, datetime, timedelta
 
             try:
                 from app.services.support_settings_service import SupportSettingsService

@@ -1,5 +1,6 @@
 """Branding routes for cabinet - logo, project name, and theme colors management."""
 
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -41,6 +42,10 @@ LITE_MODE_ENABLED_KEY = 'CABINET_LITE_MODE_ENABLED'  # Stores "true" or "false"
 # Allowed image types
 ALLOWED_CONTENT_TYPES = {'image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB for larger logos
+
+
+def _list_logo_files() -> list[Path]:
+    return list(BRANDING_DIR.glob('logo.*'))
 
 
 # ============ Schemas ============
@@ -358,8 +363,9 @@ async def upload_logo(
     extension = ext_map.get(file.content_type, '.png')
 
     # Remove old logo files with any extension
-    for old_file in BRANDING_DIR.glob('logo.*'):
-        old_file.unlink()
+    old_logo_files = await asyncio.to_thread(_list_logo_files)
+    for old_file in old_logo_files:
+        await asyncio.to_thread(old_file.unlink)
 
     # Save new logo
     logo_path = BRANDING_DIR / f'logo{extension}'
@@ -392,8 +398,9 @@ async def delete_logo(
 ):
     """Delete custom logo and revert to letter. Admin only."""
     # Remove logo files
-    for old_file in BRANDING_DIR.glob('logo.*'):
-        old_file.unlink()
+    old_logo_files = await asyncio.to_thread(_list_logo_files)
+    for old_file in old_logo_files:
+        await asyncio.to_thread(old_file.unlink)
 
     # Update setting
     await set_setting_value(db, BRANDING_LOGO_KEY, 'default')

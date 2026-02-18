@@ -29,6 +29,10 @@ from app.utils.timezone import get_local_timezone
 logger = structlog.get_logger(__name__)
 
 
+def _get_file_size(path: Path) -> int:
+    return path.stat().st_size
+
+
 @dataclass
 class LogRotationStatus:
     """Статус сервиса ротации логов."""
@@ -287,7 +291,7 @@ class LogRotationService:
         topic_id = settings.get_log_rotation_topic_id()
 
         try:
-            file_size_kb = archive_path.stat().st_size / 1024
+            file_size_kb = (await asyncio.to_thread(_get_file_size, archive_path)) / 1024
             caption = (
                 f'<b>Логи бота</b>\n'
                 f'Дата: {date_str}\n'

@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import structlog
 from aiogram import F, Router
@@ -1235,8 +1235,6 @@ async def receipts_missing_callback(callback: CallbackQuery):
 async def receipts_link_old_callback(callback: CallbackQuery):
     """Привязать старые чеки из NaloGO к транзакциям по сумме и дате."""
     try:
-        from datetime import UTC, date, timedelta
-
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
         from sqlalchemy import and_, select
 
@@ -1365,12 +1363,12 @@ async def _do_reconcile_logs(callback: CallbackQuery):
         await callback.answer('🔄 Анализирую логи платежей...', show_alert=False)
 
         # Путь к файлу логов платежей (logs/current/)
-        log_file_path = Path(settings.LOG_FILE).resolve()
+        log_file_path = Path(settings.LOG_FILE)
         log_dir = log_file_path.parent
         current_dir = log_dir / 'current'
         payments_log = current_dir / settings.LOG_PAYMENTS_FILE
 
-        if not payments_log.exists():
+        if not await asyncio.to_thread(payments_log.exists):
             try:
                 await callback.message.edit_text(
                     '❌ <b>Файл логов не найден</b>\n\n'
@@ -1506,12 +1504,12 @@ async def receipts_reconcile_logs_details_callback(callback: CallbackQuery):
         await callback.answer('🔄 Загружаю детали...', show_alert=False)
 
         # Путь к логам (logs/current/)
-        log_file_path = Path(settings.LOG_FILE).resolve()
+        log_file_path = Path(settings.LOG_FILE)
         log_dir = log_file_path.parent
         current_dir = log_dir / 'current'
         payments_log = current_dir / settings.LOG_PAYMENTS_FILE
 
-        if not payments_log.exists():
+        if not await asyncio.to_thread(payments_log.exists):
             await callback.answer('❌ Файл логов не найден', show_alert=True)
             return
 
