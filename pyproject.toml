@@ -1,6 +1,6 @@
 [project]
 name = 'remnawave-bedolaga-telegram-bot'
-version = "3.16.1"
+version = "3.16.3"
 description = 'Telegram bot for RemnaWave VPN service'
 readme = 'README.md'
 license = { text = 'MIT' }
@@ -262,30 +262,6 @@ ignore = [
 '**/__init__.py' = [
     'F401',
     'F403',
-]
-'app/cabinet/routes/admin_tickets.py' = [
-    'ASYNC240',
-]
-'app/cabinet/routes/branding.py' = [
-    'ASYNC240',
-]
-'app/handlers/admin/monitoring.py' = [
-    'ASYNC240',
-]
-'app/handlers/admin/referrals.py' = [
-    'ASYNC240',
-]
-'app/services/backup_service.py' = [
-    'ASYNC240',
-]
-'app/services/log_rotation_service.py' = [
-    'ASYNC240',
-]
-'app/services/monitoring_service.py' = [
-    'ASYNC240',
-]
-'app/utils/message_patch.py' = [
-    'ASYNC240',
 ]
 
 [tool.ruff.lint.isort]
