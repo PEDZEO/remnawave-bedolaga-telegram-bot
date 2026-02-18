@@ -1300,6 +1300,7 @@ async def create_user_by_oauth(
     last_name: str | None = None,
     username: str | None = None,
     language: str = 'ru',
+    referred_by_id: int | None = None,
 ) -> User:
     """Create a new user via OAuth provider."""
     referral_code = await create_unique_referral_code(db)
@@ -1329,6 +1330,7 @@ async def create_user_by_oauth(
         first_name=safe_first_name,
         last_name=safe_last_name,
         language=normalized_language,
+        referred_by_id=referred_by_id,
         referral_code=referral_code,
         balance_kopeks=0,
         has_had_paid_subscription=False,
