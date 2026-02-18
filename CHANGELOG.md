@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.17.0](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.16.1...v3.17.0) (2026-02-18)
+
+
+### New Features
+
+* **account-linking:** expose telegram relink cooldown metadata ([113148a](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/113148a10675240423c2e0566dd649e1785cf2f2))
+* **account-linking:** expose telegram relink cooldown metadata ([ec50d64](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/ec50d6450a31971988882fd76b3de08537ca4a50))
+
 ## [3.16.1](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.16.0...v3.16.1) (2026-02-17)
 
 
