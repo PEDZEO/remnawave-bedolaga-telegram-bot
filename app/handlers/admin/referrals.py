@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 
@@ -1434,9 +1435,9 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
 
     finally:
         # Удаляем временный файл
-        if temp_file_path and Path(temp_file_path).exists():
+        if temp_file_path and await asyncio.to_thread(Path(temp_file_path).exists):
             try:
-                Path(temp_file_path).unlink()
+                await asyncio.to_thread(Path(temp_file_path).unlink)
                 logger.info('🗑️ Временный файл удалён', temp_file_path=temp_file_path)
             except Exception as e:
                 logger.error('Ошибка удаления временного файла', error=e)
