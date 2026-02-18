@@ -10,10 +10,38 @@ class LinkedIdentity(BaseModel):
     provider_user_id_masked: str = Field(..., description='Masked provider user id')
     can_unlink: bool = Field(True, description='Whether identity can be unlinked')
     blocked_reason: str | None = Field(None, description='Reason code why unlink is blocked')
+    blocked_until: datetime | None = Field(
+        None,
+        description='ISO datetime when unlink block ends (for cooldown-based restrictions)',
+    )
+    retry_after_seconds: int | None = Field(
+        None,
+        description='Seconds remaining until action is available again',
+    )
+
+
+class TelegramRelinkStatus(BaseModel):
+    can_start_relink: bool = Field(
+        ...,
+        description='Whether user can start Telegram relink right now',
+    )
+    requires_unlink_first: bool = Field(
+        ...,
+        description='Whether current Telegram must be unlinked before linking another one',
+    )
+    cooldown_until: datetime | None = Field(
+        None,
+        description='ISO datetime when Telegram relink cooldown ends',
+    )
+    retry_after_seconds: int | None = Field(
+        None,
+        description='Seconds remaining until Telegram relink is available',
+    )
 
 
 class LinkedIdentitiesResponse(BaseModel):
     identities: list[LinkedIdentity]
+    telegram_relink: TelegramRelinkStatus
 
 
 class LinkCodeCreateResponse(BaseModel):

@@ -2,7 +2,7 @@
 
 import hashlib
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram import Bot
@@ -30,6 +30,7 @@ from ..schemas.account_linking import (
     ManualMergeRequest,
     ManualMergeResponse,
     ManualMergeTicketStatusResponse,
+    TelegramRelinkStatus,
     UnlinkIdentityConfirmRequest,
     UnlinkIdentityRequestResponse,
     UnlinkIdentityResponse,
@@ -118,6 +119,45 @@ def _generate_otp_code() -> str:
     return f'{value:0{UNLINK_OTP_LENGTH}d}'
 
 
+def _build_cooldown_payload(ttl_seconds: int) -> dict[str, str | bool]:
+    now = datetime.now(UTC)
+    expires_at = now + timedelta(seconds=ttl_seconds)
+    return {
+        'active': True,
+        'created_at': now.isoformat(),
+        'expires_at': expires_at.isoformat(),
+    }
+
+
+def _parse_iso_datetime(raw_value: object) -> datetime | None:
+    if not isinstance(raw_value, str) or not raw_value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw_value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _extract_cooldown_state(
+    payload: object,
+    default_retry_after_seconds: int | None = None,
+) -> tuple[bool, datetime | None, int | None]:
+    if not isinstance(payload, dict) or not payload.get('active'):
+        return False, None, None
+
+    cooldown_until = _parse_iso_datetime(payload.get('expires_at'))
+    if cooldown_until is not None:
+        retry_after = max(int((cooldown_until - datetime.now(UTC)).total_seconds()), 0)
+        if retry_after <= 0:
+            return False, None, None
+        return True, cooldown_until, retry_after
+
+    return True, None, default_retry_after_seconds
+
+
 _cached_bot: Bot | None = None
 
 
@@ -160,7 +200,8 @@ async def _get_unlink_block_reason(user: User, provider: str) -> str | None:
         return 'telegram_required'
 
     cooldown_payload = await cache.get(_unlink_cooldown_key(user.id, provider))
-    if isinstance(cooldown_payload, dict) and cooldown_payload.get('active'):
+    is_active, _, _ = _extract_cooldown_state(cooldown_payload, UNLINK_COOLDOWN_SECONDS)
+    if is_active:
         return 'cooldown_active'
 
     return None
@@ -205,13 +246,17 @@ async def _ensure_telegram_relink_allowed(target_user: User, source_user: User) 
 
     if target_user.telegram_id is None:
         cooldown_payload = await cache.get(_telegram_relink_cooldown_key(target_user.id))
-        if isinstance(cooldown_payload, dict) and cooldown_payload.get('active'):
+        is_active, _, retry_after = _extract_cooldown_state(
+            cooldown_payload,
+            TELEGRAM_RELINK_COOLDOWN_SECONDS,
+        )
+        if is_active:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail={
                     'code': 'telegram_relink_cooldown_active',
                     'message': 'Telegram account can be changed only once per 30 days',
-                    'retry_after_seconds': TELEGRAM_RELINK_COOLDOWN_SECONDS,
+                    'retry_after_seconds': retry_after or TELEGRAM_RELINK_COOLDOWN_SECONDS,
                 },
             )
 
@@ -221,16 +266,45 @@ async def get_linked_identities(user: User = Depends(get_current_cabinet_user)):
     """Get linked login identities for current user."""
     hints = get_user_identity_hints(user)
     reasons = {provider: await _get_unlink_block_reason(user, provider) for provider in hints}
-    identities = [
-        LinkedIdentity(
-            provider=provider,
-            provider_user_id_masked=provider_user_id_masked,
-            can_unlink=reasons.get(provider) is None,
-            blocked_reason=reasons.get(provider),
+    identities: list[LinkedIdentity] = []
+    for provider, provider_user_id_masked in sorted(hints.items()):
+        blocked_reason = reasons.get(provider)
+        blocked_until: datetime | None = None
+        retry_after_seconds: int | None = None
+        if blocked_reason == 'cooldown_active':
+            cooldown_payload = await cache.get(_unlink_cooldown_key(user.id, provider))
+            _, blocked_until, retry_after_seconds = _extract_cooldown_state(
+                cooldown_payload,
+                UNLINK_COOLDOWN_SECONDS,
+            )
+
+        identities.append(
+            LinkedIdentity(
+                provider=provider,
+                provider_user_id_masked=provider_user_id_masked,
+                can_unlink=blocked_reason is None,
+                blocked_reason=blocked_reason,
+                blocked_until=blocked_until,
+                retry_after_seconds=retry_after_seconds,
+            )
         )
-        for provider, provider_user_id_masked in sorted(hints.items())
-    ]
-    return LinkedIdentitiesResponse(identities=identities)
+
+    telegram_cooldown_payload = await cache.get(_telegram_relink_cooldown_key(user.id))
+    telegram_cooldown_active, cooldown_until, relink_retry_after = _extract_cooldown_state(
+        telegram_cooldown_payload,
+        TELEGRAM_RELINK_COOLDOWN_SECONDS,
+    )
+    requires_unlink_first = user.telegram_id is not None
+
+    return LinkedIdentitiesResponse(
+        identities=identities,
+        telegram_relink=TelegramRelinkStatus(
+            can_start_relink=not requires_unlink_first and not telegram_cooldown_active,
+            requires_unlink_first=requires_unlink_first,
+            cooldown_until=cooldown_until if telegram_cooldown_active else None,
+            retry_after_seconds=relink_retry_after if telegram_cooldown_active else None,
+        ),
+    )
 
 
 @router.post('/identities/{provider}/unlink/request', response_model=UnlinkIdentityRequestResponse)
@@ -284,7 +358,7 @@ async def request_unlink_identity(
     if send_count > UNLINK_OTP_SEND_MAX_PER_WINDOW:
         await cache.set(
             _unlink_otp_send_block_key(user.id, normalized_provider),
-            {'active': True},
+            _build_cooldown_payload(UNLINK_OTP_SEND_WINDOW_SECONDS),
             expire=UNLINK_OTP_SEND_WINDOW_SECONDS,
         )
         raise HTTPException(
@@ -340,7 +414,7 @@ async def request_unlink_identity(
 
     await cache.set(
         _unlink_otp_send_cooldown_key(user.id, normalized_provider),
-        {'active': True},
+        _build_cooldown_payload(UNLINK_OTP_SEND_COOLDOWN_SECONDS),
         expire=UNLINK_OTP_SEND_COOLDOWN_SECONDS,
     )
 
@@ -434,13 +508,13 @@ async def confirm_unlink_identity(
     await cache.delete(_unlink_otp_attempts_key(request.request_token))
     await cache.set(
         _unlink_cooldown_key(user.id, normalized_provider),
-        {'active': True},
+        _build_cooldown_payload(UNLINK_COOLDOWN_SECONDS),
         expire=UNLINK_COOLDOWN_SECONDS,
     )
     if normalized_provider == 'telegram':
         await cache.set(
             _telegram_unlink_marker_key(user.id),
-            {'active': True},
+            _build_cooldown_payload(TELEGRAM_RELINK_COOLDOWN_SECONDS),
             expire=TELEGRAM_RELINK_COOLDOWN_SECONDS,
         )
 
@@ -541,7 +615,7 @@ async def confirm_account_link_code(
         if isinstance(unlink_marker, dict) and unlink_marker.get('active'):
             await cache.set(
                 _telegram_relink_cooldown_key(source_user.id),
-                {'active': True},
+                _build_cooldown_payload(TELEGRAM_RELINK_COOLDOWN_SECONDS),
                 expire=TELEGRAM_RELINK_COOLDOWN_SECONDS,
             )
             await cache.delete(_telegram_unlink_marker_key(source_user.id))
