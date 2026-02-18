@@ -25,18 +25,14 @@ def build_manual_merge_ticket_message(
     source_user_hints: dict[str, str],
     comment: str | None = None,
 ) -> str:
-    """Build support ticket message with machine-readable metadata."""
+    """Build support ticket message in a human-readable Russian format."""
     lines = [
-        MANUAL_MERGE_MARKER,
-        f'current_user_id={current_user_id}',
-        f'source_user_id={source_user_id}',
-        f'created_at={datetime.now(UTC).isoformat()}',
-        '',
-        'Заявка на ручную проверку объединения аккаунтов.',
-        f'Текущий пользователь (куда зашли): ID {current_user_id}',
-        f'Идентификаторы текущего: {_format_identity_hints(current_user_hints)}',
-        f'Пользователь по коду: ID {source_user_id}',
-        f'Идентификаторы по коду: {_format_identity_hints(source_user_hints)}',
+        'Запрос на ручное объединение аккаунтов.',
+        f'Создано: {datetime.now(UTC).isoformat()}',
+        f'ID текущего аккаунта: {current_user_id}',
+        f'ID аккаунта по коду: {source_user_id}',
+        f'Привязки текущего аккаунта: {_format_identity_hints(current_user_hints)}',
+        f'Привязки аккаунта по коду: {_format_identity_hints(source_user_hints)}',
     ]
     if comment:
         lines.append(f'Комментарий пользователя: {comment}')
@@ -48,14 +44,19 @@ def parse_manual_merge_payload(message_text: str) -> dict[str, int] | None:
     if not message_text:
         return None
 
-    current_match = re.search(r'current_user_id=(\d+)', message_text)
-    source_match = re.search(r'source_user_id=(\d+)', message_text)
+    current_match = re.search(r'(?m)^current_user_id=(\d+)$', message_text)
+    source_match = re.search(r'(?m)^source_user_id=(\d+)$', message_text)
 
     # Backward compatibility for old ticket format.
     if not current_match:
         current_match = re.search(r'Current user id:\s*(\d+)', message_text)
     if not source_match:
         source_match = re.search(r'Code source user id:\s*(\d+)', message_text)
+    # New readable format.
+    if not current_match:
+        current_match = re.search(r'ID текущего аккаунта:\s*(\d+)', message_text)
+    if not source_match:
+        source_match = re.search(r'ID аккаунта по коду:\s*(\d+)', message_text)
 
     if not current_match or not source_match:
         return None
@@ -74,39 +75,48 @@ def build_manual_merge_resolution_message(
     secondary_user_id: int | None,
     comment: str | None = None,
 ) -> str:
-    """Build machine-readable admin resolution message."""
+    """Build admin resolution message in a human-readable Russian format."""
     action_label = 'Одобрено' if action == 'approve' else 'Отклонено'
     lines = [
-        MANUAL_MERGE_RESOLUTION_MARKER,
-        f'action={action}',
-        f'admin_user_id={admin_user_id}',
-        f'resolved_at={datetime.now(UTC).isoformat()}',
-        '',
-        f'Решение по заявке: {action_label}',
+        f'Решение по ручному объединению: {action_label}',
         f'ID администратора: {admin_user_id}',
+        f'Время решения: {datetime.now(UTC).isoformat()}',
     ]
     if primary_user_id is not None:
-        lines.append(f'primary_user_id={primary_user_id}')
         lines.append(f'Основной аккаунт после решения: ID {primary_user_id}')
     if secondary_user_id is not None:
-        lines.append(f'secondary_user_id={secondary_user_id}')
         lines.append(f'Второй аккаунт: ID {secondary_user_id}')
     if comment:
-        lines.append(f'comment={comment}')
         lines.append(f'Комментарий администратора: {comment}')
     return '\n'.join(lines)
 
 
 def parse_manual_merge_resolution(message_text: str) -> dict[str, str | int] | None:
-    """Parse approval/rejection from admin message marker."""
-    if MANUAL_MERGE_RESOLUTION_MARKER not in (message_text or ''):
-        return None
+    """Parse approval/rejection from old and new admin resolution formats."""
+    text = message_text or ''
+    action_match = re.search(r'(?m)^action=(approve|reject)$', text)
+    if not action_match:
+        action_label_match = re.search(r'Решение по ручному объединению:\s*(Одобрено|Отклонено)', text)
+        if action_label_match:
+            action_value = 'approve' if action_label_match.group(1) == 'Одобрено' else 'reject'
+            action_match = re.search(rf'({action_value})', action_value)
 
-    action_match = re.search(r'action=(approve|reject)', message_text)
-    admin_match = re.search(r'admin_user_id=(\d+)', message_text)
-    primary_match = re.search(r'primary_user_id=(\d+)', message_text)
-    secondary_match = re.search(r'secondary_user_id=(\d+)', message_text)
-    comment_match = re.search(r'comment=(.+)', message_text)
+    admin_match = re.search(r'(?m)^admin_user_id=(\d+)$', text) or re.search(
+        r'ID администратора:\s*(\d+)',
+        text,
+    )
+    primary_match = re.search(r'(?m)^primary_user_id=(\d+)$', text) or re.search(
+        r'Основной аккаунт после решения:\s*ID\s*(\d+)',
+        text,
+    )
+    secondary_match = re.search(r'(?m)^secondary_user_id=(\d+)$', text) or re.search(
+        r'Второй аккаунт:\s*ID\s*(\d+)',
+        text,
+    )
+    comment_match = re.search(r'(?m)^comment=(.+)$', text) or re.search(
+        r'Комментарий администратора:\s*(.+)',
+        text,
+    )
 
     if not action_match:
         return None
