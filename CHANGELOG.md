@@ -1,5 +1,46 @@
 # Changelog
 
+## [3.18.0](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.17.1...v3.18.0) (2026-02-18)
+
+
+### New Features
+
+* add campaign_id to ReferralEarning for campaign attribution ([0c07812](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/0c07812ecc9502f54a7745a77b086fc52bdc0e34))
+* enforce 1-to-1 partner-campaign binding with partner info in campaigns ([366df18](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/366df18c547047a7c69192c768970ebc6ee426fc))
+* expose traffic_reset_mode in subscription response ([59383bd](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/59383bdbd8c72428d151cb24d132452414b14fa3))
+* expose traffic_reset_mode in tariff API response ([5d4a94b](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/5d4a94b8cea8f16f0b4c31e24a4695bee4c67af7))
+
+
+### Bug Fixes
+
+* 3 user deletion bugs — type cast, inner savepoint, lazy load ([af31c55](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/af31c551d2f23ef01425bdb2db8f255dbc3047e2))
+* add blocked_count column migration to universal_migration.py ([b4b10c9](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/b4b10c998cadbb879540e56dbd0e362b5497ee57))
+* add migration for partner system tables and columns ([4645be5](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/4645be53cbb3799aa6b2b6a623af30460357a554))
+* add migration for partner system tables and columns ([79ea398](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/79ea398d1db436a7812a799bf01b2c1c3b1b73be))
+* add missing payment providers to payment_utils and fix {total_amount} formatting ([bdb6161](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/bdb61613de378efab4de6de98fde2de3b554c548))
+* add selectinload for subscription in campaign user list ([eb9dba3](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/eb9dba3f4728b478f2206ff992700a9677f879c7))
+* **async:** offload blocking Path operations to threads ([9d298fa](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/9d298fabad791e2d2ba48950f44e8e1f2e90cca5))
+* auth middleware catches all commit errors, not just connection errors ([6409b0c](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/6409b0c023cd7957c43d5c1c3d83e671ccaf959c))
+* auto-convert naive datetimes to UTC-aware on model load ([f7d33a7](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/f7d33a7d2b31145a839ee54676816aa657ac90da))
+* connected_squads stores UUIDs, not int IDs — use get_server_ids_by_uuids ([d7039d7](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/d7039d75a47fbf67436a9d39f2cd9f65f2646544))
+* correct subscription_service import in broadcast cleanup ([6c4e035](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/6c4e035146934dffb576477cc75f7365b2f27b99))
+* deadlock on user deletion + robust migration 0002 ([b7b83ab](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/b7b83abb723913b3167e7462ff592a374c3f421b))
+* eliminate deadlock by matching lock order with webhook ([d651a6c](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/d651a6c02f501b7a0ded570f2db6addcc16173a9))
+* extend naive datetime guard to all model properties ([bd11801](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/bd11801467e917d76005d1a782c71f5ae4ffee6e))
+* handle naive datetime in raw SQL row comparison (payment/common) ([38f3a9a](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/38f3a9a16a24e85adf473f2150aad31574a87060))
+* handle naive datetimes in Subscription properties ([e512e5f](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/e512e5fe6e9009992b5bc8b9be7f53e0612f234a))
+* make migration 0002 robust with table existence checks ([f076269](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/f076269c323726c683a38db092d907591a26e647))
+* prevent fileConfig from destroying structlog handlers ([e78b104](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/e78b1040a50ac14759bceab396d0c3e34dd79cdd))
+* return zeroed stats dict when withdrawal is disabled ([7883efc](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/7883efc3d6e6d8bedf8e4b7d72634cbab6e2f3d7))
+* use AwareDateTime TypeDecorator for all datetime columns ([a7f3d65](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/a7f3d652c51ecd653900a530b7d38feaf603ecf1))
+* wrap user deletion steps in savepoints to prevent transaction cascade abort ([a38dfcb](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/a38dfcb75a47a185d979a8202f637d8b79812e67))
+
+
+### Refactoring
+
+* replace universal_migration.py with Alembic ([b6c7f91](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/b6c7f91a7c79d108820c9f89c9070fde4843316c))
+* replace universal_migration.py with Alembic ([784616b](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/784616b349ef12b35ee021dd7a7b2a2ef9fc57f6))
+
 ## [3.17.1](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.17.0...v3.17.1) (2026-02-18)
 
 
