@@ -69,6 +69,31 @@ def _calculate_subscription_flags(subscription):
     return has_active_subscription, subscription_is_active
 
 
+async def _get_custom_main_menu_buttons(
+    db: AsyncSession,
+    *,
+    is_admin: bool,
+    has_active_subscription: bool,
+    subscription_is_active: bool,
+):
+    try:
+        return await MainMenuButtonService.get_buttons_for_user(
+            db,
+            is_admin=is_admin,
+            has_active_subscription=has_active_subscription,
+            subscription_is_active=subscription_is_active,
+        )
+    except Exception as error:
+        logger.error(
+            'Не удалось загрузить кастомные кнопки главного меню',
+            is_admin=is_admin,
+            has_active_subscription=has_active_subscription,
+            subscription_is_active=subscription_is_active,
+            error=error,
+        )
+        return []
+
+
 async def _send_pinned_message(
     bot: Bot,
     db: AsyncSession,
@@ -488,14 +513,12 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         is_admin = settings.is_admin(user.telegram_id)
         is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
 
-        custom_buttons = []
-        if not settings.is_text_main_menu_mode():
-            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-                db,
-                is_admin=is_admin,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-            )
+        custom_buttons = await _get_custom_main_menu_buttons(
+            db,
+            is_admin=is_admin,
+            has_active_subscription=has_active_subscription,
+            subscription_is_active=subscription_is_active,
+        )
 
         keyboard = await get_main_menu_keyboard_async(
             db=db,
@@ -1119,14 +1142,12 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         is_admin = settings.is_admin(existing_user.telegram_id)
         is_moderator = (not is_admin) and SupportSettingsService.is_moderator(existing_user.telegram_id)
 
-        custom_buttons = []
-        if not settings.is_text_main_menu_mode():
-            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-                db,
-                is_admin=is_admin,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-            )
+        custom_buttons = await _get_custom_main_menu_buttons(
+            db,
+            is_admin=is_admin,
+            has_active_subscription=has_active_subscription,
+            subscription_is_active=subscription_is_active,
+        )
 
         try:
             keyboard = await get_main_menu_keyboard_async(
@@ -1316,14 +1337,12 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         is_admin = settings.is_admin(user.telegram_id)
         is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
 
-        custom_buttons = []
-        if not settings.is_text_main_menu_mode():
-            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-                db,
-                is_admin=is_admin,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-            )
+        custom_buttons = await _get_custom_main_menu_buttons(
+            db,
+            is_admin=is_admin,
+            has_active_subscription=has_active_subscription,
+            subscription_is_active=subscription_is_active,
+        )
 
         try:
             keyboard = await get_main_menu_keyboard_async(
@@ -1381,14 +1400,12 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         is_admin = settings.is_admin(existing_user.telegram_id)
         is_moderator = (not is_admin) and SupportSettingsService.is_moderator(existing_user.telegram_id)
 
-        custom_buttons = []
-        if not settings.is_text_main_menu_mode():
-            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-                db,
-                is_admin=is_admin,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-            )
+        custom_buttons = await _get_custom_main_menu_buttons(
+            db,
+            is_admin=is_admin,
+            has_active_subscription=has_active_subscription,
+            subscription_is_active=subscription_is_active,
+        )
 
         try:
             keyboard = await get_main_menu_keyboard_async(
@@ -1614,14 +1631,12 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         is_admin = settings.is_admin(user.telegram_id)
         is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
 
-        custom_buttons = []
-        if not settings.is_text_main_menu_mode():
-            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-                db,
-                is_admin=is_admin,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-            )
+        custom_buttons = await _get_custom_main_menu_buttons(
+            db,
+            is_admin=is_admin,
+            has_active_subscription=has_active_subscription,
+            subscription_is_active=subscription_is_active,
+        )
 
         try:
             keyboard = await get_main_menu_keyboard_async(
@@ -1968,7 +1983,7 @@ async def required_sub_channel_check(
             is_admin = settings.is_admin(user.telegram_id)
             is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
 
-            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+            custom_buttons = await _get_custom_main_menu_buttons(
                 db,
                 is_admin=is_admin,
                 has_active_subscription=has_active_subscription,
@@ -2061,7 +2076,7 @@ async def required_sub_channel_check(
                     is_admin = settings.is_admin(user.telegram_id)
                     is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
 
-                    custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+                    custom_buttons = await _get_custom_main_menu_buttons(
                         db,
                         is_admin=is_admin,
                         has_active_subscription=has_active_subscription,

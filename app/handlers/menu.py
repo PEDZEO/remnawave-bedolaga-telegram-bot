@@ -46,6 +46,31 @@ from app.utils.timezone import format_local_datetime
 logger = structlog.get_logger(__name__)
 
 
+async def _get_custom_main_menu_buttons(
+    db: AsyncSession,
+    *,
+    is_admin: bool,
+    has_active_subscription: bool,
+    subscription_is_active: bool,
+):
+    try:
+        return await MainMenuButtonService.get_buttons_for_user(
+            db,
+            is_admin=is_admin,
+            has_active_subscription=has_active_subscription,
+            subscription_is_active=subscription_is_active,
+        )
+    except Exception as error:
+        logger.error(
+            'Не удалось загрузить кастомные кнопки главного меню',
+            is_admin=is_admin,
+            has_active_subscription=has_active_subscription,
+            subscription_is_active=subscription_is_active,
+            error=error,
+        )
+        return []
+
+
 def _format_rubles(amount_kopeks: int) -> str:
     rubles = Decimal(amount_kopeks) / Decimal(100)
 
@@ -189,14 +214,12 @@ async def show_main_menu(
     is_admin = settings.is_admin(db_user.telegram_id)
     is_moderator = (not is_admin) and SupportSettingsService.is_moderator(db_user.telegram_id)
 
-    custom_buttons = []
-    if not settings.is_text_main_menu_mode():
-        custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-            db,
-            is_admin=is_admin,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-        )
+    custom_buttons = await _get_custom_main_menu_buttons(
+        db,
+        is_admin=is_admin,
+        has_active_subscription=has_active_subscription,
+        subscription_is_active=subscription_is_active,
+    )
 
     keyboard = await get_main_menu_keyboard_async(
         db=db,
@@ -1035,14 +1058,12 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
     is_admin = settings.is_admin(db_user.telegram_id)
     is_moderator = (not is_admin) and SupportSettingsService.is_moderator(db_user.telegram_id)
 
-    custom_buttons = []
-    if not settings.is_text_main_menu_mode():
-        custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-            db,
-            is_admin=is_admin,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-        )
+    custom_buttons = await _get_custom_main_menu_buttons(
+        db,
+        is_admin=is_admin,
+        has_active_subscription=has_active_subscription,
+        subscription_is_active=subscription_is_active,
+    )
 
     keyboard = await get_main_menu_keyboard_async(
         db=db,

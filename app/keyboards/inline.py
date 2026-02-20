@@ -369,6 +369,7 @@ def _build_cabinet_main_menu_keyboard(
     is_admin: bool,
     is_moderator: bool,
     balance_kopeks: int = 0,
+    custom_buttons: list[InlineKeyboardButton] | None = None,
 ) -> InlineKeyboardMarkup:
     """Build the main-menu keyboard for Cabinet mode.
 
@@ -476,6 +477,11 @@ def _build_cabinet_main_menu_keyboard(
         info_text = info_cfg.get('labels', {}).get(language, '') or texts.t('MENU_INFO', 'ℹ️ Инфо')
         paired.append(_cabinet_button(info_text, '/info', 'menu_info'))
 
+    if custom_buttons:
+        for button in custom_buttons:
+            if isinstance(button, InlineKeyboardButton):
+                paired.append(button)
+
     # Language selection (stays as callback — not a cabinet section)
     if settings.is_language_selection_enabled():
         paired.append(InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data='menu_language'))
@@ -521,6 +527,7 @@ def get_main_menu_keyboard(
             is_admin=is_admin,
             is_moderator=is_moderator,
             balance_kopeks=balance_kopeks,
+            custom_buttons=custom_buttons,
         )
 
     if settings.DEBUG:
