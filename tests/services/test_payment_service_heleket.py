@@ -15,11 +15,6 @@ from app.database.crud import heleket as heleket_crud
 from app.services.payment_service import PaymentService
 
 
-@pytest.fixture
-def anyio_backend() -> str:
-    return 'asyncio'
-
-
 class DummySession:
     def __init__(self) -> None:
         self.added_objects: list[Any] = []
@@ -91,7 +86,7 @@ def _make_service(stub: StubHeleketService | None) -> PaymentService:
     return service
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_heleket_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     response = {
         'state': 0,
@@ -142,7 +137,7 @@ async def test_create_heleket_payment_success(monkeypatch: pytest.MonkeyPatch) -
     assert captured_args['user_id'] == 42
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_heleket_payment_returns_none_without_service() -> None:
     service = _make_service(None)
     db = DummySession()
@@ -157,7 +152,7 @@ async def test_create_heleket_payment_returns_none_without_service() -> None:
     assert result is None
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_heleket_payment_handles_empty_response(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubHeleketService(response=None)
     service = _make_service(stub)
@@ -188,7 +183,7 @@ async def test_create_heleket_payment_handles_empty_response(monkeypatch: pytest
     assert called is False
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_sync_heleket_payment_status_success(monkeypatch: pytest.MonkeyPatch) -> None:
     info_response = {
         'state': 0,
@@ -234,7 +229,7 @@ async def test_sync_heleket_payment_status_success(monkeypatch: pytest.MonkeyPat
     assert stub.info_calls == [{'uuid': payment.uuid, 'order_id': payment.order_id}]
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_sync_heleket_payment_status_without_response(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubHeleketService(response=None, info_response=None)
     service = _make_service(stub)
@@ -265,7 +260,7 @@ async def test_sync_heleket_payment_status_without_response(monkeypatch: pytest.
     assert stub.list_calls  # fallback to history should be attempted
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_sync_heleket_payment_status_history_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubHeleketService(response=None, info_response=None)
     stub.list_response = {
