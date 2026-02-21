@@ -1,7 +1,10 @@
 from app.services.remnawave_sync_service import remnawave_sync_service
+from app.utils.startup_timeline import StartupTimeline
+
+from .types import LoggerLike
 
 
-async def initialize_remnawave_sync_stage(timeline, logger):
+async def initialize_remnawave_sync_stage(timeline: StartupTimeline, logger: LoggerLike) -> None:
     async with timeline.stage(
         'Автосинхронизация RemnaWave',
         '🔄',

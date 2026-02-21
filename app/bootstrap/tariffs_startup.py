@@ -1,8 +1,11 @@
 from app.database.crud.tariff import ensure_tariffs_synced
 from app.database.database import AsyncSessionLocal
+from app.utils.startup_timeline import StartupTimeline
+
+from .types import LoggerLike
 
 
-async def sync_tariffs_stage(timeline, logger):
+async def sync_tariffs_stage(timeline: StartupTimeline, logger: LoggerLike) -> None:
     async with timeline.stage(
         'Синхронизация тарифов из конфига',
         '💰',

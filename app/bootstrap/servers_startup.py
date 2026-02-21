@@ -1,8 +1,11 @@
 from app.database.crud.server_squad import ensure_servers_synced
 from app.database.database import AsyncSessionLocal
+from app.utils.startup_timeline import StartupTimeline
+
+from .types import LoggerLike
 
 
-async def sync_servers_stage(timeline, logger):
+async def sync_servers_stage(timeline: StartupTimeline, logger: LoggerLike) -> None:
     async with timeline.stage(
         'Синхронизация серверов из RemnaWave',
         '🖥️',

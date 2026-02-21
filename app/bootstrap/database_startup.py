@@ -1,9 +1,12 @@
 import os
 
 from app.database.migrations import run_alembic_upgrade
+from app.utils.startup_timeline import StartupTimeline
+
+from .types import LoggerLike
 
 
-async def run_database_migration_stage(timeline, logger):
+async def run_database_migration_stage(timeline: StartupTimeline, logger: LoggerLike) -> None:
     skip_migration = os.getenv('SKIP_MIGRATION', 'false').lower() == 'true'
 
     if skip_migration:

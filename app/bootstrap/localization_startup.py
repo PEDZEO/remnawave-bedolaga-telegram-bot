@@ -1,7 +1,10 @@
 from app.localization.loader import ensure_locale_templates
+from app.utils.startup_timeline import StartupTimeline
+
+from .types import LoggerLike
 
 
-async def prepare_localizations(timeline, logger):
+async def prepare_localizations(timeline: StartupTimeline, logger: LoggerLike) -> None:
     async with timeline.stage('Подготовка локализаций', '🗂️', success_message='Шаблоны локализаций готовы') as stage:
         try:
             ensure_locale_templates()
