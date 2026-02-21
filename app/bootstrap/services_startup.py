@@ -1,3 +1,5 @@
+from aiogram import Bot
+
 from app.services.ban_notification_service import ban_notification_service
 from app.services.broadcast_service import broadcast_service
 from app.services.daily_subscription_service import daily_subscription_service
@@ -6,11 +8,12 @@ from app.services.monitoring_service import monitoring_service
 from app.services.referral_contest_service import referral_contest_service
 from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
 from app.services.version_service import version_service
+from app.utils.startup_timeline import StartupTimeline
 
 from .types import TelegramNotifierLike
 
 
-def wire_core_services(bot, telegram_notifier: TelegramNotifierLike):
+def wire_core_services(bot: Bot, telegram_notifier: TelegramNotifierLike) -> None:
     monitoring_service.bot = bot
     maintenance_service.set_bot(bot)
     broadcast_service.set_bot(bot)
@@ -25,7 +28,7 @@ def wire_core_services(bot, telegram_notifier: TelegramNotifierLike):
     email_broadcast_service.set_email_service(email_service)
 
 
-async def connect_integration_services_stage(timeline, bot):
+async def connect_integration_services_stage(timeline: StartupTimeline, bot: Bot) -> None:
     from app.services.admin_notification_service import AdminNotificationService
 
     async with timeline.stage(
