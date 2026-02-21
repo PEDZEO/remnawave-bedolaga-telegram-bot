@@ -13,8 +13,7 @@ from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.runtime_execution import run_runtime_loop_stage
 from app.bootstrap.runtime_logging import configure_runtime_logging
 from app.bootstrap.runtime_tasks_startup import start_runtime_tasks_stage
-from app.bootstrap.shutdown_services import shutdown_runtime_services
-from app.bootstrap.shutdown_web import shutdown_web_runtime
+from app.bootstrap.shutdown_pipeline import run_shutdown_pipeline
 from app.bootstrap.signals import install_signal_handlers
 from app.bootstrap.startup_finalize import finalize_startup_stage
 from app.config import settings
@@ -116,29 +115,20 @@ async def main():
         raise
 
     finally:
-        if not summary_logged:
-            timeline.log_summary()
-            summary_logged = True
-        logger.info('🛑 Начинается корректное завершение работы...')
-
-        await shutdown_runtime_services(
+        summary_logged = await run_shutdown_pipeline(
+            timeline,
             logger,
+            summary_logged=summary_logged,
             monitoring_task=monitoring_task,
             maintenance_task=maintenance_task,
             version_check_task=version_check_task,
             traffic_monitoring_task=traffic_monitoring_task,
             daily_subscription_task=daily_subscription_task,
             polling_task=polling_task,
-        )
-
-        await shutdown_web_runtime(
-            logger,
             bot=bot,
             web_api_server=web_api_server,
             telegram_webhook_enabled=telegram_webhook_enabled,
         )
-
-        logger.info('✅ Завершение работы бота завершено')
 
 
 if __name__ == '__main__':
