@@ -39,11 +39,6 @@ package = false
 
 [tool.pytest.ini_options]
 filterwarnings = [
-    'ignore::pydantic.warnings.PydanticDeprecatedSince20',
-    'ignore::pydantic.warnings.PydanticDeprecatedSince210',
-    'ignore::pydantic.warnings.PydanticDeprecatedSince212',
-    'ignore::DeprecationWarning:app.webserver.unified_app',
-    'ignore::DeprecationWarning:fastapi.applications',
     "ignore:coroutine 'AsyncMockMixin._execute_mock_call' was never awaited:RuntimeWarning",
 ]
 

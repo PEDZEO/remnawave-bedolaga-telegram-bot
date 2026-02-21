@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -191,7 +192,7 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
     )
 
     bot = AsyncMock()
-    db_session = AsyncMock(spec=AsyncSession)
+    db_session = SimpleNamespace()
 
     result = await auto_purchase_saved_cart_after_topup(db_session, user, bot=bot)
 
