@@ -27,6 +27,7 @@ from app.bootstrap.servers_startup import sync_servers_stage
 from app.bootstrap.services_startup import connect_integration_services_stage, wire_core_services
 from app.bootstrap.signals import install_signal_handlers
 from app.bootstrap.tariffs_startup import sync_tariffs_stage
+from app.bootstrap.telegram_webhook_startup import configure_telegram_webhook_stage
 from app.bootstrap.web_server_startup import start_web_server_stage
 from app.config import settings
 from app.database.models import PaymentMethod
@@ -202,28 +203,12 @@ async def main():
             payment_webhooks_enabled=payment_webhooks_enabled,
         )
 
-        async with timeline.stage(
-            'Telegram webhook',
-            '🤖',
-            success_message='Telegram webhook настроен',
-        ) as stage:
-            if telegram_webhook_enabled:
-                webhook_url = settings.get_telegram_webhook_url()
-                if not webhook_url:
-                    stage.warning('WEBHOOK_URL не задан, пропускаем настройку webhook')
-                else:
-                    allowed_updates = dp.resolve_used_update_types()
-                    await bot.set_webhook(
-                        url=webhook_url,
-                        secret_token=settings.WEBHOOK_SECRET_TOKEN,
-                        drop_pending_updates=False,  # Обрабатываем накопившиеся обновления
-                        allowed_updates=allowed_updates,
-                    )
-                    stage.log(f'Webhook установлен: {webhook_url}')
-                    stage.log(f'Allowed updates: {", ".join(sorted(allowed_updates)) if allowed_updates else "all"}')
-                    stage.success('Telegram webhook активен')
-            else:
-                stage.skip('Режим webhook отключен')
+        await configure_telegram_webhook_stage(
+            timeline,
+            bot,
+            dp,
+            telegram_webhook_enabled=telegram_webhook_enabled,
+        )
 
         async with timeline.stage(
             'Служба мониторинга',
