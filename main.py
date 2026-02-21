@@ -21,6 +21,7 @@ from app.bootstrap.maintenance_startup import start_maintenance_stage
 from app.bootstrap.monitoring_startup import start_monitoring_stage
 from app.bootstrap.payment_methods_startup import initialize_payment_methods_stage
 from app.bootstrap.payment_runtime import setup_payment_runtime
+from app.bootstrap.polling_startup import start_polling_stage
 from app.bootstrap.referral_contests_startup import initialize_referral_contests_stage
 from app.bootstrap.runtime_mode import resolve_runtime_mode
 from app.bootstrap.runtime_logging import configure_runtime_logging
@@ -225,17 +226,7 @@ async def main():
 
         version_check_task = await start_version_check_stage(timeline)
 
-        async with timeline.stage(
-            'Запуск polling',
-            '🤖',
-            success_message='Aiogram polling запущен',
-        ) as stage:
-            if polling_enabled:
-                polling_task = asyncio.create_task(dp.start_polling(bot, skip_updates=False))
-                stage.log('skip_updates=False — накопившиеся обновления будут обработаны')
-            else:
-                polling_task = None
-                stage.skip('Polling отключен режимом работы')
+        polling_task = await start_polling_stage(timeline, dp, bot, polling_enabled=polling_enabled)
 
         webhook_lines: list[str] = []
         base_url = settings.WEBHOOK_URL or f'http://{settings.WEB_API_HOST}:{settings.WEB_API_PORT}'
