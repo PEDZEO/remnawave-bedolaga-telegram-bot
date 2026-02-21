@@ -29,6 +29,7 @@ from app.bootstrap.remnawave_sync_startup import initialize_remnawave_sync_stage
 from app.bootstrap.reporting_startup import initialize_reporting_stage
 from app.bootstrap.runtime_logging import configure_runtime_logging
 from app.bootstrap.runtime_mode import resolve_runtime_mode
+from app.bootstrap.runtime_watchdog import RuntimeTasks, run_runtime_watchdog_loop
 from app.bootstrap.servers_startup import sync_servers_stage
 from app.bootstrap.services_startup import connect_integration_services_stage, wire_core_services
 from app.bootstrap.signals import install_signal_handlers
@@ -55,7 +56,6 @@ from app.services.referral_contest_service import referral_contest_service
 from app.services.remnawave_sync_service import remnawave_sync_service
 from app.services.reporting_service import reporting_service
 from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
-from app.services.version_service import version_service
 from app.utils.startup_timeline import StartupTimeline
 
 
@@ -178,58 +178,26 @@ async def main():
         await send_startup_notification_safe(logger, bot)
 
         try:
-            while not killer.exit:
-                await asyncio.sleep(1)
-
-                if monitoring_task.done():
-                    exception = monitoring_task.exception()
-                    if exception:
-                        logger.error('Служба мониторинга завершилась с ошибкой', error=exception)
-                        monitoring_task = asyncio.create_task(monitoring_service.start_monitoring())
-
-                if maintenance_task and maintenance_task.done():
-                    exception = maintenance_task.exception()
-                    if exception:
-                        logger.error('Служба техработ завершилась с ошибкой', error=exception)
-                        maintenance_task = asyncio.create_task(maintenance_service.start_monitoring())
-
-                if version_check_task and version_check_task.done():
-                    exception = version_check_task.exception()
-                    if exception:
-                        logger.error('Сервис проверки версий завершился с ошибкой', error=exception)
-                        if settings.is_version_check_enabled():
-                            logger.info('🔄 Перезапуск сервиса проверки версий...')
-                            version_check_task = asyncio.create_task(version_service.start_periodic_check())
-
-                if traffic_monitoring_task and traffic_monitoring_task.done():
-                    exception = traffic_monitoring_task.exception()
-                    if exception:
-                        logger.error('Мониторинг трафика завершился с ошибкой', error=exception)
-                        if traffic_monitoring_scheduler.is_enabled():
-                            logger.info('🔄 Перезапуск мониторинга трафика...')
-                            traffic_monitoring_task = asyncio.create_task(
-                                traffic_monitoring_scheduler.start_monitoring()
-                            )
-
-                if daily_subscription_task and daily_subscription_task.done():
-                    exception = daily_subscription_task.exception()
-                    if exception:
-                        logger.error('Сервис суточных подписок завершился с ошибкой', error=exception)
-                        if daily_subscription_service.is_enabled():
-                            logger.info('🔄 Перезапуск сервиса суточных подписок...')
-                            daily_subscription_task = asyncio.create_task(daily_subscription_service.start_monitoring())
-
-                if auto_verification_active and not auto_payment_verification_service.is_running():
-                    logger.warning('Сервис автопроверки пополнений остановился, пробуем перезапустить...')
-                    await auto_payment_verification_service.start()
-                    auto_verification_active = auto_payment_verification_service.is_running()
-
-                if polling_task and polling_task.done():
-                    exception = polling_task.exception()
-                    if exception:
-                        logger.error('Polling завершился с ошибкой', error=exception)
-                        break
-
+            runtime_tasks = RuntimeTasks(
+                monitoring_task=monitoring_task,
+                maintenance_task=maintenance_task,
+                version_check_task=version_check_task,
+                traffic_monitoring_task=traffic_monitoring_task,
+                daily_subscription_task=daily_subscription_task,
+                polling_task=polling_task,
+            )
+            runtime_tasks, auto_verification_active = await run_runtime_watchdog_loop(
+                killer,
+                logger,
+                runtime_tasks,
+                auto_verification_active,
+            )
+            monitoring_task = runtime_tasks.monitoring_task
+            maintenance_task = runtime_tasks.maintenance_task
+            version_check_task = runtime_tasks.version_check_task
+            traffic_monitoring_task = runtime_tasks.traffic_monitoring_task
+            daily_subscription_task = runtime_tasks.daily_subscription_task
+            polling_task = runtime_tasks.polling_task
         except Exception as e:
             logger.error('Ошибка в основном цикле', error=e)
 
