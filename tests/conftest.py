@@ -6,7 +6,6 @@ import hashlib
 import inspect
 import os
 import secrets
-import socket
 import sys
 import types
 import uuid
@@ -257,28 +256,6 @@ def pytest_configure(config: pytest.Config) -> None:
         'markers',
         'anyio: запуск асинхронного теста через встроенный цикл событий',
     )
-
-
-def _is_socket_bind_available() -> bool:
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            sock.bind(('127.0.0.1', 0))
-        finally:
-            sock.close()
-        return True
-    except OSError:
-        return False
-
-
-def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    if _is_socket_bind_available():
-        return
-
-    skip_socket = pytest.mark.skip(reason='Socket bind is not available in current sandbox environment')
-    for item in items:
-        if 'tests/external/test_yookassa_webhook.py' in str(item.fspath):
-            item.add_marker(skip_socket)
 
 
 def _unwrap_test(obj):
