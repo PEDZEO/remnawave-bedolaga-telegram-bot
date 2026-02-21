@@ -16,6 +16,7 @@ from app.bootstrap.log_rotation_startup import initialize_log_rotation_stage
 from app.bootstrap.contest_rotation_startup import initialize_contest_rotation_stage
 from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.payment_methods_startup import initialize_payment_methods_stage
+from app.bootstrap.payment_runtime import setup_payment_runtime
 from app.bootstrap.referral_contests_startup import initialize_referral_contests_stage
 from app.bootstrap.runtime_logging import configure_runtime_logging
 from app.bootstrap.reporting_startup import initialize_reporting_stage
@@ -37,7 +38,6 @@ from app.services.log_rotation_service import log_rotation_service
 from app.services.maintenance_service import maintenance_service
 from app.services.monitoring_service import monitoring_service
 from app.services.nalogo_queue_service import nalogo_queue_service
-from app.services.payment_service import PaymentService
 from app.services.payment_verification_service import (
     PENDING_MAX_AGE,
     SUPPORTED_MANUAL_CHECK_METHODS,
@@ -121,13 +121,7 @@ async def main():
 
         await initialize_remnawave_sync_stage(timeline, logger)
 
-        payment_service = PaymentService(bot)
-        auto_payment_verification_service.set_payment_service(payment_service)
-
-        # Настройка сервиса очереди чеков NaloGO
-        if payment_service.nalogo_service:
-            nalogo_queue_service.set_nalogo_service(payment_service.nalogo_service)
-            nalogo_queue_service.set_bot(bot)
+        payment_service = setup_payment_runtime(bot)
 
         verification_providers: list[str] = []
         auto_verification_active = False
