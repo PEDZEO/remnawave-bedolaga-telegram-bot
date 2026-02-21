@@ -27,6 +27,7 @@ from app.bootstrap.servers_startup import sync_servers_stage
 from app.bootstrap.services_startup import connect_integration_services_stage, wire_core_services
 from app.bootstrap.signals import install_signal_handlers
 from app.bootstrap.tariffs_startup import sync_tariffs_stage
+from app.bootstrap.web_server_startup import start_web_server_stage
 from app.config import settings
 from app.database.models import PaymentMethod
 from app.logging_config import setup_logging
@@ -52,8 +53,6 @@ from app.services.reporting_service import reporting_service
 from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
 from app.services.version_service import version_service
 from app.utils.startup_timeline import StartupTimeline
-from app.webapi.server import WebAPIServer
-from app.webserver.unified_app import create_unified_app
 
 
 async def main():
@@ -194,47 +193,14 @@ async def main():
 
         polling_enabled, telegram_webhook_enabled, payment_webhooks_enabled = resolve_runtime_mode()
 
-        async with timeline.stage(
-            'Единый веб-сервер',
-            '🌐',
-            success_message='Веб-сервер запущен',
-        ) as stage:
-            should_start_web_app = (
-                settings.is_web_api_enabled()
-                or telegram_webhook_enabled
-                or payment_webhooks_enabled
-                or settings.get_miniapp_static_path().exists()
-            )
-
-            if should_start_web_app:
-                web_app = create_unified_app(
-                    bot,
-                    dp,
-                    payment_service,
-                    enable_telegram_webhook=telegram_webhook_enabled,
-                )
-
-                web_api_server = WebAPIServer(app=web_app)
-                await web_api_server.start()
-
-                base_url = settings.WEBHOOK_URL or f'http://{settings.WEB_API_HOST}:{settings.WEB_API_PORT}'
-                stage.log(f'Базовый URL: {base_url}')
-
-                features: list[str] = []
-                if settings.is_web_api_enabled():
-                    features.append('админка')
-                if payment_webhooks_enabled:
-                    features.append('платежные webhook-и')
-                if telegram_webhook_enabled:
-                    features.append('Telegram webhook')
-                if settings.get_miniapp_static_path().exists():
-                    features.append('статические файлы миниаппа')
-
-                if features:
-                    stage.log('Активные сервисы: ' + ', '.join(features))
-                stage.success('HTTP-сервисы активны')
-            else:
-                stage.skip('HTTP-сервисы отключены настройками')
+        web_app, web_api_server = await start_web_server_stage(
+            timeline,
+            bot,
+            dp,
+            payment_service,
+            telegram_webhook_enabled=telegram_webhook_enabled,
+            payment_webhooks_enabled=payment_webhooks_enabled,
+        )
 
         async with timeline.stage(
             'Telegram webhook',
