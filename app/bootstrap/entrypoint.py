@@ -2,11 +2,10 @@ import asyncio
 import sys
 import traceback
 from collections.abc import Awaitable, Callable
-from typing import Any
 
 
 def run_main_entrypoint(
-    main_coroutine: Callable[[], Awaitable[Any]],
+    main_coroutine: Callable[[], Awaitable[None]],
     crash_notifier: Callable[[Exception], Awaitable[None]],
 ) -> None:
     try:
