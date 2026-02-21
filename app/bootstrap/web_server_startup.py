@@ -1,6 +1,5 @@
-from typing import Any
-
 from aiogram import Bot, Dispatcher
+from fastapi import FastAPI
 
 from app.config import settings
 from app.services.payment_service import PaymentService
@@ -16,8 +15,8 @@ async def start_web_server_stage(
     payment_service: PaymentService,
     telegram_webhook_enabled: bool,
     payment_webhooks_enabled: bool,
-) -> tuple[Any, WebAPIServer | None]:
-    web_app = None
+) -> tuple[FastAPI | None, WebAPIServer | None]:
+    web_app: FastAPI | None = None
     web_api_server = None
 
     async with timeline.stage(

@@ -1,17 +1,15 @@
-from typing import Any
-
 from aiogram import Bot
 
-from app.bootstrap.types import LoggerLike
+from app.bootstrap.types import LoggerLike, WebAPIServerLike
 
 
 async def shutdown_web_runtime(
     logger: LoggerLike,
     *,
     bot: Bot | None,
-    web_api_server: Any,
+    web_api_server: WebAPIServerLike | None,
     telegram_webhook_enabled: bool,
-):
+) -> None:
     if telegram_webhook_enabled and bot is not None:
         logger.info('ℹ️ Снятие Telegram webhook...')
         try:

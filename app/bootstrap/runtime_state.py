@@ -1,13 +1,27 @@
 import asyncio
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, TypedDict
 
 from aiogram import Bot, Dispatcher
+
+from app.bootstrap.types import WebAPIServerLike
 
 
 if TYPE_CHECKING:
     from app.bootstrap.core_runtime_startup import CoreRuntimeStartupContext
     from app.bootstrap.runtime_tasks_startup import RuntimeStartupTasks
+
+
+class ShutdownPayload(TypedDict):
+    monitoring_task: asyncio.Task | None
+    maintenance_task: asyncio.Task | None
+    version_check_task: asyncio.Task | None
+    traffic_monitoring_task: asyncio.Task | None
+    daily_subscription_task: asyncio.Task | None
+    polling_task: asyncio.Task | None
+    bot: Bot | None
+    web_api_server: WebAPIServerLike | None
+    telegram_webhook_enabled: bool
 
 
 @dataclass
@@ -20,7 +34,7 @@ class RuntimeState:
     traffic_monitoring_task: asyncio.Task | None = None
     daily_subscription_task: asyncio.Task | None = None
     polling_task: asyncio.Task | None = None
-    web_api_server: Any | None = None
+    web_api_server: WebAPIServerLike | None = None
     telegram_webhook_enabled: bool = False
     polling_enabled: bool = True
     verification_providers: list[str] = field(default_factory=list)
@@ -44,7 +58,7 @@ class RuntimeState:
         self.version_check_task = runtime_tasks.version_check_task
         self.polling_task = runtime_tasks.polling_task
 
-    def build_shutdown_payload(self) -> dict[str, Any]:
+    def build_shutdown_payload(self) -> ShutdownPayload:
         return {
             'monitoring_task': self.monitoring_task,
             'maintenance_task': self.maintenance_task,

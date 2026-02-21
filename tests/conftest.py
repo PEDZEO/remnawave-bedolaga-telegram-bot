@@ -250,16 +250,6 @@ def pytest_configure(config: pytest.Config) -> None:
 
     # Keep coroutine origins in warnings to pinpoint un-awaited AsyncMock calls.
     sys.set_coroutine_origin_tracking_depth(10)
-    warnings.filterwarnings(
-        'ignore',
-        message=r'Exception ignored in: <socket\.socket.*',
-        category=pytest.PytestUnraisableExceptionWarning,
-    )
-    warnings.filterwarnings(
-        'ignore',
-        message=r'Exception ignored in: <function BaseEventLoop\.__del__.*',
-        category=pytest.PytestUnraisableExceptionWarning,
-    )
 
     config.addinivalue_line(
         'markers',
@@ -273,10 +263,12 @@ def pytest_configure(config: pytest.Config) -> None:
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     """Close orphaned default event loop to avoid unraisable ResourceWarning at interpreter shutdown."""
-    try:
-        loop = asyncio.get_event_loop_policy().get_event_loop()
-    except RuntimeError:
-        return
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', category=DeprecationWarning)
+        try:
+            loop = asyncio.get_event_loop_policy().get_event_loop()
+        except RuntimeError:
+            return
 
     if loop.is_running():
         return

@@ -15,3 +15,7 @@ class KillerLike(Protocol):
 
 class TelegramNotifierLike(Protocol):
     def set_bot(self, bot: Any) -> Any: ...
+
+
+class WebAPIServerLike(Protocol):
+    async def stop(self) -> None: ...
