@@ -15,6 +15,7 @@ from app.bootstrap.external_admin_startup import initialize_external_admin_stage
 from app.bootstrap.configuration_startup import load_bot_configuration_stage
 from app.bootstrap.log_rotation_startup import initialize_log_rotation_stage
 from app.bootstrap.contest_rotation_startup import initialize_contest_rotation_stage
+from app.bootstrap.daily_subscription_startup import start_daily_subscription_stage
 from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.maintenance_startup import start_maintenance_stage
 from app.bootstrap.monitoring_startup import start_monitoring_stage
@@ -219,18 +220,7 @@ async def main():
 
         traffic_monitoring_task = await start_traffic_monitoring_stage(timeline)
 
-        async with timeline.stage(
-            'Суточные подписки',
-            '💳',
-            success_message='Сервис суточных подписок запущен',
-        ) as stage:
-            if daily_subscription_service.is_enabled():
-                daily_subscription_task = asyncio.create_task(daily_subscription_service.start_monitoring())
-                interval_minutes = daily_subscription_service.get_check_interval_minutes()
-                stage.log(f'Интервал проверки: {interval_minutes} мин')
-            else:
-                daily_subscription_task = None
-                stage.skip('Суточные подписки отключены настройками')
+        daily_subscription_task = await start_daily_subscription_stage(timeline)
 
         async with timeline.stage(
             'Сервис проверки версий',
