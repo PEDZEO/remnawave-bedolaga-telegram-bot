@@ -32,9 +32,12 @@ pytestmark = pytest.mark.asyncio
 
 @pytest.fixture(autouse=True)
 def _mock_recent_transactions(monkeypatch):
+    async def get_user_transactions_stub(*args, **kwargs):
+        return []
+
     monkeypatch.setattr(
         'app.database.crud.transaction.get_user_transactions',
-        AsyncMock(return_value=[]),
+        get_user_transactions_stub,
     )
 
 
@@ -442,10 +445,15 @@ async def test_auto_purchase_trial_converted_after_successful_extension(monkeypa
     }
 
     # Mock: деньги списались успешно
-    subtract_mock = AsyncMock(return_value=True)
+    subtract_called = {'value': False}
+
+    async def subtract_stub(*args, **kwargs):
+        subtract_called['value'] = True
+        return True
+
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.subtract_user_balance',
-        subtract_mock,
+        subtract_stub,
     )
 
     # Mock: продление успешно
@@ -471,9 +479,12 @@ async def test_auto_purchase_trial_converted_after_successful_extension(monkeypa
         lambda: service_mock,
     )
 
+    async def get_user_cart_stub(_user_id):
+        return cart_data
+
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.user_cart_service.get_user_cart',
-        AsyncMock(return_value=cart_data),
+        get_user_cart_stub,
     )
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.user_cart_service.delete_user_cart',
@@ -528,22 +539,25 @@ async def test_auto_purchase_trial_preserved_on_extension_failure(monkeypatch):
     """Тест: триал НЕ конвертируется и вызывается rollback при ошибке в extend_subscription"""
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
 
-    subscription = MagicMock()
-    subscription.id = 789
-    subscription.is_trial = True  # Триальная подписка!
-    subscription.status = 'active'
-    subscription.end_date = datetime.now(UTC) + timedelta(days=3)
-    subscription.device_limit = 1
-    subscription.traffic_limit_gb = 10
-    subscription.connected_squads = []
+    subscription = SimpleNamespace(
+        id=789,
+        is_trial=True,
+        status='active',
+        end_date=datetime.now(UTC) + timedelta(days=3),
+        tariff_id=None,
+        device_limit=1,
+        traffic_limit_gb=10,
+        connected_squads=[],
+    )
 
-    user = MagicMock(spec=User)
-    user.id = 77
-    user.telegram_id = 7777
-    user.balance_kopeks = 200_000  # Достаточно денег
-    user.language = 'ru'
-    user.subscription = subscription
-    user.get_primary_promo_group = MagicMock(return_value=None)
+    user = SimpleNamespace(
+        id=77,
+        telegram_id=7777,
+        balance_kopeks=200_000,
+        language='ru',
+        subscription=subscription,
+        get_primary_promo_group=lambda: None,
+    )
 
     cart_data = {
         'cart_mode': 'extend',
@@ -558,10 +572,15 @@ async def test_auto_purchase_trial_preserved_on_extension_failure(monkeypatch):
     }
 
     # Mock: деньги списались успешно
-    subtract_mock = AsyncMock(return_value=True)
+    subtract_called = {'value': False}
+
+    async def subtract_stub(*args, **kwargs):
+        subtract_called['value'] = True
+        return True
+
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.subtract_user_balance',
-        subtract_mock,
+        subtract_stub,
     )
 
     # Mock: extend_subscription выбрасывает ошибку!
@@ -573,9 +592,12 @@ async def test_auto_purchase_trial_preserved_on_extension_failure(monkeypatch):
         extend_error,
     )
 
+    async def get_user_cart_stub(_user_id):
+        return cart_data
+
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.user_cart_service.get_user_cart',
-        AsyncMock(return_value=cart_data),
+        get_user_cart_stub,
     )
 
     # ИСПРАВЛЕНО: Добавлены недостающие моки
@@ -592,30 +614,44 @@ async def test_auto_purchase_trial_preserved_on_extension_failure(monkeypatch):
         lambda dt, fmt: dt.strftime(fmt) if dt else '',
     )
 
-    admin_service_mock = MagicMock()
-    admin_service_mock.send_subscription_extension_notification = AsyncMock()
+    class _AdminServiceStub:
+        async def send_subscription_extension_notification(self, *args, **kwargs):
+            return None
+
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.AdminNotificationService',
-        lambda bot: admin_service_mock,
+        lambda bot: _AdminServiceStub(),
     )
 
     # Мок для get_subscription_by_user_id
+    async def get_subscription_by_user_id_stub(*args, **kwargs):
+        return subscription
+
     monkeypatch.setattr(
         'app.database.crud.subscription.get_subscription_by_user_id',
-        AsyncMock(return_value=subscription),
+        get_subscription_by_user_id_stub,
     )
 
-    db_session = AsyncMock(spec=AsyncSession)
-    db_session.rollback = AsyncMock()  # Важно! Отслеживаем rollback
-    db_session.refresh = AsyncMock()  # ИСПРАВЛЕНО: Добавлен мок для refresh
-    bot = AsyncMock()
+    class DummyDbSession:
+        def __init__(self):
+            self.rollback_called = False
+
+        async def rollback(self):
+            self.rollback_called = True
+
+        async def refresh(self, *_args, **_kwargs):
+            return None
+
+    db_session = DummyDbSession()
+    bot = None
 
     result = await auto_purchase_saved_cart_after_topup(db_session, user, bot=bot)
 
     # Проверки
     assert result is False  # Автопокупка не удалась
     assert subscription.is_trial is True  # ТРИАЛ СОХРАНЁН!
-    db_session.rollback.assert_awaited()  # ROLLBACK БЫЛ ВЫЗВАН!
+    assert subtract_called['value'] is True
+    assert db_session.rollback_called is True  # ROLLBACK БЫЛ ВЫЗВАН!
 
 
 async def test_auto_purchase_trial_remaining_days_transferred(monkeypatch):
