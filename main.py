@@ -9,24 +9,24 @@ sys.path.append(str(Path(__file__).parent))
 
 from app.bootstrap.backup_startup import initialize_backup_stage
 from app.bootstrap.bot_startup import setup_bot_stage
+from app.bootstrap.configuration_startup import load_bot_configuration_stage
+from app.bootstrap.contest_rotation_startup import initialize_contest_rotation_stage
+from app.bootstrap.daily_subscription_startup import start_daily_subscription_stage
 from app.bootstrap.database_initialization import initialize_database_stage
 from app.bootstrap.database_startup import run_database_migration_stage
 from app.bootstrap.external_admin_startup import initialize_external_admin_stage
-from app.bootstrap.configuration_startup import load_bot_configuration_stage
-from app.bootstrap.log_rotation_startup import initialize_log_rotation_stage
-from app.bootstrap.contest_rotation_startup import initialize_contest_rotation_stage
-from app.bootstrap.daily_subscription_startup import start_daily_subscription_stage
 from app.bootstrap.localization_startup import prepare_localizations
+from app.bootstrap.log_rotation_startup import initialize_log_rotation_stage
 from app.bootstrap.maintenance_startup import start_maintenance_stage
 from app.bootstrap.monitoring_startup import start_monitoring_stage
 from app.bootstrap.payment_methods_startup import initialize_payment_methods_stage
 from app.bootstrap.payment_runtime import setup_payment_runtime
 from app.bootstrap.polling_startup import start_polling_stage
 from app.bootstrap.referral_contests_startup import initialize_referral_contests_stage
-from app.bootstrap.runtime_mode import resolve_runtime_mode
-from app.bootstrap.runtime_logging import configure_runtime_logging
-from app.bootstrap.reporting_startup import initialize_reporting_stage
 from app.bootstrap.remnawave_sync_startup import initialize_remnawave_sync_stage
+from app.bootstrap.reporting_startup import initialize_reporting_stage
+from app.bootstrap.runtime_logging import configure_runtime_logging
+from app.bootstrap.runtime_mode import resolve_runtime_mode
 from app.bootstrap.servers_startup import sync_servers_stage
 from app.bootstrap.services_startup import connect_integration_services_stage, wire_core_services
 from app.bootstrap.signals import install_signal_handlers
@@ -39,8 +39,6 @@ from app.config import settings
 from app.database.models import PaymentMethod
 from app.logging_config import setup_logging
 from app.services.backup_service import backup_service
-from app.services.ban_notification_service import ban_notification_service
-from app.services.broadcast_service import broadcast_service
 from app.services.contest_rotation_service import contest_rotation_service
 from app.services.daily_subscription_service import daily_subscription_service
 from app.services.log_rotation_service import log_rotation_service
