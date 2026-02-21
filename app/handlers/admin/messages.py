@@ -1225,7 +1225,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
 
         for attempt in range(_MAX_SEND_RETRIES):
             # Глобальная пауза при FloodWait
-            now = asyncio.get_event_loop().time()
+            now = asyncio.get_running_loop().time()
             if flood_wait_until > now:
                 await asyncio.sleep(flood_wait_until - now)
 
@@ -1269,7 +1269,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
             except TelegramRetryAfter as e:
                 # Глобальная пауза — тормозим все корутины
                 wait_seconds = e.retry_after + 1
-                flood_wait_until = asyncio.get_event_loop().time() + wait_seconds
+                flood_wait_until = asyncio.get_running_loop().time() + wait_seconds
                 logger.warning(
                     'FloodWait: Telegram просит подождать сек (пользователь , попытка /)',
                     retry_after=e.retry_after,
@@ -1340,7 +1340,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
     async def _update_progress_message(current_sent: int, current_failed: int, current_blocked: int = 0) -> None:
         """Безопасно обновляет сообщение с прогрессом."""
         nonlocal last_progress_update, progress_message
-        now = asyncio.get_event_loop().time()
+        now = asyncio.get_running_loop().time()
         if now - last_progress_update < _PROGRESS_MIN_INTERVAL:
             return
         last_progress_update = now
