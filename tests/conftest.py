@@ -1,14 +1,75 @@
 """Глобальные фикстуры и настройки окружения для тестов."""
 
 import asyncio
+import base64
+import hashlib
 import inspect
 import os
+import secrets
+import socket
 import sys
 import types
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+
+
+pytest_plugins = ['tests.fixtures.promocode_fixtures']
+
+
+def _install_secrets_fallback_for_sandbox() -> None:
+    try:
+        secrets.token_hex(1)
+        return
+    except NotImplementedError:
+        pass
+
+    counter = {'value': 0}
+
+    def _fallback_token_bytes(nbytes: int | None = None) -> bytes:
+        if nbytes is None:
+            nbytes = 32
+        counter['value'] += 1
+        seed = f'{counter["value"]}:{nbytes}'.encode()
+        digest = hashlib.sha256(seed).digest()
+        needed = max(nbytes, 0)
+        while len(digest) < needed:
+            digest += hashlib.sha256(digest).digest()
+        return digest[:needed]
+
+    def _fallback_token_hex(nbytes: int | None = None) -> str:
+        return _fallback_token_bytes(nbytes).hex()
+
+    def _fallback_token_urlsafe(nbytes: int | None = None) -> str:
+        return base64.urlsafe_b64encode(_fallback_token_bytes(nbytes)).rstrip(b'=').decode()
+
+    secrets.token_bytes = _fallback_token_bytes
+    secrets.token_hex = _fallback_token_hex
+    secrets.token_urlsafe = _fallback_token_urlsafe
+
+
+_install_secrets_fallback_for_sandbox()
+
+
+def _install_uuid4_fallback_for_sandbox() -> None:
+    try:
+        uuid.uuid4()
+        return
+    except NotImplementedError:
+        pass
+
+    counter = {'value': 0}
+
+    def _fallback_uuid4() -> uuid.UUID:
+        counter['value'] += 1
+        return uuid.uuid5(uuid.NAMESPACE_URL, f'sandbox-{counter["value"]}')
+
+    uuid.uuid4 = _fallback_uuid4
+
+
+_install_uuid4_fallback_for_sandbox()
 
 
 # Add project root to Python path for imports
@@ -196,6 +257,28 @@ def pytest_configure(config: pytest.Config) -> None:
         'markers',
         'anyio: запуск асинхронного теста через встроенный цикл событий',
     )
+
+
+def _is_socket_bind_available() -> bool:
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.bind(('127.0.0.1', 0))
+        finally:
+            sock.close()
+        return True
+    except OSError:
+        return False
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    if _is_socket_bind_available():
+        return
+
+    skip_socket = pytest.mark.skip(reason='Socket bind is not available in current sandbox environment')
+    for item in items:
+        if 'tests/external/test_yookassa_webhook.py' in str(item.fspath):
+            item.add_marker(skip_socket)
 
 
 def _unwrap_test(obj):

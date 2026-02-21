@@ -21,9 +21,13 @@ def trial_callback_query():
 @pytest.fixture
 def trial_user():
     user = MagicMock(spec=User)
+    user.id = 42
+    user.telegram_id = 4242
     user.subscription = None
     user.has_had_paid_subscription = False
     user.language = 'ru'
+    user.restriction_subscription = False
+    user.restriction_reason = None
     return user
 
 
@@ -43,9 +47,19 @@ async def test_activate_trial_uses_trial_price_for_topup_redirect(
     mock_keyboard = InlineKeyboardMarkup(inline_keyboard=[])
 
     with (
+        patch('app.database.crud.tariff.get_trial_tariff', new=AsyncMock(return_value=None)),
+        patch('app.database.crud.tariff.get_tariff_by_id', new=AsyncMock(return_value=None)),
         patch(
-            'app.handlers.subscription.purchase.preview_trial_activation_charge',
+            'app.handlers.subscription.purchase.charge_trial_activation_if_required',
             side_effect=error,
+        ),
+        patch(
+            'app.handlers.subscription.purchase.create_trial_subscription',
+            new=AsyncMock(return_value=MagicMock(id=777)),
+        ),
+        patch(
+            'app.handlers.subscription.purchase.rollback_trial_subscription_activation',
+            new=AsyncMock(return_value=True),
         ),
         patch(
             'app.handlers.subscription.purchase.get_texts',

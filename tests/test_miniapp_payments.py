@@ -651,7 +651,7 @@ async def test_create_payment_link_pal24_uses_selected_option(monkeypatch):
             }
 
     async def fake_resolve_user(db, init_data):
-        return types.SimpleNamespace(id=123, language='ru'), {}
+        return types.SimpleNamespace(id=123, telegram_id=123, language='ru'), {}
 
     monkeypatch.setattr(miniapp, 'PaymentService', lambda *args, **kwargs: DummyPaymentService())
     monkeypatch.setattr(miniapp, '_resolve_user_from_init_data', fake_resolve_user)
@@ -696,7 +696,7 @@ async def test_create_payment_link_wata_returns_payload(monkeypatch):
             }
 
     async def fake_resolve_user(db, init_data):
-        return types.SimpleNamespace(id=555, language='ru'), {}
+        return types.SimpleNamespace(id=555, telegram_id=555, language='ru'), {}
 
     monkeypatch.setattr(miniapp, 'PaymentService', lambda *args, **kwargs: DummyPaymentService())
     monkeypatch.setattr(miniapp, '_resolve_user_from_init_data', fake_resolve_user)
@@ -1030,7 +1030,7 @@ async def test_create_payment_link_stars_normalizes_amount(monkeypatch):
             self.session = DummySession()
 
     async def fake_resolve_user(db, init_data):
-        return types.SimpleNamespace(id=7, language='ru'), {}
+        return types.SimpleNamespace(id=7, telegram_id=7, language='ru'), {}
 
     monkeypatch.setattr(miniapp, 'PaymentService', DummyPaymentService)
     monkeypatch.setattr(miniapp, 'Bot', DummyBot)
@@ -1060,7 +1060,7 @@ async def test_get_payment_methods_exposes_stars_min_amount(monkeypatch):
     monkeypatch.setattr(settings, 'TELEGRAM_STARS_RATE_RUB', 999.99, raising=False)
 
     async def fake_resolve_user(db, init_data):
-        return types.SimpleNamespace(id=1, language='ru'), {}
+        return types.SimpleNamespace(id=1, telegram_id=1, language='ru'), {}
 
     monkeypatch.setattr(miniapp, '_resolve_user_from_init_data', fake_resolve_user)
 
@@ -1085,7 +1085,7 @@ async def test_get_payment_methods_includes_wata(monkeypatch):
     monkeypatch.setattr(settings, 'WATA_MAX_AMOUNT_KOPEKS', 7500000, raising=False)
 
     async def fake_resolve_user(db, init_data):
-        return types.SimpleNamespace(id=1, language='ru'), {}
+        return types.SimpleNamespace(id=1, telegram_id=1, language='ru'), {}
 
     monkeypatch.setattr(miniapp, '_resolve_user_from_init_data', fake_resolve_user)
 
@@ -1112,7 +1112,7 @@ async def test_get_payment_methods_marks_mulenpay_iframe(monkeypatch):
     monkeypatch.setattr(settings, 'MULENPAY_IFRAME_EXPECTED_ORIGIN', None, raising=False)
 
     async def fake_resolve_user(db, init_data):
-        return types.SimpleNamespace(id=1, language='ru'), {}
+        return types.SimpleNamespace(id=1, telegram_id=1, language='ru'), {}
 
     monkeypatch.setattr(miniapp, '_resolve_user_from_init_data', fake_resolve_user)
 

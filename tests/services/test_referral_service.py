@@ -62,4 +62,4 @@ async def test_commission_accrues_before_minimum_first_topup(monkeypatch):
     assert earning_call.kwargs['reason'] == 'referral_commission_topup'
 
     db.commit.assert_not_awaited()
-    db.execute.assert_not_awaited()
+    db.execute.assert_awaited_once()

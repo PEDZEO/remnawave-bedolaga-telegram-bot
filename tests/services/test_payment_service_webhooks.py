@@ -81,6 +81,12 @@ class FakeResult:
             raise ValueError('Expected zero or one result')
         return items[0]
 
+    def scalar_one(self) -> Any:
+        items = self._as_iterable()
+        if len(items) != 1:
+            raise ValueError('Expected exactly one result')
+        return items[0]
+
     def first(self) -> Any:  # pragma: no cover - утилитарный метод
         items = self._as_iterable()
         return items[0] if items else None
@@ -214,9 +220,13 @@ async def test_process_mulenpay_callback_success(monkeypatch: pytest.MonkeyPatch
         return user
 
     monkeypatch.setattr(payment_service_module, 'get_user_by_id', fake_get_user)
+    monkeypatch.setattr('app.database.crud.user.get_user_by_id', fake_get_user)
     monkeypatch.setattr(type(settings), 'format_price', lambda self, amount: f'{amount / 100:.2f}₽', raising=False)
 
-    referral_mock = SimpleNamespace(process_referral_topup=AsyncMock())
+    referral_mock = SimpleNamespace(
+        process_referral_topup=AsyncMock(),
+        process_referral_registration=AsyncMock(),
+    )
     monkeypatch.setitem(sys.modules, 'app.services.referral_service', referral_mock)
 
     class DummyAdminService:
@@ -525,6 +535,7 @@ async def test_process_yookassa_webhook_success(monkeypatch: pytest.MonkeyPatch)
     service = _make_service(bot)
     fake_session = FakeSession()
     payment = SimpleNamespace(
+        id=123,
         yookassa_payment_id='yk_123',
         user_id=21,
         amount_kopeks=10000,
@@ -532,6 +543,7 @@ async def test_process_yookassa_webhook_success(monkeypatch: pytest.MonkeyPatch)
         status='pending',
         is_paid=False,
     )
+    fake_session.execute_results = [payment]
 
     async def fake_get_payment(db, payment_id):
         return payment
@@ -580,6 +592,9 @@ async def test_process_yookassa_webhook_success(monkeypatch: pytest.MonkeyPatch)
         return user
 
     monkeypatch.setattr(payment_service_module, 'get_user_by_id', fake_get_user)
+    fake_user_module = ModuleType('app.database.crud.user')
+    fake_user_module.get_user_by_id = fake_get_user
+    monkeypatch.setitem(sys.modules, 'app.database.crud.user', fake_user_module)
     monkeypatch.setattr(type(settings), 'format_price', lambda self, amount: f'{amount / 100:.2f}₽', raising=False)
 
     referral_mock = SimpleNamespace(process_referral_topup=AsyncMock())
@@ -627,6 +642,7 @@ async def test_process_yookassa_webhook_uses_remote_status(monkeypatch: pytest.M
     service = _make_service(bot)
     fake_session = FakeSession()
     payment = SimpleNamespace(
+        id=789,
         yookassa_payment_id='yk_789',
         user_id=42,
         amount_kopeks=20000,
@@ -634,6 +650,7 @@ async def test_process_yookassa_webhook_uses_remote_status(monkeypatch: pytest.M
         status='pending',
         is_paid=False,
     )
+    fake_session.execute_results = [payment]
 
     async def fake_get_payment(db, payment_id):
         return payment
@@ -677,6 +694,9 @@ async def test_process_yookassa_webhook_uses_remote_status(monkeypatch: pytest.M
         return user
 
     monkeypatch.setattr(payment_service_module, 'get_user_by_id', fake_get_user)
+    fake_user_module = ModuleType('app.database.crud.user')
+    fake_user_module.get_user_by_id = fake_get_user
+    monkeypatch.setitem(sys.modules, 'app.database.crud.user', fake_user_module)
     monkeypatch.setattr(type(settings), 'format_price', lambda self, amount: f'{amount / 100:.2f}₽', raising=False)
 
     referral_mock = SimpleNamespace(process_referral_topup=AsyncMock())
@@ -737,6 +757,7 @@ async def test_process_yookassa_webhook_handles_cancellation(monkeypatch: pytest
     service = _make_service(bot)
     fake_session = FakeSession()
     payment = SimpleNamespace(
+        id=456,
         yookassa_payment_id='yk_cancel',
         user_id=77,
         amount_kopeks=5000,
@@ -795,6 +816,7 @@ async def test_process_yookassa_webhook_restores_missing_payment(
     fake_session = FakeSession()
 
     restored_payment = SimpleNamespace(
+        id=654,
         yookassa_payment_id='yk_456',
         user_id=21,
         amount_kopeks=0,
@@ -808,6 +830,7 @@ async def test_process_yookassa_webhook_restores_missing_payment(
         test_mode=False,
         refundable=False,
     )
+    fake_session.execute_results = [restored_payment]
 
     get_calls = {'count': 0}
 
@@ -878,9 +901,13 @@ async def test_process_yookassa_webhook_restores_missing_payment(
         return user
 
     monkeypatch.setattr(payment_service_module, 'get_user_by_id', fake_get_user)
+    monkeypatch.setattr('app.database.crud.user.get_user_by_id', fake_get_user)
     monkeypatch.setattr(type(settings), 'format_price', lambda self, amount: f'{amount / 100:.2f}₽', raising=False)
 
-    referral_mock = SimpleNamespace(process_referral_topup=AsyncMock())
+    referral_mock = SimpleNamespace(
+        process_referral_topup=AsyncMock(),
+        process_referral_registration=AsyncMock(),
+    )
     monkeypatch.setitem(sys.modules, 'app.services.referral_service', referral_mock)
 
     admin_calls: list[Any] = []
