@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BanNotificationRequest(BaseModel):
@@ -26,8 +26,8 @@ class BanNotificationRequest(BaseModel):
     network_type: str | None = Field(None, description='Тип сети (WiFi/Mobile)')
     node_name: str | None = Field(None, description='Название ноды/сервера с которой пришел бан')
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             'example': {
                 'notification_type': 'punishment',
                 'user_identifier': 'user@example.com',
@@ -38,6 +38,7 @@ class BanNotificationRequest(BaseModel):
                 'node_name': 'DE-Server-1',
             }
         }
+    )
 
 
 class BanNotificationResponse(BaseModel):
@@ -48,7 +49,8 @@ class BanNotificationResponse(BaseModel):
     telegram_id: int | None = Field(None, description='Telegram ID получателя')
     sent: bool = Field(False, description='Было ли фактически отправлено сообщение')
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             'example': {'success': True, 'message': 'Уведомление отправлено', 'telegram_id': 123456789, 'sent': True}
         }
+    )

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class WebhookCreateRequest(BaseModel):
@@ -35,8 +35,7 @@ class WebhookResponse(BaseModel):
     failure_count: int
     success_count: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class WebhookListResponse(BaseModel):
@@ -60,8 +59,7 @@ class WebhookDeliveryResponse(BaseModel):
     delivered_at: datetime | None
     next_retry_at: datetime | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class WebhookDeliveryListResponse(BaseModel):

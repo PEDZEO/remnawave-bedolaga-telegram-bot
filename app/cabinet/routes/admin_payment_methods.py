@@ -4,7 +4,7 @@ from datetime import datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
@@ -53,8 +53,7 @@ class PaymentMethodConfigResponse(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PaymentMethodConfigUpdateRequest(BaseModel):
@@ -81,8 +80,7 @@ class PromoGroupSimple(BaseModel):
     id: int
     name: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============ Helpers ============
