@@ -41,13 +41,14 @@ def _mock_recent_transactions(monkeypatch):
 async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
 
-    user = MagicMock(spec=User)
-    user.id = 42
-    user.telegram_id = 4242
-    user.balance_kopeks = 200_000
-    user.language = 'ru'
-    user.subscription = None
-    user.get_primary_promo_group = MagicMock(return_value=None)
+    user = SimpleNamespace(
+        id=42,
+        telegram_id=4242,
+        balance_kopeks=200_000,
+        language='ru',
+        subscription=None,
+        get_primary_promo_group=lambda: None,
+    )
 
     cart_data = {
         'period_days': 30,
@@ -146,8 +147,8 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
 
         async def submit_purchase(self, db, prepared_context, pricing):
             return {
-                'subscription': MagicMock(),
-                'transaction': MagicMock(),
+                'subscription': SimpleNamespace(),
+                'transaction': SimpleNamespace(),
                 'was_trial_conversion': False,
                 'message': '🎉 Subscription purchased',
             }
@@ -179,8 +180,7 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
         lambda days, lang: f'{days} дней',
     )
 
-    admin_service_mock = MagicMock()
-    admin_service_mock.send_subscription_purchase_notification = AsyncMock()
+    admin_service_mock = SimpleNamespace(send_subscription_purchase_notification=AsyncMock())
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.AdminNotificationService',
         lambda bot: admin_service_mock,
@@ -191,7 +191,7 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
         AsyncMock(return_value=user),
     )
 
-    bot = AsyncMock()
+    bot = SimpleNamespace(send_message=AsyncMock())
     db_session = SimpleNamespace()
 
     result = await auto_purchase_saved_cart_after_topup(db_session, user, bot=bot)
