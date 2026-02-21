@@ -1,0 +1,8 @@
+from app.bot import setup_bot
+
+
+async def setup_bot_stage(timeline):
+    async with timeline.stage('Настройка бота', '🤖', success_message='Бот настроен') as stage:
+        bot, dp = await setup_bot()
+        stage.log('Кеш и FSM подготовлены')
+        return bot, dp

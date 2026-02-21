@@ -7,7 +7,7 @@ import structlog
 
 sys.path.append(str(Path(__file__).parent))
 
-from app.bot import setup_bot
+from app.bootstrap.bot_startup import setup_bot_stage
 from app.bootstrap.database_initialization import initialize_database_stage
 from app.bootstrap.database_startup import run_database_migration_stage
 from app.bootstrap.configuration_startup import load_bot_configuration_stage
@@ -96,9 +96,7 @@ async def main():
 
         bot = None
         dp = None
-        async with timeline.stage('Настройка бота', '🤖', success_message='Бот настроен') as stage:
-            bot, dp = await setup_bot()
-            stage.log('Кеш и FSM подготовлены')
+        bot, dp = await setup_bot_stage(timeline)
 
         monitoring_service.bot = bot
         maintenance_service.set_bot(bot)
