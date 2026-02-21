@@ -1,19 +1,22 @@
+import asyncio
+
 from app.config import settings
 from app.services.payment_verification_service import auto_payment_verification_service
 from app.services.reporting_service import reporting_service
+from app.utils.startup_timeline import StartupTimeline
 
 
 def log_startup_summary(
-    timeline,
+    timeline: StartupTimeline,
     *,
     telegram_webhook_enabled: bool,
-    monitoring_task,
-    maintenance_task,
-    traffic_monitoring_task,
-    daily_subscription_task,
-    version_check_task,
+    monitoring_task: asyncio.Task | None,
+    maintenance_task: asyncio.Task | None,
+    traffic_monitoring_task: asyncio.Task | None,
+    daily_subscription_task: asyncio.Task | None,
+    version_check_task: asyncio.Task | None,
     verification_providers: list[str],
-):
+) -> None:
     webhook_lines: list[str] = []
     base_url = settings.WEBHOOK_URL or f'http://{settings.WEB_API_HOST}:{settings.WEB_API_PORT}'
 
