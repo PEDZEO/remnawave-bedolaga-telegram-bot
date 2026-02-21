@@ -28,9 +28,9 @@ from app.bootstrap.polling_startup import start_polling_stage
 from app.bootstrap.referral_contests_startup import initialize_referral_contests_stage
 from app.bootstrap.remnawave_sync_startup import initialize_remnawave_sync_stage
 from app.bootstrap.reporting_startup import initialize_reporting_stage
+from app.bootstrap.runtime_execution import run_runtime_loop_stage
 from app.bootstrap.runtime_logging import configure_runtime_logging
 from app.bootstrap.runtime_mode import resolve_runtime_mode
-from app.bootstrap.runtime_watchdog import RuntimeTasks, run_runtime_watchdog_loop
 from app.bootstrap.servers_startup import sync_servers_stage
 from app.bootstrap.services_startup import connect_integration_services_stage, wire_core_services
 from app.bootstrap.shutdown_services import shutdown_runtime_services
@@ -166,29 +166,23 @@ async def main():
 
         await send_startup_notification_safe(logger, bot)
 
-        try:
-            runtime_tasks = RuntimeTasks(
-                monitoring_task=monitoring_task,
-                maintenance_task=maintenance_task,
-                version_check_task=version_check_task,
-                traffic_monitoring_task=traffic_monitoring_task,
-                daily_subscription_task=daily_subscription_task,
-                polling_task=polling_task,
-            )
-            runtime_tasks, auto_verification_active = await run_runtime_watchdog_loop(
-                killer,
-                logger,
-                runtime_tasks,
-                auto_verification_active,
-            )
-            monitoring_task = runtime_tasks.monitoring_task
-            maintenance_task = runtime_tasks.maintenance_task
-            version_check_task = runtime_tasks.version_check_task
-            traffic_monitoring_task = runtime_tasks.traffic_monitoring_task
-            daily_subscription_task = runtime_tasks.daily_subscription_task
-            polling_task = runtime_tasks.polling_task
-        except Exception as e:
-            logger.error('Ошибка в основном цикле', error=e)
+        runtime_tasks, auto_verification_active = await run_runtime_loop_stage(
+            killer,
+            logger,
+            monitoring_task=monitoring_task,
+            maintenance_task=maintenance_task,
+            version_check_task=version_check_task,
+            traffic_monitoring_task=traffic_monitoring_task,
+            daily_subscription_task=daily_subscription_task,
+            polling_task=polling_task,
+            auto_verification_active=auto_verification_active,
+        )
+        monitoring_task = runtime_tasks.monitoring_task
+        maintenance_task = runtime_tasks.maintenance_task
+        version_check_task = runtime_tasks.version_check_task
+        traffic_monitoring_task = runtime_tasks.traffic_monitoring_task
+        daily_subscription_task = runtime_tasks.daily_subscription_task
+        polling_task = runtime_tasks.polling_task
 
     except Exception as e:
         logger.error('❌ Критическая ошибка при запуске', error=e)
