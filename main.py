@@ -43,6 +43,8 @@ async def main():
 
     killer = install_signal_handlers()
 
+    bot = None
+    dp = None
     monitoring_task = None
     maintenance_task = None
     version_check_task = None
@@ -132,7 +134,7 @@ async def main():
 
         await shutdown_web_runtime(
             logger,
-            bot=bot if 'bot' in locals() else None,
+            bot=bot,
             web_api_server=web_api_server,
             telegram_webhook_enabled=telegram_webhook_enabled,
         )
