@@ -1,0 +1,15 @@
+from app.services.reporting_service import reporting_service
+
+
+async def initialize_reporting_stage(timeline, logger, bot):
+    async with timeline.stage(
+        'Сервис отчетов',
+        '📊',
+        success_message='Сервис отчетов готов',
+    ) as stage:
+        try:
+            reporting_service.set_bot(bot)
+            await reporting_service.start()
+        except Exception as error:
+            stage.warning(f'Ошибка запуска сервиса отчетов: {error}')
+            logger.error('❌ Ошибка запуска сервиса отчетов', error=error)

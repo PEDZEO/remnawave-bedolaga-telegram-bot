@@ -15,6 +15,7 @@ from app.bootstrap.configuration_startup import load_bot_configuration_stage
 from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.payment_methods_startup import initialize_payment_methods_stage
 from app.bootstrap.runtime_logging import configure_runtime_logging
+from app.bootstrap.reporting_startup import initialize_reporting_stage
 from app.bootstrap.servers_startup import sync_servers_stage
 from app.bootstrap.services_startup import connect_integration_services_stage, wire_core_services
 from app.bootstrap.signals import install_signal_handlers
@@ -105,17 +106,7 @@ async def main():
 
         await initialize_backup_stage(timeline, logger, bot)
 
-        async with timeline.stage(
-            'Сервис отчетов',
-            '📊',
-            success_message='Сервис отчетов готов',
-        ) as stage:
-            try:
-                reporting_service.set_bot(bot)
-                await reporting_service.start()
-            except Exception as e:
-                stage.warning(f'Ошибка запуска сервиса отчетов: {e}')
-                logger.error('❌ Ошибка запуска сервиса отчетов', error=e)
+        await initialize_reporting_stage(timeline, logger, bot)
 
         async with timeline.stage(
             'Реферальные конкурсы',
