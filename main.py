@@ -12,6 +12,7 @@ from app.bootstrap.bot_startup import setup_bot_stage
 from app.bootstrap.database_initialization import initialize_database_stage
 from app.bootstrap.database_startup import run_database_migration_stage
 from app.bootstrap.configuration_startup import load_bot_configuration_stage
+from app.bootstrap.log_rotation_startup import initialize_log_rotation_stage
 from app.bootstrap.contest_rotation_startup import initialize_contest_rotation_stage
 from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.payment_methods_startup import initialize_payment_methods_stage
@@ -115,27 +116,7 @@ async def main():
         await initialize_contest_rotation_stage(timeline, logger, bot)
 
         if settings.is_log_rotation_enabled():
-            async with timeline.stage(
-                'Ротация логов',
-                '📋',
-                success_message='Сервис ротации логов готов',
-            ) as stage:
-                try:
-                    log_rotation_service.set_bot(bot)
-                    await log_rotation_service.start()
-                    status = log_rotation_service.get_status()
-                    stage.log(f'Время ротации: {status.rotation_time}')
-                    stage.log(f'Хранение архивов: {status.keep_days} дней')
-                    if status.send_to_telegram:
-                        stage.log('Отправка в Telegram: включена')
-                    if status.next_rotation:
-                        from datetime import datetime
-
-                        next_dt = datetime.fromisoformat(status.next_rotation)
-                        stage.log(f'Следующая ротация: {next_dt.strftime("%d.%m.%Y %H:%M")}')
-                except Exception as e:
-                    stage.warning(f'Ошибка запуска сервиса ротации логов: {e}')
-                    logger.error('❌ Ошибка запуска сервиса ротации логов', error=e)
+            await initialize_log_rotation_stage(timeline, logger, bot)
 
         async with timeline.stage(
             'Автосинхронизация RemnaWave',
