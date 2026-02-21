@@ -1,6 +1,5 @@
 import asyncio
 import os
-import signal
 import sys
 from pathlib import Path
 
@@ -11,6 +10,7 @@ sys.path.append(str(Path(__file__).parent))
 
 from app.bot import setup_bot
 from app.bootstrap.runtime_logging import configure_runtime_logging
+from app.bootstrap.signals import install_signal_handlers
 from app.config import settings
 from app.database.database import sync_postgres_sequences
 from app.database.migrations import run_alembic_upgrade
@@ -47,15 +47,6 @@ from app.webapi.server import WebAPIServer
 from app.webserver.unified_app import create_unified_app
 
 
-class GracefulExit:
-    def __init__(self):
-        self.exit = False
-
-    def exit_gracefully(self, signum, frame):
-        structlog.get_logger(__name__).info('Получен сигнал, корректное завершение работы', signum=signum)
-        self.exit = True
-
-
 async def main():
     file_formatter, console_formatter, telegram_notifier = setup_logging()
     await configure_runtime_logging(file_formatter, console_formatter)
@@ -79,9 +70,7 @@ async def main():
             stage.warning(f'Не удалось подготовить шаблоны локализаций: {error}')
             logger.warning('Failed to prepare locale templates', error=error)
 
-    killer = GracefulExit()
-    signal.signal(signal.SIGINT, killer.exit_gracefully)
-    signal.signal(signal.SIGTERM, killer.exit_gracefully)
+    killer = install_signal_handlers()
 
     web_app = None
     monitoring_task = None

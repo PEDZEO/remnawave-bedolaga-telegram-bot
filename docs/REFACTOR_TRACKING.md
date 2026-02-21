@@ -11,10 +11,13 @@
 - [x] Started backend phase 5 bootstrap decomposition.
 - [x] Extracted runtime logging setup from `main.py` into `app/bootstrap/runtime_logging.py`.
 - [x] Kept startup order and behavior unchanged (same formatter inputs, same log-rotation branch logic).
+- [x] Extracted graceful signal handling from `main.py` into `app/bootstrap/signals.py`.
+- [x] Kept shutdown flow behavior unchanged (`SIGINT`/`SIGTERM` still set `killer.exit=True`).
 - [ ] Continue backend phase 5 with next atomic extraction from `main.py`.
 
 ## Validation
 - Attempted `make lint` -> failed: `uv: No such file or directory`.
 - Attempted `make test` -> failed: `uv: No such file or directory`.
 - Fallback `python -m pytest -q` -> failed: `No module named pytest`.
+- `python -m py_compile main.py app/bootstrap/runtime_logging.py app/bootstrap/signals.py` -> success.
 - Result: local environment currently lacks required Python tooling; code validation is limited to static review in this step.
