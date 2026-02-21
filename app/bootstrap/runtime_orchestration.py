@@ -3,14 +3,16 @@ from app.bootstrap.runtime_execution import run_runtime_loop_stage
 from app.bootstrap.runtime_state import RuntimeState
 from app.bootstrap.runtime_tasks_startup import start_runtime_tasks_stage
 from app.bootstrap.startup_finalize import finalize_startup_stage
+from app.bootstrap.types import KillerLike, LoggerLike
+from app.utils.startup_timeline import StartupTimeline
 
 
 async def run_startup_and_runtime_loop(
-    timeline,
-    logger,
-    killer,
+    timeline: StartupTimeline,
+    logger: LoggerLike,
+    killer: KillerLike,
     state: RuntimeState,
-    telegram_notifier,
+    telegram_notifier: object | None,
 ) -> None:
     runtime_context = await start_core_runtime_stage(timeline, logger, telegram_notifier)
     state.apply_core_runtime(runtime_context)
