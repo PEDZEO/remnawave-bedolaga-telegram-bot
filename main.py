@@ -19,6 +19,7 @@ from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.payment_methods_startup import initialize_payment_methods_stage
 from app.bootstrap.payment_runtime import setup_payment_runtime
 from app.bootstrap.referral_contests_startup import initialize_referral_contests_stage
+from app.bootstrap.runtime_mode import resolve_runtime_mode
 from app.bootstrap.runtime_logging import configure_runtime_logging
 from app.bootstrap.reporting_startup import initialize_reporting_stage
 from app.bootstrap.remnawave_sync_startup import initialize_remnawave_sync_stage
@@ -191,21 +192,7 @@ async def main():
 
         await initialize_external_admin_stage(timeline, logger, bot)
 
-        bot_run_mode = settings.get_bot_run_mode()
-        polling_enabled = bot_run_mode == 'polling'
-        telegram_webhook_enabled = bot_run_mode == 'webhook'
-
-        payment_webhooks_enabled = any(
-            [
-                settings.TRIBUTE_ENABLED,
-                settings.is_cryptobot_enabled(),
-                settings.is_mulenpay_enabled(),
-                settings.is_yookassa_enabled(),
-                settings.is_pal24_enabled(),
-                settings.is_wata_enabled(),
-                settings.is_heleket_enabled(),
-            ]
-        )
+        polling_enabled, telegram_webhook_enabled, payment_webhooks_enabled = resolve_runtime_mode()
 
         async with timeline.stage(
             'Единый веб-сервер',
