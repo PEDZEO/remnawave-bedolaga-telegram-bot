@@ -32,6 +32,7 @@ from app.bootstrap.runtime_mode import resolve_runtime_mode
 from app.bootstrap.runtime_watchdog import RuntimeTasks, run_runtime_watchdog_loop
 from app.bootstrap.servers_startup import sync_servers_stage
 from app.bootstrap.services_startup import connect_integration_services_stage, wire_core_services
+from app.bootstrap.shutdown_web import shutdown_web_runtime
 from app.bootstrap.signals import install_signal_handlers
 from app.bootstrap.startup_notification import send_startup_notification_safe
 from app.bootstrap.startup_summary import log_startup_summary
@@ -312,27 +313,12 @@ async def main():
             except asyncio.CancelledError:
                 pass
 
-        if telegram_webhook_enabled and 'bot' in locals():
-            logger.info('ℹ️ Снятие Telegram webhook...')
-            try:
-                await bot.delete_webhook(drop_pending_updates=False)
-                logger.info('✅ Telegram webhook удалён')
-            except Exception as error:
-                logger.error('Ошибка удаления Telegram webhook', error=error)
-
-        if web_api_server:
-            try:
-                await web_api_server.stop()
-                logger.info('✅ Административное веб-API остановлено')
-            except Exception as error:
-                logger.error('Ошибка остановки веб-API', error=error)
-
-        if 'bot' in locals():
-            try:
-                await bot.session.close()
-                logger.info('✅ Сессия бота закрыта')
-            except Exception as e:
-                logger.error('Ошибка закрытия сессии бота', error=e)
+        await shutdown_web_runtime(
+            logger,
+            bot=bot if 'bot' in locals() else None,
+            web_api_server=web_api_server,
+            telegram_webhook_enabled=telegram_webhook_enabled,
+        )
 
         logger.info('✅ Завершение работы бота завершено')
 
