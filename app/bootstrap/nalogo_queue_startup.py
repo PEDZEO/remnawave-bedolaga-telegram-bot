@@ -1,8 +1,16 @@
 from app.config import settings
 from app.services.nalogo_queue_service import nalogo_queue_service
+from app.services.payment_service import PaymentService
+from app.utils.startup_timeline import StartupTimeline
+
+from .types import LoggerLike
 
 
-async def start_nalogo_queue_stage(timeline, logger, payment_service):
+async def start_nalogo_queue_stage(
+    timeline: StartupTimeline,
+    logger: LoggerLike,
+    payment_service: PaymentService,
+) -> None:
     async with timeline.stage(
         'Очередь чеков NaloGO',
         '🧾',

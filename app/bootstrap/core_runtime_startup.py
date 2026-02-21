@@ -26,13 +26,14 @@ from app.bootstrap.telegram_webhook_startup import configure_telegram_webhook_st
 from app.bootstrap.types import LoggerLike, TelegramNotifierLike
 from app.bootstrap.web_server_startup import start_web_server_stage
 from app.config import settings
+from app.services.payment_service import PaymentService
 
 
 @dataclass
 class CoreRuntimeStartupContext:
     bot: Bot
     dp: Dispatcher
-    payment_service: Any
+    payment_service: PaymentService
     verification_providers: list[str]
     auto_verification_active: bool
     polling_enabled: bool
