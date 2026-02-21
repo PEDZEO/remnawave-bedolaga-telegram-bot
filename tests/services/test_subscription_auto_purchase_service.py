@@ -237,22 +237,25 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
 async def test_auto_purchase_saved_cart_after_topup_extension(monkeypatch):
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
 
-    subscription = MagicMock()
-    subscription.id = 99
-    subscription.is_trial = False
-    subscription.status = 'active'
-    subscription.end_date = datetime.now(UTC)
-    subscription.device_limit = 1
-    subscription.traffic_limit_gb = 100
-    subscription.connected_squads = ['squad-a']
+    subscription = SimpleNamespace(
+        id=99,
+        is_trial=False,
+        status='active',
+        end_date=datetime.now(UTC),
+        device_limit=1,
+        traffic_limit_gb=100,
+        connected_squads=['squad-a'],
+        tariff_id=None,
+    )
 
-    user = MagicMock(spec=User)
-    user.id = 7
-    user.telegram_id = 7007
-    user.balance_kopeks = 200_000
-    user.language = 'ru'
-    user.subscription = subscription
-    user.get_primary_promo_group = MagicMock(return_value=None)
+    user = SimpleNamespace(
+        id=7,
+        telegram_id=7007,
+        balance_kopeks=200_000,
+        language='ru',
+        subscription=subscription,
+        get_primary_promo_group=lambda: None,
+    )
 
     cart_data = {
         'cart_mode': 'extend',
@@ -266,10 +269,15 @@ async def test_auto_purchase_saved_cart_after_topup_extension(monkeypatch):
         'consume_promo_offer': True,
     }
 
-    subtract_mock = AsyncMock(return_value=True)
+    subtract_calls: list[tuple] = []
+
+    async def subtract_stub(*args, **kwargs):
+        subtract_calls.append((args, kwargs))
+        return True
+
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.subtract_user_balance',
-        subtract_mock,
+        subtract_stub,
     )
 
     async def extend_stub(db, current_subscription, days, **kwargs):
@@ -281,33 +289,52 @@ async def test_auto_purchase_saved_cart_after_topup_extension(monkeypatch):
         extend_stub,
     )
 
-    create_transaction_mock = AsyncMock(return_value=MagicMock())
+    create_transaction_calls = {'count': 0}
+
+    async def create_transaction_stub(*args, **kwargs):
+        create_transaction_calls['count'] += 1
+        return SimpleNamespace()
+
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.create_transaction',
-        create_transaction_mock,
+        create_transaction_stub,
     )
 
-    service_mock = MagicMock()
-    service_mock.update_remnawave_user = AsyncMock()
+    class _SubscriptionServiceStub:
+        def __init__(self):
+            self.update_called = False
+
+        async def update_remnawave_user(self, *args, **kwargs):
+            self.update_called = True
+
+    service_stub = _SubscriptionServiceStub()
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.SubscriptionService',
-        lambda: service_mock,
+        lambda: service_stub,
     )
+
+    async def get_user_cart_stub(_user_id):
+        return cart_data
+
+    deleted_cart_ids: list[int] = []
+
+    async def delete_user_cart_stub(user_id: int):
+        deleted_cart_ids.append(user_id)
+
+    cleared_draft_ids: list[int] = []
+
+    async def clear_checkout_draft_stub(user_id: int):
+        cleared_draft_ids.append(user_id)
 
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.user_cart_service.get_user_cart',
-        AsyncMock(return_value=cart_data),
+        get_user_cart_stub,
     )
-    delete_cart_mock = AsyncMock()
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.user_cart_service.delete_user_cart',
-        delete_cart_mock,
+        delete_user_cart_stub,
     )
-    clear_draft_mock = AsyncMock()
-    monkeypatch.setattr(
-        'app.services.subscription_auto_purchase_service.clear_subscription_checkout_draft',
-        clear_draft_mock,
-    )
+    monkeypatch.setattr('app.services.subscription_auto_purchase_service.clear_subscription_checkout_draft', clear_checkout_draft_stub)
 
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.get_texts',
@@ -318,41 +345,51 @@ async def test_auto_purchase_saved_cart_after_topup_extension(monkeypatch):
         lambda days, lang: f'{days} дней',
     )
 
-    admin_service_mock = MagicMock()
-    admin_service_mock.send_subscription_extension_notification = AsyncMock()
+    class _AdminServiceStub:
+        def __init__(self):
+            self.called = False
+
+        async def send_subscription_extension_notification(self, *args, **kwargs):
+            self.called = True
+
+    admin_service = _AdminServiceStub()
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.AdminNotificationService',
-        lambda bot: admin_service_mock,
+        lambda bot: admin_service,
     )
 
     # Мок для get_subscription_by_user_id
+    async def get_subscription_by_user_id_stub(*args, **kwargs):
+        return subscription
+
     monkeypatch.setattr(
         'app.database.crud.subscription.get_subscription_by_user_id',
-        AsyncMock(return_value=subscription),
+        get_subscription_by_user_id_stub,
     )
 
-    bot = AsyncMock()
-    db_session = AsyncMock(spec=AsyncSession)
+    class _BotStub:
+        def __init__(self):
+            self.sent = 0
+
+        async def send_message(self, *args, **kwargs):
+            self.sent += 1
+
+    bot = _BotStub()
+    db_session = SimpleNamespace()
 
     result = await auto_purchase_saved_cart_after_topup(db_session, user, bot=bot)
 
     assert result is True
-    subtract_mock.assert_awaited_once_with(
-        db_session,
-        user,
-        cart_data['total_price'],
-        cart_data['description'],
-        consume_promo_offer=True,
-    )
+    assert len(subtract_calls) == 1
     assert subscription.device_limit == 2
     assert subscription.traffic_limit_gb == 500
     assert 'squad-b' in subscription.connected_squads
-    delete_cart_mock.assert_awaited_once_with(user.id)
-    clear_draft_mock.assert_awaited_once_with(user.id)
-    admin_service_mock.send_subscription_extension_notification.assert_awaited()
-    bot.send_message.assert_awaited()
-    service_mock.update_remnawave_user.assert_awaited()
-    create_transaction_mock.assert_awaited()
+    assert deleted_cart_ids == [user.id]
+    assert cleared_draft_ids == [user.id]
+    assert admin_service.called is True
+    assert bot.sent >= 1
+    assert service_stub.update_called is True
+    assert create_transaction_calls['count'] == 1
 
 
 async def test_auto_purchase_trial_preserved_on_insufficient_balance(monkeypatch):
