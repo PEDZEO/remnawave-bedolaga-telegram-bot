@@ -32,6 +32,7 @@ from app.bootstrap.signals import install_signal_handlers
 from app.bootstrap.tariffs_startup import sync_tariffs_stage
 from app.bootstrap.telegram_webhook_startup import configure_telegram_webhook_stage
 from app.bootstrap.traffic_monitoring_startup import start_traffic_monitoring_stage
+from app.bootstrap.version_check_startup import start_version_check_stage
 from app.bootstrap.web_server_startup import start_web_server_stage
 from app.config import settings
 from app.database.models import PaymentMethod
@@ -222,17 +223,7 @@ async def main():
 
         daily_subscription_task = await start_daily_subscription_stage(timeline)
 
-        async with timeline.stage(
-            'Сервис проверки версий',
-            '📄',
-            success_message='Проверка версий запущена',
-        ) as stage:
-            if settings.is_version_check_enabled():
-                version_check_task = asyncio.create_task(version_service.start_periodic_check())
-                stage.log(f'Интервал проверки: {settings.VERSION_CHECK_INTERVAL_HOURS}ч')
-            else:
-                version_check_task = None
-                stage.skip('Проверка версий отключена настройками')
+        version_check_task = await start_version_check_stage(timeline)
 
         async with timeline.stage(
             'Запуск polling',
