@@ -2,6 +2,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
@@ -9,6 +11,9 @@ if str(ROOT_DIR) not in sys.path:
 
 from app.config import settings
 from app.services.system_settings_service import bot_configuration_service
+
+
+pytestmark = pytest.mark.asyncio
 
 
 async def test_env_override_prevents_set_value(monkeypatch):

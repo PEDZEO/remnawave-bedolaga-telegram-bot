@@ -4,7 +4,12 @@ Tests for PromoCodeService - focus on promo group integration
 
 from unittest.mock import AsyncMock
 
+import pytest
+
 from app.services.promocode_service import PromoCodeService
+
+
+pytestmark = pytest.mark.asyncio
 
 
 # Import fixtures

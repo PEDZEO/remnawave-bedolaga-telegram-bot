@@ -26,6 +26,9 @@ class DummyTexts:
         return f'{value / 100:.0f} ₽'
 
 
+pytestmark = pytest.mark.asyncio
+
+
 @pytest.fixture(autouse=True)
 def _mock_recent_transactions(monkeypatch):
     monkeypatch.setattr(

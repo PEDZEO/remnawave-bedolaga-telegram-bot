@@ -1,9 +1,7 @@
 """Глобальные фикстуры и настройки окружения для тестов."""
 
-import asyncio
 import base64
 import hashlib
-import inspect
 import os
 import secrets
 import sys
@@ -256,43 +254,3 @@ def pytest_configure(config: pytest.Config) -> None:
         'markers',
         'anyio: запуск асинхронного теста через встроенный цикл событий',
     )
-
-
-def _unwrap_test(obj):
-    """Возвращает исходную функцию, снимая обёртки pytest и декораторов."""
-
-    unwrapped = obj
-    while hasattr(unwrapped, '__wrapped__'):
-        unwrapped = unwrapped.__wrapped__
-    return unwrapped
-
-
-@pytest.hookimpl(tryfirst=True)
-def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> bool | None:
-    """Позволяет запускать async def тесты без дополнительных плагинов."""
-
-    marker_names = {marker.name for marker in pyfuncitem.iter_markers()}
-    if 'asyncio' in marker_names or 'anyio' in marker_names:
-        return None
-
-    test_func = _unwrap_test(pyfuncitem.obj)
-    if not inspect.iscoroutinefunction(test_func):
-        return None
-
-    # Проверяем, не обработан ли уже тест плагином pytest-asyncio
-    # Если pyfuncitem.obj не возвращает корутину - пропускаем
-    loop = asyncio.new_event_loop()
-    try:
-        asyncio.set_event_loop(loop)
-        signature = inspect.signature(test_func)
-        call_kwargs = {name: value for name, value in pyfuncitem.funcargs.items() if name in signature.parameters}
-        coro = pyfuncitem.obj(**call_kwargs)
-        if coro is None:
-            # Уже обработано другим плагином
-            return None
-        loop.run_until_complete(coro)
-    finally:
-        asyncio.set_event_loop(None)
-        loop.close()
-
-    return True

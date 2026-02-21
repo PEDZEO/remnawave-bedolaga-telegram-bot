@@ -15,6 +15,9 @@ from app.handlers.subscription.autopay import handle_subscription_cancel
 from app.handlers.subscription.purchase import clear_saved_cart, return_to_saved_cart, save_cart_and_redirect_to_topup
 
 
+pytestmark = pytest.mark.asyncio
+
+
 @pytest.fixture
 def mock_callback_query():
     callback = AsyncMock(spec=CallbackQuery)

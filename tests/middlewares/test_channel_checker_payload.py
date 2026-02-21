@@ -5,12 +5,17 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from aiogram.types import Message
+
+
+pytestmark = pytest.mark.asyncio
 
 
 class TestRedisPayloadFunctions:

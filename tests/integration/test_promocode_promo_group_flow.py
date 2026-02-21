@@ -9,8 +9,13 @@ the promo group assignment.
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import pytest
+
 from app.database.models import PromoCodeType
 from app.services.promocode_service import PromoCodeService
+
+
+pytestmark = pytest.mark.asyncio
 
 
 # Import fixtures
