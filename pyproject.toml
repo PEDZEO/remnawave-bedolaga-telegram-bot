@@ -40,9 +40,6 @@ package = false
 [tool.pytest.ini_options]
 addopts = "-p no:unraisableexception"
 asyncio_default_fixture_loop_scope = "function"
-filterwarnings = [
-    "ignore:coroutine 'AsyncMockMixin._execute_mock_call' was never awaited:RuntimeWarning",
-]
 
 [tool.ruff]
 target-version = 'py313'
