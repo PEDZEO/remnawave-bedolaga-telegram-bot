@@ -32,6 +32,7 @@ from app.bootstrap.runtime_mode import resolve_runtime_mode
 from app.bootstrap.servers_startup import sync_servers_stage
 from app.bootstrap.services_startup import connect_integration_services_stage, wire_core_services
 from app.bootstrap.signals import install_signal_handlers
+from app.bootstrap.startup_notification import send_startup_notification_safe
 from app.bootstrap.startup_summary import log_startup_summary
 from app.bootstrap.tariffs_startup import sync_tariffs_stage
 from app.bootstrap.telegram_webhook_startup import configure_telegram_webhook_stage
@@ -174,13 +175,7 @@ async def main():
         )
         summary_logged = True
 
-        # Отправляем стартовое уведомление в админский чат
-        try:
-            from app.services.startup_notification_service import send_bot_startup_notification
-
-            await send_bot_startup_notification(bot)
-        except Exception as startup_notify_error:
-            logger.warning('Не удалось отправить стартовое уведомление', startup_notify_error=startup_notify_error)
+        await send_startup_notification_safe(logger, bot)
 
         try:
             while not killer.exit:
