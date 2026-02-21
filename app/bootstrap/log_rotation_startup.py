@@ -1,9 +1,18 @@
 from datetime import datetime
 
+from aiogram import Bot
+
 from app.services.log_rotation_service import log_rotation_service
+from app.utils.startup_timeline import StartupTimeline
+
+from .types import LoggerLike
 
 
-async def initialize_log_rotation_stage(timeline, logger, bot):
+async def initialize_log_rotation_stage(
+    timeline: StartupTimeline,
+    logger: LoggerLike,
+    bot: Bot,
+) -> None:
     async with timeline.stage(
         'Ротация логов',
         '📋',

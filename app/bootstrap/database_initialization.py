@@ -1,8 +1,9 @@
 from app.database.database import sync_postgres_sequences
 from app.services.web_api_token_service import ensure_default_web_api_token
+from app.utils.startup_timeline import StartupTimeline
 
 
-async def initialize_database_stage(timeline):
+async def initialize_database_stage(timeline: StartupTimeline) -> None:
     async with timeline.stage(
         'Инициализация базы данных',
         '🗄️',

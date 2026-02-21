@@ -1,7 +1,7 @@
 from app.config import settings
 
 
-def resolve_runtime_mode():
+def resolve_runtime_mode() -> tuple[bool, bool, bool]:
     bot_run_mode = settings.get_bot_run_mode()
     polling_enabled = bot_run_mode == 'polling'
     telegram_webhook_enabled = bot_run_mode == 'webhook'

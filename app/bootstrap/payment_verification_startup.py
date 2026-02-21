@@ -7,9 +7,10 @@ from app.services.payment_verification_service import (
     get_enabled_auto_methods,
     method_display_name,
 )
+from app.utils.startup_timeline import StartupTimeline
 
 
-async def initialize_payment_verification_stage(timeline):
+async def initialize_payment_verification_stage(timeline: StartupTimeline) -> tuple[list[str], bool]:
     verification_providers: list[str] = []
     auto_verification_active = False
 
