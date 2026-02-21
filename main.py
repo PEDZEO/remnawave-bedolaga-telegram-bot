@@ -14,6 +14,7 @@ from app.bootstrap.database_startup import run_database_migration_stage
 from app.bootstrap.configuration_startup import load_bot_configuration_stage
 from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.payment_methods_startup import initialize_payment_methods_stage
+from app.bootstrap.referral_contests_startup import initialize_referral_contests_stage
 from app.bootstrap.runtime_logging import configure_runtime_logging
 from app.bootstrap.reporting_startup import initialize_reporting_stage
 from app.bootstrap.servers_startup import sync_servers_stage
@@ -108,20 +109,7 @@ async def main():
 
         await initialize_reporting_stage(timeline, logger, bot)
 
-        async with timeline.stage(
-            'Реферальные конкурсы',
-            '🏆',
-            success_message='Сервис конкурсов готов',
-        ) as stage:
-            try:
-                await referral_contest_service.start()
-                if referral_contest_service.is_running():
-                    stage.log('Автосводки по конкурсам запущены')
-                else:
-                    stage.skip('Сервис конкурсов выключен настройками')
-            except Exception as e:
-                stage.warning(f'Ошибка запуска сервиса конкурсов: {e}')
-                logger.error('❌ Ошибка запуска сервиса конкурсов', error=e)
+        await initialize_referral_contests_stage(timeline, logger)
 
         async with timeline.stage(
             'Ротация игр',
