@@ -10,7 +10,7 @@ from app.bootstrap.runtime_preflight import prepare_runtime_preflight
 from app.bootstrap.runtime_session import run_runtime_session
 
 
-async def main():
+async def main() -> None:
     preflight = await prepare_runtime_preflight()
     await run_runtime_session(preflight)
 
