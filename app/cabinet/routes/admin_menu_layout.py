@@ -118,7 +118,9 @@ async def update_menu_button(
             if hasattr(updates['conditions'], 'model_dump'):
                 updates['conditions'] = updates['conditions'].model_dump(exclude_none=True)
             elif isinstance(updates['conditions'], dict):
-                updates['conditions'] = {key: value for key, value in updates['conditions'].items() if value is not None}
+                updates['conditions'] = {
+                    key: value for key, value in updates['conditions'].items() if value is not None
+                }
 
         button = await MenuLayoutService.update_button(db, button_id, updates)
         return MenuButtonConfig(
