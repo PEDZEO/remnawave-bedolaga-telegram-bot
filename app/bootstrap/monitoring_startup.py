@@ -2,9 +2,10 @@ import asyncio
 
 from app.config import settings
 from app.services.monitoring_service import monitoring_service
+from app.utils.startup_timeline import StartupTimeline
 
 
-async def start_monitoring_stage(timeline):
+async def start_monitoring_stage(timeline: StartupTimeline) -> asyncio.Task:
     async with timeline.stage(
         'Служба мониторинга',
         '📈',

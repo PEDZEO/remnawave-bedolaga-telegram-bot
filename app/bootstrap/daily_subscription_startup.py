@@ -1,9 +1,10 @@
 import asyncio
 
 from app.services.daily_subscription_service import daily_subscription_service
+from app.utils.startup_timeline import StartupTimeline
 
 
-async def start_daily_subscription_stage(timeline):
+async def start_daily_subscription_stage(timeline: StartupTimeline) -> asyncio.Task | None:
     async with timeline.stage(
         'Суточные подписки',
         '💳',

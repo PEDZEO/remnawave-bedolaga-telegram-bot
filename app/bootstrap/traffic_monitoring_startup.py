@@ -1,9 +1,10 @@
 import asyncio
 
 from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
+from app.utils.startup_timeline import StartupTimeline
 
 
-async def start_traffic_monitoring_stage(timeline):
+async def start_traffic_monitoring_stage(timeline: StartupTimeline) -> asyncio.Task | None:
     async with timeline.stage(
         'Мониторинг трафика',
         '📊',

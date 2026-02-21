@@ -2,9 +2,10 @@ import asyncio
 
 from app.config import settings
 from app.services.version_service import version_service
+from app.utils.startup_timeline import StartupTimeline
 
 
-async def start_version_check_stage(timeline):
+async def start_version_check_stage(timeline: StartupTimeline) -> asyncio.Task | None:
     async with timeline.stage(
         'Сервис проверки версий',
         '📄',

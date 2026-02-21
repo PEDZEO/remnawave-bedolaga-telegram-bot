@@ -2,9 +2,10 @@ import asyncio
 
 from app.config import settings
 from app.services.maintenance_service import maintenance_service
+from app.utils.startup_timeline import StartupTimeline
 
 
-async def start_maintenance_stage(timeline):
+async def start_maintenance_stage(timeline: StartupTimeline) -> asyncio.Task | None:
     async with timeline.stage(
         'Служба техработ',
         '🛡️',

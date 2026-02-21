@@ -1,7 +1,16 @@
 import asyncio
 
+from aiogram import Bot, Dispatcher
 
-async def start_polling_stage(timeline, dp, bot, polling_enabled: bool):
+from app.utils.startup_timeline import StartupTimeline
+
+
+async def start_polling_stage(
+    timeline: StartupTimeline,
+    dp: Dispatcher,
+    bot: Bot,
+    polling_enabled: bool,
+) -> asyncio.Task | None:
     async with timeline.stage(
         'Запуск polling',
         '🤖',
