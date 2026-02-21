@@ -1,0 +1,24 @@
+from app.services.remnawave_sync_service import remnawave_sync_service
+
+
+async def initialize_remnawave_sync_stage(timeline, logger):
+    async with timeline.stage(
+        'Автосинхронизация RemnaWave',
+        '🔄',
+        success_message='Сервис автосинхронизации готов',
+    ) as stage:
+        try:
+            await remnawave_sync_service.initialize()
+            status = remnawave_sync_service.get_status()
+            if status.enabled:
+                times_text = ', '.join(t.strftime('%H:%M') for t in status.times) or '—'
+                if status.next_run:
+                    next_run_text = status.next_run.strftime('%d.%m.%Y %H:%M')
+                    stage.log(f'Активирована: расписание {times_text}, ближайший запуск {next_run_text}')
+                else:
+                    stage.log(f'Активирована: расписание {times_text}')
+            else:
+                stage.log('Автосинхронизация отключена настройками')
+        except Exception as error:
+            stage.warning(f'Ошибка запуска автосинхронизации: {error}')
+            logger.error('❌ Ошибка запуска автосинхронизации RemnaWave', error=error)

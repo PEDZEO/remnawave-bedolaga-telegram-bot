@@ -19,6 +19,7 @@ from app.bootstrap.payment_methods_startup import initialize_payment_methods_sta
 from app.bootstrap.referral_contests_startup import initialize_referral_contests_stage
 from app.bootstrap.runtime_logging import configure_runtime_logging
 from app.bootstrap.reporting_startup import initialize_reporting_stage
+from app.bootstrap.remnawave_sync_startup import initialize_remnawave_sync_stage
 from app.bootstrap.servers_startup import sync_servers_stage
 from app.bootstrap.services_startup import connect_integration_services_stage, wire_core_services
 from app.bootstrap.signals import install_signal_handlers
@@ -118,26 +119,7 @@ async def main():
         if settings.is_log_rotation_enabled():
             await initialize_log_rotation_stage(timeline, logger, bot)
 
-        async with timeline.stage(
-            'Автосинхронизация RemnaWave',
-            '🔄',
-            success_message='Сервис автосинхронизации готов',
-        ) as stage:
-            try:
-                await remnawave_sync_service.initialize()
-                status = remnawave_sync_service.get_status()
-                if status.enabled:
-                    times_text = ', '.join(t.strftime('%H:%M') for t in status.times) or '—'
-                    if status.next_run:
-                        next_run_text = status.next_run.strftime('%d.%m.%Y %H:%M')
-                        stage.log(f'Активирована: расписание {times_text}, ближайший запуск {next_run_text}')
-                    else:
-                        stage.log(f'Активирована: расписание {times_text}')
-                else:
-                    stage.log('Автосинхронизация отключена настройками')
-            except Exception as e:
-                stage.warning(f'Ошибка запуска автосинхронизации: {e}')
-                logger.error('❌ Ошибка запуска автосинхронизации RemnaWave', error=e)
+        await initialize_remnawave_sync_stage(timeline, logger)
 
         payment_service = PaymentService(bot)
         auto_payment_verification_service.set_payment_service(payment_service)
