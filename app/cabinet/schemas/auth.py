@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class TelegramAuthRequest(BaseModel):
@@ -100,8 +100,7 @@ class UserResponse(BaseModel):
     created_at: datetime
     auth_type: str = 'telegram'  # "telegram" или "email"
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EmailRegisterStandaloneRequest(BaseModel):

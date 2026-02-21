@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ServerInfo(BaseModel):
@@ -58,8 +58,7 @@ class SubscriptionData(BaseModel):
     tariff_name: str | None = None
     traffic_reset_mode: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Backward compatibility alias
