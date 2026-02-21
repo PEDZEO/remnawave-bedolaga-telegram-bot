@@ -12,6 +12,7 @@ from app.bootstrap.database_initialization import initialize_database_stage
 from app.bootstrap.database_startup import run_database_migration_stage
 from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.runtime_logging import configure_runtime_logging
+from app.bootstrap.servers_startup import sync_servers_stage
 from app.bootstrap.signals import install_signal_handlers
 from app.bootstrap.tariffs_startup import sync_tariffs_stage
 from app.config import settings
@@ -86,20 +87,7 @@ async def main():
 
         await sync_tariffs_stage(timeline, logger)
 
-        async with timeline.stage(
-            'Синхронизация серверов из RemnaWave',
-            '🖥️',
-            success_message='Серверы синхронизированы',
-        ) as stage:
-            try:
-                from app.database.crud.server_squad import ensure_servers_synced
-                from app.database.database import AsyncSessionLocal
-
-                async with AsyncSessionLocal() as db:
-                    await ensure_servers_synced(db)
-            except Exception as error:
-                stage.warning(f'Не удалось синхронизировать серверы: {error}')
-                logger.error('❌ Не удалось синхронизировать серверы', error=error)
+        await sync_servers_stage(timeline, logger)
 
         async with timeline.stage(
             'Инициализация платёжных методов',
