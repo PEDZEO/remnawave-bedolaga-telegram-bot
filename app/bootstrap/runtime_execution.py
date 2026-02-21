@@ -15,7 +15,7 @@ async def run_runtime_loop_stage(
     daily_subscription_task: asyncio.Task | None,
     polling_task: asyncio.Task | None,
     auto_verification_active: bool,
-):
+) -> tuple[RuntimeTasks, bool]:
     runtime_tasks = RuntimeTasks(
         monitoring_task=monitoring_task,
         maintenance_task=maintenance_task,

@@ -1,6 +1,7 @@
 import asyncio
 from dataclasses import dataclass
 
+from app.bootstrap.types import KillerLike, LoggerLike
 from app.config import settings
 from app.services.daily_subscription_service import daily_subscription_service
 from app.services.maintenance_service import maintenance_service
@@ -20,7 +21,12 @@ class RuntimeTasks:
     polling_task: asyncio.Task | None
 
 
-async def run_runtime_watchdog_loop(killer, logger, tasks: RuntimeTasks, auto_verification_active: bool):
+async def run_runtime_watchdog_loop(
+    killer: KillerLike,
+    logger: LoggerLike,
+    tasks: RuntimeTasks,
+    auto_verification_active: bool,
+) -> tuple[RuntimeTasks, bool]:
     while not killer.exit:
         await asyncio.sleep(1)
 
