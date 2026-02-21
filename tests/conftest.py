@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import gc
 import hashlib
 import os
 import secrets
@@ -277,3 +278,14 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         loop.close()
 
     asyncio.set_event_loop(None)
+
+    # Defensive cleanup for orphan loops created indirectly by async integrations.
+    for obj in gc.get_objects():
+        if not isinstance(obj, asyncio.AbstractEventLoop):
+            continue
+        if obj.is_closed() or obj.is_running():
+            continue
+        try:
+            obj.close()
+        except Exception:
+            continue
