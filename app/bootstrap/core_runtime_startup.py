@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Any
 
 from aiogram import Bot, Dispatcher
 
@@ -27,6 +26,8 @@ from app.bootstrap.types import LoggerLike, TelegramNotifierLike
 from app.bootstrap.web_server_startup import start_web_server_stage
 from app.config import settings
 from app.services.payment_service import PaymentService
+from app.utils.startup_timeline import StartupTimeline
+from app.webapi.server import WebAPIServer
 
 
 @dataclass
@@ -38,11 +39,11 @@ class CoreRuntimeStartupContext:
     auto_verification_active: bool
     polling_enabled: bool
     telegram_webhook_enabled: bool
-    web_api_server: Any
+    web_api_server: WebAPIServer | None
 
 
 async def start_core_runtime_stage(
-    timeline,
+    timeline: StartupTimeline,
     logger: LoggerLike,
     telegram_notifier: TelegramNotifierLike,
 ) -> CoreRuntimeStartupContext:

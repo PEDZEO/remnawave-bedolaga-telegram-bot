@@ -1,12 +1,15 @@
 import asyncio
 from dataclasses import dataclass
 
+from aiogram import Bot, Dispatcher
+
 from app.bootstrap.daily_subscription_startup import start_daily_subscription_stage
 from app.bootstrap.maintenance_startup import start_maintenance_stage
 from app.bootstrap.monitoring_startup import start_monitoring_stage
 from app.bootstrap.polling_startup import start_polling_stage
 from app.bootstrap.traffic_monitoring_startup import start_traffic_monitoring_stage
 from app.bootstrap.version_check_startup import start_version_check_stage
+from app.utils.startup_timeline import StartupTimeline
 
 
 @dataclass
@@ -19,7 +22,13 @@ class RuntimeStartupTasks:
     polling_task: asyncio.Task | None
 
 
-async def start_runtime_tasks_stage(timeline, *, dp, bot, polling_enabled: bool) -> RuntimeStartupTasks:
+async def start_runtime_tasks_stage(
+    timeline: StartupTimeline,
+    *,
+    dp: Dispatcher,
+    bot: Bot,
+    polling_enabled: bool,
+) -> RuntimeStartupTasks:
     monitoring_task = await start_monitoring_stage(timeline)
     maintenance_task = await start_maintenance_stage(timeline)
     traffic_monitoring_task = await start_traffic_monitoring_stage(timeline)
