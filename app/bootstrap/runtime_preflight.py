@@ -4,6 +4,7 @@ import structlog
 
 from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.runtime_logging import configure_runtime_logging
+from app.bootstrap.types import TelegramNotifierLike
 from app.config import settings
 from app.logging_config import setup_logging
 from app.utils.startup_timeline import StartupTimeline
@@ -13,7 +14,7 @@ from app.utils.startup_timeline import StartupTimeline
 class RuntimePreflightContext:
     logger: structlog.typing.FilteringBoundLogger
     timeline: StartupTimeline
-    telegram_notifier: object | None
+    telegram_notifier: TelegramNotifierLike
 
 
 async def prepare_runtime_preflight() -> RuntimePreflightContext:

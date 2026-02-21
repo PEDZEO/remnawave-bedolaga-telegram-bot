@@ -23,6 +23,7 @@ from app.bootstrap.servers_startup import sync_servers_stage
 from app.bootstrap.services_startup import connect_integration_services_stage, wire_core_services
 from app.bootstrap.tariffs_startup import sync_tariffs_stage
 from app.bootstrap.telegram_webhook_startup import configure_telegram_webhook_stage
+from app.bootstrap.types import LoggerLike, TelegramNotifierLike
 from app.bootstrap.web_server_startup import start_web_server_stage
 from app.config import settings
 
@@ -39,7 +40,11 @@ class CoreRuntimeStartupContext:
     web_api_server: Any
 
 
-async def start_core_runtime_stage(timeline, logger, telegram_notifier) -> CoreRuntimeStartupContext:
+async def start_core_runtime_stage(
+    timeline,
+    logger: LoggerLike,
+    telegram_notifier: TelegramNotifierLike,
+) -> CoreRuntimeStartupContext:
     await run_database_migration_stage(timeline, logger)
     await initialize_database_stage(timeline)
     await sync_tariffs_stage(timeline, logger)

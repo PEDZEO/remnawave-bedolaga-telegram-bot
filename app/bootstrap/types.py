@@ -11,3 +11,7 @@ class LoggerLike(Protocol):
 
 class KillerLike(Protocol):
     exit: bool
+
+
+class TelegramNotifierLike(Protocol):
+    def set_bot(self, bot: Any) -> Any: ...

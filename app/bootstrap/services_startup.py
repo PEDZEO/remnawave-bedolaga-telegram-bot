@@ -7,8 +7,10 @@ from app.services.referral_contest_service import referral_contest_service
 from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
 from app.services.version_service import version_service
 
+from .types import TelegramNotifierLike
 
-def wire_core_services(bot, telegram_notifier):
+
+def wire_core_services(bot, telegram_notifier: TelegramNotifierLike):
     monitoring_service.bot = bot
     maintenance_service.set_bot(bot)
     broadcast_service.set_bot(bot)
