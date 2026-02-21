@@ -11,6 +11,7 @@ from app.bot import setup_bot
 from app.bootstrap.database_initialization import initialize_database_stage
 from app.bootstrap.database_startup import run_database_migration_stage
 from app.bootstrap.localization_startup import prepare_localizations
+from app.bootstrap.payment_methods_startup import initialize_payment_methods_stage
 from app.bootstrap.runtime_logging import configure_runtime_logging
 from app.bootstrap.servers_startup import sync_servers_stage
 from app.bootstrap.signals import install_signal_handlers
@@ -89,20 +90,7 @@ async def main():
 
         await sync_servers_stage(timeline, logger)
 
-        async with timeline.stage(
-            'Инициализация платёжных методов',
-            '💳',
-            success_message='Платёжные методы инициализированы',
-        ) as stage:
-            try:
-                from app.database.database import AsyncSessionLocal
-                from app.services.payment_method_config_service import ensure_payment_method_configs
-
-                async with AsyncSessionLocal() as db:
-                    await ensure_payment_method_configs(db)
-            except Exception as error:
-                stage.warning(f'Не удалось инициализировать платёжные методы: {error}')
-                logger.error('❌ Не удалось инициализировать платёжные методы', error=error)
+        await initialize_payment_methods_stage(timeline, logger)
 
         async with timeline.stage(
             'Загрузка конфигурации из БД',
