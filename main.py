@@ -32,6 +32,7 @@ from app.bootstrap.runtime_mode import resolve_runtime_mode
 from app.bootstrap.runtime_watchdog import RuntimeTasks, run_runtime_watchdog_loop
 from app.bootstrap.servers_startup import sync_servers_stage
 from app.bootstrap.services_startup import connect_integration_services_stage, wire_core_services
+from app.bootstrap.shutdown_services import shutdown_runtime_services
 from app.bootstrap.shutdown_web import shutdown_web_runtime
 from app.bootstrap.signals import install_signal_handlers
 from app.bootstrap.startup_notification import send_startup_notification_safe
@@ -43,20 +44,6 @@ from app.bootstrap.version_check_startup import start_version_check_stage
 from app.bootstrap.web_server_startup import start_web_server_stage
 from app.config import settings
 from app.logging_config import setup_logging
-from app.services.backup_service import backup_service
-from app.services.contest_rotation_service import contest_rotation_service
-from app.services.daily_subscription_service import daily_subscription_service
-from app.services.log_rotation_service import log_rotation_service
-from app.services.maintenance_service import maintenance_service
-from app.services.monitoring_service import monitoring_service
-from app.services.nalogo_queue_service import nalogo_queue_service
-from app.services.payment_verification_service import (
-    auto_payment_verification_service,
-)
-from app.services.referral_contest_service import referral_contest_service
-from app.services.remnawave_sync_service import remnawave_sync_service
-from app.services.reporting_service import reporting_service
-from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
 from app.utils.startup_timeline import StartupTimeline
 
 
@@ -212,106 +199,15 @@ async def main():
             summary_logged = True
         logger.info('🛑 Начинается корректное завершение работы...')
 
-        logger.info('ℹ️ Остановка сервиса автопроверки пополнений...')
-        try:
-            await auto_payment_verification_service.stop()
-        except Exception as error:
-            logger.error('Ошибка остановки сервиса автопроверки пополнений', error=error)
-
-        if monitoring_task and not monitoring_task.done():
-            logger.info('ℹ️ Остановка службы мониторинга...')
-            monitoring_service.stop_monitoring()
-            monitoring_task.cancel()
-            try:
-                await monitoring_task
-            except asyncio.CancelledError:
-                pass
-
-        if maintenance_task and not maintenance_task.done():
-            logger.info('ℹ️ Остановка службы техработ...')
-            await maintenance_service.stop_monitoring()
-            maintenance_task.cancel()
-            try:
-                await maintenance_task
-            except asyncio.CancelledError:
-                pass
-
-        if version_check_task and not version_check_task.done():
-            logger.info('ℹ️ Остановка сервиса проверки версий...')
-            version_check_task.cancel()
-            try:
-                await version_check_task
-            except asyncio.CancelledError:
-                pass
-
-        if traffic_monitoring_task and not traffic_monitoring_task.done():
-            logger.info('ℹ️ Остановка мониторинга трафика...')
-            traffic_monitoring_scheduler.stop_monitoring()
-            traffic_monitoring_task.cancel()
-            try:
-                await traffic_monitoring_task
-            except asyncio.CancelledError:
-                pass
-
-        if daily_subscription_task and not daily_subscription_task.done():
-            logger.info('ℹ️ Остановка сервиса суточных подписок...')
-            daily_subscription_service.stop_monitoring()
-            daily_subscription_task.cancel()
-            try:
-                await daily_subscription_task
-            except asyncio.CancelledError:
-                pass
-
-        logger.info('ℹ️ Остановка сервиса отчетов...')
-        try:
-            await reporting_service.stop()
-        except Exception as e:
-            logger.error('Ошибка остановки сервиса отчетов', error=e)
-
-        logger.info('ℹ️ Остановка сервиса конкурсов...')
-        try:
-            await referral_contest_service.stop()
-        except Exception as e:
-            logger.error('Ошибка остановки сервиса конкурсов', error=e)
-
-        logger.info('ℹ️ Остановка сервиса автосинхронизации RemnaWave...')
-        try:
-            await remnawave_sync_service.stop()
-        except Exception as e:
-            logger.error('Ошибка остановки автосинхронизации RemnaWave', error=e)
-
-        logger.info('ℹ️ Остановка ротации игр...')
-        try:
-            await contest_rotation_service.stop()
-        except Exception as e:
-            logger.error('Ошибка остановки ротации игр', error=e)
-
-        if settings.is_log_rotation_enabled():
-            logger.info('ℹ️ Остановка сервиса ротации логов...')
-            try:
-                await log_rotation_service.stop()
-            except Exception as e:
-                logger.error('Ошибка остановки сервиса ротации логов', error=e)
-
-        logger.info('ℹ️ Остановка очереди чеков NaloGO...')
-        try:
-            await nalogo_queue_service.stop()
-        except Exception as e:
-            logger.error('Ошибка остановки очереди чеков NaloGO', error=e)
-
-        logger.info('ℹ️ Остановка сервиса бекапов...')
-        try:
-            await backup_service.stop_auto_backup()
-        except Exception as e:
-            logger.error('Ошибка остановки сервиса бекапов', error=e)
-
-        if polling_task and not polling_task.done():
-            logger.info('ℹ️ Остановка polling...')
-            polling_task.cancel()
-            try:
-                await polling_task
-            except asyncio.CancelledError:
-                pass
+        await shutdown_runtime_services(
+            logger,
+            monitoring_task=monitoring_task,
+            maintenance_task=maintenance_task,
+            version_check_task=version_check_task,
+            traffic_monitoring_task=traffic_monitoring_task,
+            daily_subscription_task=daily_subscription_task,
+            polling_task=polling_task,
+        )
 
         await shutdown_web_runtime(
             logger,
