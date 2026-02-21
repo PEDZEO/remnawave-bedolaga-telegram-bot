@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.19.0](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.18.0...v3.19.0) (2026-02-20)
+
+
+### New Features
+
+* **cabinet:** add admin menu-layout endpoints ([4e8a3ce](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/4e8a3ce020d27b50d710e2581404538867bfda8a))
+
+
+### Bug Fixes
+
+* **menu:** enable custom buttons in cabinet mode ([3e08e6a](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/3e08e6ad65379a8190efcfb74b3772780f0f7160))
+* skip blocked users in trial notifications and broadcasts without DB status change ([493f315](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/493f315a65610826a04e04c3d2065e0b395426ed))
+
 ## [3.18.0](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.17.1...v3.18.0) (2026-02-18)
 
 
