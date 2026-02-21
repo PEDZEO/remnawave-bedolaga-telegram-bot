@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import os
 import signal
 import sys
@@ -11,6 +10,7 @@ import structlog
 sys.path.append(str(Path(__file__).parent))
 
 from app.bot import setup_bot
+from app.bootstrap.runtime_logging import configure_runtime_logging
 from app.config import settings
 from app.database.database import sync_postgres_sequences
 from app.database.migrations import run_alembic_upgrade
@@ -42,8 +42,6 @@ from app.services.system_settings_service import bot_configuration_service
 from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
 from app.services.version_service import version_service
 from app.services.web_api_token_service import ensure_default_web_api_token
-from app.utils.log_handlers import ExcludePaymentFilter, LevelFilterHandler
-from app.utils.payment_logger import configure_payment_logger
 from app.utils.startup_timeline import StartupTimeline
 from app.webapi.server import WebAPIServer
 from app.webserver.unified_app import create_unified_app
@@ -60,87 +58,7 @@ class GracefulExit:
 
 async def main():
     file_formatter, console_formatter, telegram_notifier = setup_logging()
-
-    log_handlers = []
-
-    # === Инициализация системы логирования ===
-    if settings.is_log_rotation_enabled():
-        # Новая система: разделение по уровням + отдельный лог платежей
-        await log_rotation_service.initialize()
-
-        log_dir = log_rotation_service.current_dir
-        log_dir.mkdir(parents=True, exist_ok=True)
-
-        # 1. Общий лог (bot.log) - все уровни, без платежей
-        bot_handler = logging.FileHandler(log_dir / 'bot.log', encoding='utf-8')
-        bot_handler.setFormatter(file_formatter)
-        bot_handler.addFilter(ExcludePaymentFilter())
-        log_handlers.append(bot_handler)
-
-        # 2. INFO лог - только INFO уровень
-        info_handler = LevelFilterHandler(
-            str(log_dir / settings.LOG_INFO_FILE),
-            min_level=logging.INFO,
-            max_level=logging.INFO,
-        )
-        info_handler.setFormatter(file_formatter)
-        info_handler.addFilter(ExcludePaymentFilter())
-        log_handlers.append(info_handler)
-
-        # 3. WARNING лог - WARNING и выше
-        warning_handler = LevelFilterHandler(
-            str(log_dir / settings.LOG_WARNING_FILE),
-            min_level=logging.WARNING,
-        )
-        warning_handler.setFormatter(file_formatter)
-        warning_handler.addFilter(ExcludePaymentFilter())
-        log_handlers.append(warning_handler)
-
-        # 4. ERROR лог - только ERROR и CRITICAL
-        error_handler = LevelFilterHandler(
-            str(log_dir / settings.LOG_ERROR_FILE),
-            min_level=logging.ERROR,
-        )
-        error_handler.setFormatter(file_formatter)
-        error_handler.addFilter(ExcludePaymentFilter())
-        log_handlers.append(error_handler)
-
-        # 5. Payment лог - отдельный файл для платежей
-        payment_handler = logging.FileHandler(
-            log_dir / settings.LOG_PAYMENTS_FILE,
-            encoding='utf-8',
-        )
-        configure_payment_logger(payment_handler, file_formatter)
-
-        # 6. Консольный вывод
-        stream_handler = logging.StreamHandler(sys.stdout)
-        stream_handler.setFormatter(console_formatter)
-        log_handlers.append(stream_handler)
-
-        logging.basicConfig(
-            level=getattr(logging, settings.LOG_LEVEL),
-            handlers=log_handlers,
-            force=True,
-        )
-
-        # Регистрируем хэндлеры для управления при ротации
-        log_rotation_service.register_handlers(log_handlers)
-
-    else:
-        # Старое поведение: один файл лога
-        file_handler = logging.FileHandler(settings.LOG_FILE, encoding='utf-8')
-        file_handler.setFormatter(file_formatter)
-        log_handlers.append(file_handler)
-
-        stream_handler = logging.StreamHandler(sys.stdout)
-        stream_handler.setFormatter(console_formatter)
-        log_handlers.append(stream_handler)
-
-        logging.basicConfig(
-            level=getattr(logging, settings.LOG_LEVEL),
-            handlers=log_handlers,
-            force=True,
-        )
+    await configure_runtime_logging(file_formatter, console_formatter)
 
     # NOTE: TelegramNotifierProcessor and noisy logger suppression are
     # handled inside setup_logging() / logging_config.py.
