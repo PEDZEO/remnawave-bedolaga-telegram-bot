@@ -13,6 +13,7 @@ from app.bootstrap.database_startup import run_database_migration_stage
 from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.runtime_logging import configure_runtime_logging
 from app.bootstrap.signals import install_signal_handlers
+from app.bootstrap.tariffs_startup import sync_tariffs_stage
 from app.config import settings
 from app.database.models import PaymentMethod
 from app.logging_config import setup_logging
@@ -83,20 +84,7 @@ async def main():
         await run_database_migration_stage(timeline, logger)
         await initialize_database_stage(timeline)
 
-        async with timeline.stage(
-            'Синхронизация тарифов из конфига',
-            '💰',
-            success_message='Тарифы синхронизированы',
-        ) as stage:
-            try:
-                from app.database.crud.tariff import ensure_tariffs_synced
-                from app.database.database import AsyncSessionLocal
-
-                async with AsyncSessionLocal() as db:
-                    await ensure_tariffs_synced(db)
-            except Exception as error:
-                stage.warning(f'Не удалось синхронизировать тарифы: {error}')
-                logger.error('❌ Не удалось синхронизировать тарифы', error=error)
+        await sync_tariffs_stage(timeline, logger)
 
         async with timeline.stage(
             'Синхронизация серверов из RemnaWave',
