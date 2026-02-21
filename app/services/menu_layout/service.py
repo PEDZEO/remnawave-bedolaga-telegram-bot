@@ -18,6 +18,8 @@ from app.config import settings
 from app.database.crud.system_setting import upsert_system_setting
 from app.database.models import SystemSetting
 from app.localization.texts import get_texts
+from app.utils.button_styles_cache import CALLBACK_TO_SECTION, get_cached_button_styles
+from app.utils.miniapp_buttons import CALLBACK_TO_CABINET_STYLE, _resolve_style
 
 from .constants import (
     AVAILABLE_CALLBACKS,
@@ -1006,6 +1008,26 @@ class MenuLayoutService:
         open_mode = button_config.get('open_mode', 'callback')
         webapp_url = button_config.get('webapp_url')
         icon = button_config.get('icon', '')
+        global_style = _resolve_style((settings.CABINET_BUTTON_STYLE or '').strip())
+        cached_styles = get_cached_button_styles()
+
+        def _menu_layout_style_kwargs(callback_fallback: str) -> dict[str, Any]:
+            if not settings.is_cabinet_mode():
+                return {}
+            section = CALLBACK_TO_SECTION.get(callback_fallback)
+            if not section:
+                return {}
+
+            section_cfg = cached_styles.get(section, {})
+            if section_cfg.get('style'):
+                resolved_style = _resolve_style(section_cfg['style'])
+            else:
+                resolved_style = global_style or _resolve_style(CALLBACK_TO_CABINET_STYLE.get(callback_fallback))
+            resolved_emoji = section_cfg.get('icon_custom_emoji_id') or None
+            return {
+                'style': resolved_style,
+                'icon_custom_emoji_id': resolved_emoji or None,
+            }
 
         # Логирование для отладки кнопки connect
         is_connect_button = (
@@ -1045,7 +1067,11 @@ class MenuLayoutService:
             return InlineKeyboardButton(text=text, web_app=types.WebAppInfo(url=action))
         if button_type == 'callback':
             # Кастомная кнопка с callback_data
-            return InlineKeyboardButton(text=text, callback_data=action)
+            return InlineKeyboardButton(
+                text=text,
+                callback_data=action,
+                **_menu_layout_style_kwargs(action),
+            )
         # builtin - проверяем open_mode
         if open_mode == 'direct':
             # Прямое открытие Mini App через WebAppInfo
@@ -1071,7 +1097,11 @@ class MenuLayoutService:
             # Проверяем, что это действительно URL
             if url and (url.startswith('http://') or url.startswith('https://')):
                 logger.info('🔗 Кнопка connect: open_mode=direct, используем URL: ...', url=url[:50])
-                return InlineKeyboardButton(text=text, web_app=types.WebAppInfo(url=url))
+                return InlineKeyboardButton(
+                    text=text,
+                    web_app=types.WebAppInfo(url=url),
+                    **_menu_layout_style_kwargs(action),
+                )
             logger.warning(
                 '🔗 Кнопка connect: open_mode=direct, но URL не найден. webapp_url=, action=, subscription_url',
                 webapp_url=webapp_url,
@@ -1079,10 +1109,18 @@ class MenuLayoutService:
                 value='есть' if context.subscription else 'нет',
             )
             # Fallback на callback_data
-            return InlineKeyboardButton(text=text, callback_data=action)
+            return InlineKeyboardButton(
+                text=text,
+                callback_data=action,
+                **_menu_layout_style_kwargs(action),
+            )
         # Стандартный callback_data
         logger.debug('Кнопка connect: open_mode=, используем callback_data', open_mode=open_mode, action=action)
-        return InlineKeyboardButton(text=text, callback_data=action)
+        return InlineKeyboardButton(
+            text=text,
+            callback_data=action,
+            **_menu_layout_style_kwargs(action),
+        )
 
     # --- Построение клавиатуры ---
 
