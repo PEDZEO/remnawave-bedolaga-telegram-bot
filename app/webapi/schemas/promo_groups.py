@@ -45,7 +45,7 @@ class _PromoGroupBase(BaseModel):
             'Словарь скидок по длительности подписки. Ключ — количество месяцев, '
             'значение — скидка в процентах. Например: {1: 10, 6: 20}.'
         ),
-        example={1: 10, 6: 20},
+        json_schema_extra={'example': {1: 10, 6: 20}},
     )
 
     @field_validator('period_discounts', mode='before')

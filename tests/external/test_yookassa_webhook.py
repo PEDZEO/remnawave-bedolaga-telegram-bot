@@ -124,7 +124,9 @@ def _patch_get_db(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_session = AsyncMock()
     mock_session.commit = AsyncMock()
     mock_session.rollback = AsyncMock()
-    mock_session.execute = AsyncMock()
+    execute_result = MagicMock()
+    execute_result.scalar_one_or_none.return_value = None
+    mock_session.execute = AsyncMock(return_value=execute_result)
 
     ctx = MagicMock()
     ctx.__aenter__ = AsyncMock(return_value=mock_session)

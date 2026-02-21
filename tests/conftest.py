@@ -271,13 +271,9 @@ def _unwrap_test(obj):
 def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> bool | None:
     """Позволяет запускать async def тесты без дополнительных плагинов."""
 
-    # Пропускаем если pytest-asyncio уже обработал этот тест
-    if hasattr(pyfuncitem, '_request') and hasattr(pyfuncitem._request, '_pyfuncitem'):
-        markers = list(pyfuncitem.iter_markers())
-        for marker in markers:
-            if marker.name in ('asyncio', 'anyio'):
-                # pytest-asyncio обработает этот тест
-                return None
+    marker_names = {marker.name for marker in pyfuncitem.iter_markers()}
+    if 'asyncio' in marker_names or 'anyio' in marker_names:
+        return None
 
     test_func = _unwrap_test(pyfuncitem.obj)
     if not inspect.iscoroutinefunction(test_func):
