@@ -1,50 +1,31 @@
 import sys
 from pathlib import Path
 
-import structlog
-
 
 sys.path.append(str(Path(__file__).parent))
 
 from app.bootstrap.core_runtime_startup import start_core_runtime_stage
 from app.bootstrap.crash_notification import send_crash_notification_on_error
 from app.bootstrap.entrypoint import run_main_entrypoint
-from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.runtime_execution import run_runtime_loop_stage
-from app.bootstrap.runtime_logging import configure_runtime_logging
+from app.bootstrap.runtime_preflight import prepare_runtime_preflight
 from app.bootstrap.runtime_state import RuntimeState
 from app.bootstrap.runtime_tasks_startup import start_runtime_tasks_stage
 from app.bootstrap.shutdown_pipeline import run_shutdown_pipeline
 from app.bootstrap.signals import install_signal_handlers
 from app.bootstrap.startup_finalize import finalize_startup_stage
-from app.config import settings
-from app.logging_config import setup_logging
-from app.utils.startup_timeline import StartupTimeline
 
 
 async def main():
-    file_formatter, console_formatter, telegram_notifier = setup_logging()
-    await configure_runtime_logging(file_formatter, console_formatter)
-
-    # NOTE: TelegramNotifierProcessor and noisy logger suppression are
-    # handled inside setup_logging() / logging_config.py.
-
-    logger = structlog.get_logger(__name__)
-    timeline = StartupTimeline(logger, 'Bedolaga Remnawave Bot')
-    timeline.log_banner(
-        [
-            ('Уровень логирования', settings.LOG_LEVEL),
-            ('Режим БД', settings.DATABASE_MODE),
-        ]
-    )
-
-    await prepare_localizations(timeline, logger)
+    preflight = await prepare_runtime_preflight()
+    logger = preflight.logger
+    timeline = preflight.timeline
 
     killer = install_signal_handlers()
     state = RuntimeState()
 
     try:
-        runtime_context = await start_core_runtime_stage(timeline, logger, telegram_notifier)
+        runtime_context = await start_core_runtime_stage(timeline, logger, preflight.telegram_notifier)
         state.apply_core_runtime(runtime_context)
 
         runtime_startup_tasks = await start_runtime_tasks_stage(
