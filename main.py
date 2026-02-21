@@ -45,13 +45,7 @@ async def main():
 
     try:
         runtime_context = await start_core_runtime_stage(timeline, logger, telegram_notifier)
-        state.bot = runtime_context.bot
-        state.dp = runtime_context.dp
-        state.verification_providers = runtime_context.verification_providers
-        state.auto_verification_active = runtime_context.auto_verification_active
-        state.polling_enabled = runtime_context.polling_enabled
-        state.telegram_webhook_enabled = runtime_context.telegram_webhook_enabled
-        state.web_api_server = runtime_context.web_api_server
+        state.apply_core_runtime(runtime_context)
 
         runtime_startup_tasks = await start_runtime_tasks_stage(
             timeline,
@@ -59,12 +53,7 @@ async def main():
             bot=state.bot,
             polling_enabled=state.polling_enabled,
         )
-        state.monitoring_task = runtime_startup_tasks.monitoring_task
-        state.maintenance_task = runtime_startup_tasks.maintenance_task
-        state.traffic_monitoring_task = runtime_startup_tasks.traffic_monitoring_task
-        state.daily_subscription_task = runtime_startup_tasks.daily_subscription_task
-        state.version_check_task = runtime_startup_tasks.version_check_task
-        state.polling_task = runtime_startup_tasks.polling_task
+        state.apply_runtime_tasks(runtime_startup_tasks)
 
         await finalize_startup_stage(
             timeline,
@@ -91,12 +80,7 @@ async def main():
             polling_task=state.polling_task,
             auto_verification_active=state.auto_verification_active,
         )
-        state.monitoring_task = runtime_tasks.monitoring_task
-        state.maintenance_task = runtime_tasks.maintenance_task
-        state.version_check_task = runtime_tasks.version_check_task
-        state.traffic_monitoring_task = runtime_tasks.traffic_monitoring_task
-        state.daily_subscription_task = runtime_tasks.daily_subscription_task
-        state.polling_task = runtime_tasks.polling_task
+        state.apply_runtime_tasks(runtime_tasks)
 
     except Exception as e:
         logger.error('❌ Критическая ошибка при запуске', error=e)
