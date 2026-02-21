@@ -16,6 +16,7 @@ from app.bootstrap.configuration_startup import load_bot_configuration_stage
 from app.bootstrap.log_rotation_startup import initialize_log_rotation_stage
 from app.bootstrap.contest_rotation_startup import initialize_contest_rotation_stage
 from app.bootstrap.localization_startup import prepare_localizations
+from app.bootstrap.monitoring_startup import start_monitoring_stage
 from app.bootstrap.payment_methods_startup import initialize_payment_methods_stage
 from app.bootstrap.payment_runtime import setup_payment_runtime
 from app.bootstrap.referral_contests_startup import initialize_referral_contests_stage
@@ -210,13 +211,7 @@ async def main():
             telegram_webhook_enabled=telegram_webhook_enabled,
         )
 
-        async with timeline.stage(
-            'Служба мониторинга',
-            '📈',
-            success_message='Служба мониторинга запущена',
-        ) as stage:
-            monitoring_task = asyncio.create_task(monitoring_service.start_monitoring())
-            stage.log(f'Интервал опроса: {settings.MONITORING_INTERVAL}с')
+        monitoring_task = await start_monitoring_stage(timeline)
 
         async with timeline.stage(
             'Служба техработ',

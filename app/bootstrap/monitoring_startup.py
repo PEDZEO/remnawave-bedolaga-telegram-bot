@@ -1,0 +1,15 @@
+import asyncio
+
+from app.config import settings
+from app.services.monitoring_service import monitoring_service
+
+
+async def start_monitoring_stage(timeline):
+    async with timeline.stage(
+        'Служба мониторинга',
+        '📈',
+        success_message='Служба мониторинга запущена',
+    ) as stage:
+        monitoring_task = asyncio.create_task(monitoring_service.start_monitoring())
+        stage.log(f'Интервал опроса: {settings.MONITORING_INTERVAL}с')
+        return monitoring_task
