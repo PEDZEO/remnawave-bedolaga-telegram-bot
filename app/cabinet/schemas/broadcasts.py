@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ============ Channel Types ============
@@ -127,8 +127,7 @@ class BroadcastResponse(BaseModel):
     email_subject: str | None = None
     email_html_content: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BroadcastListResponse(BaseModel):

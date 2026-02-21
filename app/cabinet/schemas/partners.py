@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ==================== User-facing ====================
@@ -33,8 +33,7 @@ class PartnerApplicationInfo(BaseModel):
     created_at: datetime
     processed_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PartnerCampaignInfo(BaseModel):
