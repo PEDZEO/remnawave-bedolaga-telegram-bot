@@ -1019,6 +1019,8 @@ class MenuLayoutService:
                 return {}
 
             section_cfg = cached_styles.get(section, {})
+            if not section_cfg.get('enabled', True):
+                return {}
             if section_cfg.get('style'):
                 resolved_style = _resolve_style(section_cfg['style'])
             else:
