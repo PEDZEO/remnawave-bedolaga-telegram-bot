@@ -30,9 +30,13 @@ async def test_commission_accrues_before_minimum_first_topup(monkeypatch):
         full_name='Referrer',
     )
 
+    class _DummyScalarResult:
+        def scalar_one_or_none(self):
+            return None
+
     db = SimpleNamespace(
         commit=AsyncMock(),
-        execute=AsyncMock(),
+        execute=AsyncMock(return_value=_DummyScalarResult()),
     )
 
     get_user_mock = AsyncMock(side_effect=[user, referrer])

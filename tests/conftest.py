@@ -1,5 +1,6 @@
 """Глобальные фикстуры и настройки окружения для тестов."""
 
+import asyncio
 import base64
 import hashlib
 import os
@@ -7,6 +8,7 @@ import secrets
 import sys
 import types
 import uuid
+import warnings
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -246,6 +248,19 @@ def fixed_datetime() -> datetime:
 def pytest_configure(config: pytest.Config) -> None:
     """Регистрируем маркеры для асинхронных тестов."""
 
+    # Keep coroutine origins in warnings to pinpoint un-awaited AsyncMock calls.
+    sys.set_coroutine_origin_tracking_depth(10)
+    warnings.filterwarnings(
+        'ignore',
+        message=r'Exception ignored in: <socket\.socket.*',
+        category=pytest.PytestUnraisableExceptionWarning,
+    )
+    warnings.filterwarnings(
+        'ignore',
+        message=r'Exception ignored in: <function BaseEventLoop\.__del__.*',
+        category=pytest.PytestUnraisableExceptionWarning,
+    )
+
     config.addinivalue_line(
         'markers',
         'asyncio: запуск асинхронного теста через встроенный цикл событий',
@@ -254,3 +269,19 @@ def pytest_configure(config: pytest.Config) -> None:
         'markers',
         'anyio: запуск асинхронного теста через встроенный цикл событий',
     )
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """Close orphaned default event loop to avoid unraisable ResourceWarning at interpreter shutdown."""
+    try:
+        loop = asyncio.get_event_loop_policy().get_event_loop()
+    except RuntimeError:
+        return
+
+    if loop.is_running():
+        return
+
+    if not loop.is_closed():
+        loop.close()
+
+    asyncio.set_event_loop(None)
