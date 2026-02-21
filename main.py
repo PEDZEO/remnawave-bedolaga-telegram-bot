@@ -1,4 +1,3 @@
-import asyncio
 import sys
 from pathlib import Path
 
@@ -11,9 +10,11 @@ from app.bootstrap.backup_startup import initialize_backup_stage
 from app.bootstrap.bot_startup import setup_bot_stage
 from app.bootstrap.configuration_startup import load_bot_configuration_stage
 from app.bootstrap.contest_rotation_startup import initialize_contest_rotation_stage
+from app.bootstrap.crash_notification import send_crash_notification_on_error
 from app.bootstrap.daily_subscription_startup import start_daily_subscription_stage
 from app.bootstrap.database_initialization import initialize_database_stage
 from app.bootstrap.database_startup import run_database_migration_stage
+from app.bootstrap.entrypoint import run_main_entrypoint
 from app.bootstrap.external_admin_startup import initialize_external_admin_stage
 from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.log_rotation_startup import initialize_log_rotation_stage
@@ -219,43 +220,5 @@ async def main():
         logger.info('✅ Завершение работы бота завершено')
 
 
-async def _send_crash_notification_on_error(error: Exception) -> None:
-    """Отправляет уведомление о падении бота в админский чат."""
-    import traceback
-
-    from app.config import settings
-
-    if not getattr(settings, 'BOT_TOKEN', None):
-        return
-
-    try:
-        from aiogram import Bot
-
-        from app.services.startup_notification_service import send_crash_notification
-
-        bot = Bot(token=settings.BOT_TOKEN)
-        try:
-            traceback_str = traceback.format_exc()
-            await send_crash_notification(bot, error, traceback_str)
-        finally:
-            await bot.session.close()
-    except Exception as notify_error:
-        print(f'⚠️ Не удалось отправить уведомление о падении: {notify_error}')
-
-
 if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print('\n🛑 Бот остановлен пользователем')
-    except Exception as e:
-        print(f'❌ Критическая ошибка: {e}')
-        import traceback
-
-        traceback.print_exc()
-        # Пытаемся отправить уведомление о падении
-        try:
-            asyncio.run(_send_crash_notification_on_error(e))
-        except Exception:
-            pass
-        sys.exit(1)
+    run_main_entrypoint(main, send_crash_notification_on_error)
