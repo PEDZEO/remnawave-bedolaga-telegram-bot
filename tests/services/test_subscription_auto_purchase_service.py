@@ -160,19 +160,30 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
         'app.services.subscription_auto_purchase_service.MiniAppSubscriptionPurchaseService',
         DummyMiniAppService,
     )
+    async def get_user_cart_stub(_user_id):
+        return cart_data
+
+    deleted_cart_ids: list[int] = []
+
+    async def delete_user_cart_stub(user_id: int):
+        deleted_cart_ids.append(user_id)
+
+    cleared_draft_ids: list[int] = []
+
+    async def clear_subscription_checkout_draft_stub(user_id: int):
+        cleared_draft_ids.append(user_id)
+
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.user_cart_service.get_user_cart',
-        AsyncMock(return_value=cart_data),
+        get_user_cart_stub,
     )
-    delete_cart_mock = AsyncMock()
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.user_cart_service.delete_user_cart',
-        delete_cart_mock,
+        delete_user_cart_stub,
     )
-    clear_draft_mock = AsyncMock()
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.clear_subscription_checkout_draft',
-        clear_draft_mock,
+        clear_subscription_checkout_draft_stub,
     )
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.get_texts',
@@ -183,27 +194,44 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
         lambda days, lang: f'{days} дней',
     )
 
-    admin_service_mock = SimpleNamespace(send_subscription_purchase_notification=AsyncMock())
+    class _AdminServiceStub:
+        def __init__(self):
+            self.called = False
+
+        async def send_subscription_purchase_notification(self, *args, **kwargs):
+            self.called = True
+
+    admin_service = _AdminServiceStub()
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.AdminNotificationService',
-        lambda bot: admin_service_mock,
+        lambda bot: admin_service,
     )
     # Мокаем get_user_by_id чтобы вернуть того же user
+    async def get_user_by_id_stub(*args, **kwargs):
+        return user
+
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.get_user_by_id',
-        AsyncMock(return_value=user),
+        get_user_by_id_stub,
     )
 
-    bot = SimpleNamespace(send_message=AsyncMock())
+    class _BotStub:
+        def __init__(self):
+            self.sent_messages = 0
+
+        async def send_message(self, *args, **kwargs):
+            self.sent_messages += 1
+
+    bot = _BotStub()
     db_session = SimpleNamespace()
 
     result = await auto_purchase_saved_cart_after_topup(db_session, user, bot=bot)
 
     assert result is True
-    delete_cart_mock.assert_awaited_once_with(user.id)
-    clear_draft_mock.assert_awaited_once_with(user.id)
-    bot.send_message.assert_awaited()
-    admin_service_mock.send_subscription_purchase_notification.assert_awaited()
+    assert deleted_cart_ids == [user.id]
+    assert cleared_draft_ids == [user.id]
+    assert bot.sent_messages >= 1
+    assert admin_service.called is True
 
 
 async def test_auto_purchase_saved_cart_after_topup_extension(monkeypatch):
