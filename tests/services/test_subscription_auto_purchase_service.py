@@ -494,22 +494,25 @@ async def test_auto_purchase_trial_converted_after_successful_extension(monkeypa
     """Тест: триал конвертируется в платную подписку ТОЛЬКО после успешного продления"""
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
 
-    subscription = MagicMock()
-    subscription.id = 456
-    subscription.is_trial = True  # Триальная подписка!
-    subscription.status = 'active'
-    subscription.end_date = datetime.now(UTC) + timedelta(days=1)
-    subscription.device_limit = 1
-    subscription.traffic_limit_gb = 10
-    subscription.connected_squads = []
+    subscription = SimpleNamespace(
+        id=456,
+        is_trial=True,
+        status='active',
+        end_date=datetime.now(UTC) + timedelta(days=1),
+        device_limit=1,
+        traffic_limit_gb=10,
+        connected_squads=[],
+        tariff_id=None,
+    )
 
-    user = MagicMock(spec=User)
-    user.id = 88
-    user.telegram_id = 8888
-    user.balance_kopeks = 200_000  # Достаточно денег
-    user.language = 'ru'
-    user.subscription = subscription
-    user.get_primary_promo_group = MagicMock(return_value=None)
+    user = SimpleNamespace(
+        id=88,
+        telegram_id=8888,
+        balance_kopeks=200_000,
+        language='ru',
+        subscription=subscription,
+        get_primary_promo_group=lambda: None,
+    )
 
     cart_data = {
         'cart_mode': 'extend',
@@ -545,21 +548,42 @@ async def test_auto_purchase_trial_converted_after_successful_extension(monkeypa
         extend_stub,
     )
 
-    create_transaction_mock = AsyncMock(return_value=MagicMock())
+    create_transaction_calls = {'count': 0}
+
+    async def create_transaction_stub(*args, **kwargs):
+        create_transaction_calls['count'] += 1
+        return SimpleNamespace()
+
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.create_transaction',
-        create_transaction_mock,
+        create_transaction_stub,
     )
 
-    service_mock = MagicMock()
-    service_mock.update_remnawave_user = AsyncMock()
+    class _SubscriptionServiceStub:
+        def __init__(self):
+            self.update_called = False
+
+        async def update_remnawave_user(self, *args, **kwargs):
+            self.update_called = True
+
+    service_stub = _SubscriptionServiceStub()
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.SubscriptionService',
-        lambda: service_mock,
+        lambda: service_stub,
     )
 
     async def get_user_cart_stub(_user_id):
         return cart_data
+
+    deleted_cart_ids: list[int] = []
+
+    async def delete_user_cart_stub(user_id: int):
+        deleted_cart_ids.append(user_id)
+
+    cleared_draft_ids: list[int] = []
+
+    async def clear_checkout_draft_stub(user_id: int):
+        cleared_draft_ids.append(user_id)
 
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.user_cart_service.get_user_cart',
@@ -567,11 +591,11 @@ async def test_auto_purchase_trial_converted_after_successful_extension(monkeypa
     )
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.user_cart_service.delete_user_cart',
-        AsyncMock(),
+        delete_user_cart_stub,
     )
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.clear_subscription_checkout_draft',
-        AsyncMock(),
+        clear_checkout_draft_stub,
     )
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.get_texts',
@@ -587,23 +611,48 @@ async def test_auto_purchase_trial_converted_after_successful_extension(monkeypa
         lambda dt, fmt: dt.strftime(fmt) if dt else '',
     )
 
-    admin_service_mock = MagicMock()
-    admin_service_mock.send_subscription_extension_notification = AsyncMock()
+    class _AdminServiceStub:
+        def __init__(self):
+            self.called = False
+
+        async def send_subscription_extension_notification(self, *args, **kwargs):
+            self.called = True
+
+    admin_service = _AdminServiceStub()
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.AdminNotificationService',
-        lambda bot: admin_service_mock,
+        lambda bot: admin_service,
     )
 
     # Мок для get_subscription_by_user_id
+    async def get_subscription_by_user_id_stub(*args, **kwargs):
+        return subscription
+
     monkeypatch.setattr(
         'app.database.crud.subscription.get_subscription_by_user_id',
-        AsyncMock(return_value=subscription),
+        get_subscription_by_user_id_stub,
     )
 
-    db_session = AsyncMock(spec=AsyncSession)
-    db_session.commit = AsyncMock()  # Важно! Отслеживаем commit
-    db_session.refresh = AsyncMock()  # ИСПРАВЛЕНО: Добавлен мок для refresh
-    bot = AsyncMock()
+    class DummyDbSession:
+        def __init__(self):
+            self.commit_called = False
+            self.refresh_called = False
+
+        async def commit(self):
+            self.commit_called = True
+
+        async def refresh(self, *_args, **_kwargs):
+            self.refresh_called = True
+
+    class _BotStub:
+        def __init__(self):
+            self.sent = 0
+
+        async def send_message(self, *args, **kwargs):
+            self.sent += 1
+
+    db_session = DummyDbSession()
+    bot = _BotStub()
 
     result = await auto_purchase_saved_cart_after_topup(db_session, user, bot=bot)
 
@@ -611,7 +660,13 @@ async def test_auto_purchase_trial_converted_after_successful_extension(monkeypa
     assert result is True  # Автопокупка успешна
     assert subscription.is_trial is False  # ТРИАЛ КОНВЕРТИРОВАН!
     assert subscription.status == 'active'
-    db_session.commit.assert_awaited()  # Commit был вызван
+    assert db_session.commit_called is True  # Commit был вызван
+    assert deleted_cart_ids == [user.id]
+    assert cleared_draft_ids == [user.id]
+    assert service_stub.update_called is True
+    assert admin_service.called is True
+    assert bot.sent >= 1
+    assert create_transaction_calls['count'] == 1
 
 
 async def test_auto_purchase_trial_preserved_on_extension_failure(monkeypatch):
