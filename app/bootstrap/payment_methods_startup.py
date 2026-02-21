@@ -1,8 +1,11 @@
 from app.database.database import AsyncSessionLocal
 from app.services.payment_method_config_service import ensure_payment_method_configs
+from app.utils.startup_timeline import StartupTimeline
+
+from .types import LoggerLike
 
 
-async def initialize_payment_methods_stage(timeline, logger):
+async def initialize_payment_methods_stage(timeline: StartupTimeline, logger: LoggerLike) -> None:
     async with timeline.stage(
         'Инициализация платёжных методов',
         '💳',

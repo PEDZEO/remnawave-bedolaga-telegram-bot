@@ -1,7 +1,16 @@
+from aiogram import Bot
+
 from app.services.external_admin_service import ensure_external_admin_token
+from app.utils.startup_timeline import StartupTimeline
+
+from .types import LoggerLike
 
 
-async def initialize_external_admin_stage(timeline, logger, bot):
+async def initialize_external_admin_stage(
+    timeline: StartupTimeline,
+    logger: LoggerLike,
+    bot: Bot,
+) -> None:
     async with timeline.stage(
         'Внешняя админка',
         '🛡️',

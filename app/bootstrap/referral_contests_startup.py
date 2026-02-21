@@ -1,7 +1,10 @@
 from app.services.referral_contest_service import referral_contest_service
+from app.utils.startup_timeline import StartupTimeline
+
+from .types import LoggerLike
 
 
-async def initialize_referral_contests_stage(timeline, logger):
+async def initialize_referral_contests_stage(timeline: StartupTimeline, logger: LoggerLike) -> None:
     async with timeline.stage(
         'Реферальные конкурсы',
         '🏆',

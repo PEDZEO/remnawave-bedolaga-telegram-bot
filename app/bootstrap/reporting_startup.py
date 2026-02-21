@@ -1,7 +1,16 @@
+from aiogram import Bot
+
 from app.services.reporting_service import reporting_service
+from app.utils.startup_timeline import StartupTimeline
+
+from .types import LoggerLike
 
 
-async def initialize_reporting_stage(timeline, logger, bot):
+async def initialize_reporting_stage(
+    timeline: StartupTimeline,
+    logger: LoggerLike,
+    bot: Bot,
+) -> None:
     async with timeline.stage(
         'Сервис отчетов',
         '📊',
