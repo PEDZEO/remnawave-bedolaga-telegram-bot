@@ -9,12 +9,12 @@ sys.path.append(str(Path(__file__).parent))
 
 from app.bot import setup_bot
 from app.bootstrap.database_startup import run_database_migration_stage
+from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.runtime_logging import configure_runtime_logging
 from app.bootstrap.signals import install_signal_handlers
 from app.config import settings
 from app.database.database import sync_postgres_sequences
 from app.database.models import PaymentMethod
-from app.localization.loader import ensure_locale_templates
 from app.logging_config import setup_logging
 from app.services.backup_service import backup_service
 from app.services.ban_notification_service import ban_notification_service
@@ -62,12 +62,7 @@ async def main():
         ]
     )
 
-    async with timeline.stage('Подготовка локализаций', '🗂️', success_message='Шаблоны локализаций готовы') as stage:
-        try:
-            ensure_locale_templates()
-        except Exception as error:
-            stage.warning(f'Не удалось подготовить шаблоны локализаций: {error}')
-            logger.warning('Failed to prepare locale templates', error=error)
+    await prepare_localizations(timeline, logger)
 
     killer = install_signal_handlers()
 
