@@ -19,6 +19,7 @@ from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.log_rotation_startup import initialize_log_rotation_stage
 from app.bootstrap.maintenance_startup import start_maintenance_stage
 from app.bootstrap.monitoring_startup import start_monitoring_stage
+from app.bootstrap.nalogo_queue_startup import start_nalogo_queue_stage
 from app.bootstrap.payment_methods_startup import initialize_payment_methods_stage
 from app.bootstrap.payment_runtime import setup_payment_runtime
 from app.bootstrap.payment_verification_startup import initialize_payment_verification_stage
@@ -126,26 +127,7 @@ async def main():
 
         verification_providers, auto_verification_active = await initialize_payment_verification_stage(timeline)
 
-        async with timeline.stage(
-            'Очередь чеков NaloGO',
-            '🧾',
-            success_message='Сервис очереди чеков запущен',
-        ) as stage:
-            if settings.is_nalogo_enabled():
-                try:
-                    await nalogo_queue_service.start()
-                    if nalogo_queue_service.is_running():
-                        queue_len = await payment_service.nalogo_service.get_queue_length()
-                        if queue_len > 0:
-                            stage.log(f'В очереди ожидает {queue_len} чек(ов)')
-                        stage.success('Фоновая обработка чеков активна')
-                    else:
-                        stage.skip('Сервис не запущен')
-                except Exception as e:
-                    stage.warning(f'Ошибка запуска очереди чеков: {e}')
-                    logger.error('❌ Ошибка запуска очереди чеков NaloGO', error=e)
-            else:
-                stage.skip('NaloGO отключен настройками')
+        await start_nalogo_queue_stage(timeline, logger, payment_service)
 
         await initialize_external_admin_stage(timeline, logger, bot)
 
