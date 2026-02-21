@@ -10,6 +10,7 @@ sys.path.append(str(Path(__file__).parent))
 from app.bot import setup_bot
 from app.bootstrap.database_initialization import initialize_database_stage
 from app.bootstrap.database_startup import run_database_migration_stage
+from app.bootstrap.configuration_startup import load_bot_configuration_stage
 from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.payment_methods_startup import initialize_payment_methods_stage
 from app.bootstrap.runtime_logging import configure_runtime_logging
@@ -40,7 +41,6 @@ from app.services.payment_verification_service import (
 from app.services.referral_contest_service import referral_contest_service
 from app.services.remnawave_sync_service import remnawave_sync_service
 from app.services.reporting_service import reporting_service
-from app.services.system_settings_service import bot_configuration_service
 from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
 from app.services.version_service import version_service
 from app.utils.startup_timeline import StartupTimeline
@@ -92,16 +92,7 @@ async def main():
 
         await initialize_payment_methods_stage(timeline, logger)
 
-        async with timeline.stage(
-            'Загрузка конфигурации из БД',
-            '⚙️',
-            success_message='Конфигурация загружена',
-        ) as stage:
-            try:
-                await bot_configuration_service.initialize()
-            except Exception as error:
-                stage.warning(f'Не удалось загрузить конфигурацию: {error}')
-                logger.error('❌ Не удалось загрузить конфигурацию', error=error)
+        await load_bot_configuration_stage(timeline, logger)
 
         bot = None
         dp = None
