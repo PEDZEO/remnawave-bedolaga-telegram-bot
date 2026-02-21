@@ -37,6 +37,16 @@ dev = [
 [tool.uv]
 package = false
 
+[tool.pytest.ini_options]
+filterwarnings = [
+    'ignore::pydantic.warnings.PydanticDeprecatedSince20',
+    'ignore::pydantic.warnings.PydanticDeprecatedSince210',
+    'ignore::pydantic.warnings.PydanticDeprecatedSince212',
+    'ignore::DeprecationWarning:app.webserver.unified_app',
+    'ignore::DeprecationWarning:fastapi.applications',
+    "ignore:coroutine 'AsyncMockMixin._execute_mock_call' was never awaited:RuntimeWarning",
+]
+
 [tool.ruff]
 target-version = 'py313'
 line-length = 120
@@ -259,6 +269,7 @@ ignore = [
 '*.py' = [
     'INP001',
 ]
+
 '**/__init__.py' = [
     'F401',
     'F403',

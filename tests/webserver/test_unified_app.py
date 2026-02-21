@@ -7,6 +7,7 @@ import pytest
 from fastapi import FastAPI, status
 
 from app.config import settings
+from app.services.disposable_email_service import disposable_email_service
 from app.services.payment_service import PaymentService
 
 
@@ -37,6 +38,8 @@ async def test_unified_app_health_reports_features(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(settings, 'WEBHOOK_ENQUEUE_TIMEOUT', 0.0, raising=False)
     monkeypatch.setattr(settings, 'WEBHOOK_WORKER_SHUTDOWN_TIMEOUT', 1.0, raising=False)
     monkeypatch.setattr(settings, 'MINIAPP_STATIC_PATH', str(miniapp_static_dir), raising=False)
+    monkeypatch.setattr(disposable_email_service, 'start', AsyncMock())
+    monkeypatch.setattr(disposable_email_service, 'stop', AsyncMock())
 
     app = create_unified_app(
         bot,

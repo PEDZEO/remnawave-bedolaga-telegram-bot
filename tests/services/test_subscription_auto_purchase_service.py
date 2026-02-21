@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -23,6 +24,14 @@ class DummyTexts:
 
     def format_price(self, value: int) -> str:
         return f'{value / 100:.0f} ₽'
+
+
+@pytest.fixture(autouse=True)
+def _mock_recent_transactions(monkeypatch):
+    monkeypatch.setattr(
+        'app.database.crud.transaction.get_user_transactions',
+        AsyncMock(return_value=[]),
+    )
 
 
 async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):

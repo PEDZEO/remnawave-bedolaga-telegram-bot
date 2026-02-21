@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 from zoneinfo import ZoneInfo
 
+import pytest
 from sqlalchemy.exc import IntegrityError
 
 
@@ -12,6 +13,9 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from app.services.remnawave_service import RemnaWaveService
+
+
+pytestmark = pytest.mark.anyio('asyncio')
 
 
 def _create_service() -> RemnaWaveService:
