@@ -8,12 +8,12 @@ import structlog
 sys.path.append(str(Path(__file__).parent))
 
 from app.bot import setup_bot
+from app.bootstrap.database_initialization import initialize_database_stage
 from app.bootstrap.database_startup import run_database_migration_stage
 from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.runtime_logging import configure_runtime_logging
 from app.bootstrap.signals import install_signal_handlers
 from app.config import settings
-from app.database.database import sync_postgres_sequences
 from app.database.models import PaymentMethod
 from app.logging_config import setup_logging
 from app.services.backup_service import backup_service
@@ -40,7 +40,6 @@ from app.services.reporting_service import reporting_service
 from app.services.system_settings_service import bot_configuration_service
 from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
 from app.services.version_service import version_service
-from app.services.web_api_token_service import ensure_default_web_api_token
 from app.utils.startup_timeline import StartupTimeline
 from app.webapi.server import WebAPIServer
 from app.webserver.unified_app import create_unified_app
@@ -82,18 +81,7 @@ async def main():
 
     try:
         await run_database_migration_stage(timeline, logger)
-
-        async with timeline.stage(
-            'Инициализация базы данных',
-            '🗄️',
-            success_message='База данных готова',
-        ) as stage:
-            seq_ok = await sync_postgres_sequences()
-            token_ok = await ensure_default_web_api_token()
-            if not seq_ok:
-                stage.warning('Не удалось синхронизировать последовательности PostgreSQL')
-            if not token_ok:
-                stage.warning('Не удалось создать/проверить дефолтный веб-API токен')
+        await initialize_database_stage(timeline)
 
         async with timeline.stage(
             'Синхронизация тарифов из конфига',
