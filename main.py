@@ -12,6 +12,7 @@ from app.bootstrap.bot_startup import setup_bot_stage
 from app.bootstrap.database_initialization import initialize_database_stage
 from app.bootstrap.database_startup import run_database_migration_stage
 from app.bootstrap.configuration_startup import load_bot_configuration_stage
+from app.bootstrap.contest_rotation_startup import initialize_contest_rotation_stage
 from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.payment_methods_startup import initialize_payment_methods_stage
 from app.bootstrap.referral_contests_startup import initialize_referral_contests_stage
@@ -111,21 +112,7 @@ async def main():
 
         await initialize_referral_contests_stage(timeline, logger)
 
-        async with timeline.stage(
-            'Ротация игр',
-            '🎲',
-            success_message='Мини-игры готовы',
-        ) as stage:
-            try:
-                contest_rotation_service.set_bot(bot)
-                await contest_rotation_service.start()
-                if contest_rotation_service.is_running():
-                    stage.log('Ротационные игры запущены')
-                else:
-                    stage.skip('Ротация игр выключена настройками')
-            except Exception as e:
-                stage.warning(f'Ошибка запуска ротации игр: {e}')
-                logger.error('❌ Ошибка запуска ротации игр', error=e)
+        await initialize_contest_rotation_stage(timeline, logger, bot)
 
         if settings.is_log_rotation_enabled():
             async with timeline.stage(
