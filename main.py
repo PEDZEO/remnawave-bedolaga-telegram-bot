@@ -1,5 +1,4 @@
 import asyncio
-import os
 import sys
 from pathlib import Path
 
@@ -9,11 +8,11 @@ import structlog
 sys.path.append(str(Path(__file__).parent))
 
 from app.bot import setup_bot
+from app.bootstrap.database_startup import run_database_migration_stage
 from app.bootstrap.runtime_logging import configure_runtime_logging
 from app.bootstrap.signals import install_signal_handlers
 from app.config import settings
 from app.database.database import sync_postgres_sequences
-from app.database.migrations import run_alembic_upgrade
 from app.database.models import PaymentMethod
 from app.localization.loader import ensure_locale_templates
 from app.logging_config import setup_logging
@@ -87,30 +86,7 @@ async def main():
     summary_logged = False
 
     try:
-        skip_migration = os.getenv('SKIP_MIGRATION', 'false').lower() == 'true'
-
-        if not skip_migration:
-            async with timeline.stage(
-                'Миграция базы данных (Alembic)',
-                '🧬',
-                success_message='Миграция завершена успешно',
-            ) as stage:
-                try:
-                    await run_alembic_upgrade()
-                    stage.success('Миграция завершена успешно')
-                except Exception as migration_error:
-                    allow_failure = os.getenv('ALLOW_MIGRATION_FAILURE', 'false').lower() == 'true'
-                    logger.error('Ошибка выполнения миграции', migration_error=migration_error)
-                    if not allow_failure:
-                        raise
-                    stage.warning(f'Ошибка миграции: {migration_error} (ALLOW_MIGRATION_FAILURE=true)')
-        else:
-            timeline.add_manual_step(
-                'Миграция базы данных (Alembic)',
-                '⏭️',
-                'Пропущено',
-                'SKIP_MIGRATION=true',
-            )
+        await run_database_migration_stage(timeline, logger)
 
         async with timeline.stage(
             'Инициализация базы данных',
