@@ -30,6 +30,7 @@ from app.bootstrap.services_startup import connect_integration_services_stage, w
 from app.bootstrap.signals import install_signal_handlers
 from app.bootstrap.tariffs_startup import sync_tariffs_stage
 from app.bootstrap.telegram_webhook_startup import configure_telegram_webhook_stage
+from app.bootstrap.traffic_monitoring_startup import start_traffic_monitoring_stage
 from app.bootstrap.web_server_startup import start_web_server_stage
 from app.config import settings
 from app.database.models import PaymentMethod
@@ -216,19 +217,7 @@ async def main():
 
         maintenance_task = await start_maintenance_stage(timeline)
 
-        async with timeline.stage(
-            'Мониторинг трафика',
-            '📊',
-            success_message='Мониторинг трафика запущен',
-        ) as stage:
-            if traffic_monitoring_scheduler.is_enabled():
-                traffic_monitoring_task = asyncio.create_task(traffic_monitoring_scheduler.start_monitoring())
-                # Показываем информацию о новом мониторинге v2
-                status_info = traffic_monitoring_scheduler.get_status_info()
-                stage.log(status_info)
-            else:
-                traffic_monitoring_task = None
-                stage.skip('Мониторинг трафика отключен настройками')
+        traffic_monitoring_task = await start_traffic_monitoring_stage(timeline)
 
         async with timeline.stage(
             'Суточные подписки',
