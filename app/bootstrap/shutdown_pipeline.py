@@ -1,20 +1,26 @@
+import asyncio
+from typing import Any
+
+from aiogram import Bot
+
 from app.bootstrap.shutdown_services import shutdown_runtime_services
 from app.bootstrap.shutdown_web import shutdown_web_runtime
+from app.bootstrap.types import LoggerLike
 
 
 async def run_shutdown_pipeline(
     timeline,
-    logger,
+    logger: LoggerLike,
     *,
     summary_logged: bool,
-    monitoring_task,
-    maintenance_task,
-    version_check_task,
-    traffic_monitoring_task,
-    daily_subscription_task,
-    polling_task,
-    bot,
-    web_api_server,
+    monitoring_task: asyncio.Task | None,
+    maintenance_task: asyncio.Task | None,
+    version_check_task: asyncio.Task | None,
+    traffic_monitoring_task: asyncio.Task | None,
+    daily_subscription_task: asyncio.Task | None,
+    polling_task: asyncio.Task | None,
+    bot: Bot | None,
+    web_api_server: Any,
     telegram_webhook_enabled: bool,
 ) -> bool:
     if not summary_logged:

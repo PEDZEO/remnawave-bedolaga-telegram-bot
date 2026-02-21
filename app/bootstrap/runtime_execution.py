@@ -1,16 +1,19 @@
+import asyncio
+
 from app.bootstrap.runtime_watchdog import RuntimeTasks, run_runtime_watchdog_loop
+from app.bootstrap.types import KillerLike, LoggerLike
 
 
 async def run_runtime_loop_stage(
-    killer,
-    logger,
+    killer: KillerLike,
+    logger: LoggerLike,
     *,
-    monitoring_task,
-    maintenance_task,
-    version_check_task,
-    traffic_monitoring_task,
-    daily_subscription_task,
-    polling_task,
+    monitoring_task: asyncio.Task | None,
+    maintenance_task: asyncio.Task | None,
+    version_check_task: asyncio.Task | None,
+    traffic_monitoring_task: asyncio.Task | None,
+    daily_subscription_task: asyncio.Task | None,
+    polling_task: asyncio.Task | None,
     auto_verification_active: bool,
 ):
     runtime_tasks = RuntimeTasks(

@@ -1,6 +1,6 @@
 import asyncio
-from typing import Any
 
+from app.bootstrap.types import LoggerLike
 from app.config import settings
 from app.services.backup_service import backup_service
 from app.services.contest_rotation_service import contest_rotation_service
@@ -26,7 +26,7 @@ async def _cancel_task_if_running(task: asyncio.Task | None) -> None:
 
 
 async def shutdown_runtime_services(
-    logger: Any,
+    logger: LoggerLike,
     *,
     monitoring_task: asyncio.Task | None,
     maintenance_task: asyncio.Task | None,

@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Any
 
+from aiogram import Bot, Dispatcher
+
 from app.bootstrap.backup_startup import initialize_backup_stage
 from app.bootstrap.bot_startup import setup_bot_stage
 from app.bootstrap.configuration_startup import load_bot_configuration_stage
@@ -27,8 +29,8 @@ from app.config import settings
 
 @dataclass
 class CoreRuntimeStartupContext:
-    bot: Any
-    dp: Any
+    bot: Bot
+    dp: Dispatcher
     payment_service: Any
     verification_providers: list[str]
     auto_verification_active: bool

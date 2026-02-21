@@ -2,11 +2,13 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
+from aiogram import Bot, Dispatcher
+
 
 @dataclass
 class RuntimeState:
-    bot: Any | None = None
-    dp: Any | None = None
+    bot: Bot | None = None
+    dp: Dispatcher | None = None
     monitoring_task: asyncio.Task | None = None
     maintenance_task: asyncio.Task | None = None
     version_check_task: asyncio.Task | None = None
