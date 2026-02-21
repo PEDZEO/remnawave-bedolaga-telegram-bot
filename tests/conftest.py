@@ -14,11 +14,14 @@ import pytest
 # Add project root to Python path for imports
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+test_backup_dir = project_root / 'tests' / 'tmp' / 'backups'
+test_backup_dir.mkdir(parents=True, exist_ok=True)
 
 # Подменяем параметры подключения к БД, чтобы SQLAlchemy не требовал aiosqlite.
 os.environ.setdefault('DATABASE_MODE', 'postgresql')
 os.environ.setdefault('DATABASE_URL', 'postgresql+asyncpg://user:pass@localhost/test_db')
 os.environ.setdefault('BOT_TOKEN', 'test-token')
+os.environ.setdefault('BACKUP_LOCATION', str(test_backup_dir))
 
 # Создаём заглушки для драйверов, которых может не быть в окружении тестов.
 sys.modules.setdefault('asyncpg', types.ModuleType('asyncpg'))
@@ -66,8 +69,31 @@ if 'redis.asyncio' not in sys.modules:
     sys.modules['redis'] = redis_module
     sys.modules['redis.asyncio'] = redis_async_module
 
+# Минимальная заглушка uvicorn, чтобы избежать импорта multiprocessing в sandbox.
+if 'uvicorn' not in sys.modules:
+    uvicorn_module = types.ModuleType('uvicorn')
+
+    class _FakeConfig:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+
+    class _FakeServer:
+        def __init__(self, config=None):
+            self.config = config
+
+        async def serve(self):
+            return True
+
+    uvicorn_module.Config = _FakeConfig
+    uvicorn_module.Server = _FakeServer
+    uvicorn_module.run = lambda *args, **kwargs: None
+    sys.modules['uvicorn'] = uvicorn_module
+
 # Минимальная реализация SDK YooKassa, чтобы импорт сервисов не падал.
-if 'yookassa' not in sys.modules:
+try:
+    import yookassa as _real_yookassa  # noqa: F401
+except Exception:
     fake_yookassa = types.ModuleType('yookassa')
 
     class _FakeConfiguration:
