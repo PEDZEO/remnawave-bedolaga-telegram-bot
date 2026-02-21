@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 def _normalize_period_discounts(value: dict[object, object] | None) -> dict[int, int] | None:
@@ -48,7 +48,8 @@ class _PromoGroupBase(BaseModel):
         example={1: 10, 6: 20},
     )
 
-    @validator('period_discounts', pre=True)
+    @field_validator('period_discounts', mode='before')
+    @classmethod
     def validate_period_discounts(cls, value):
         return _normalize_period_discounts(value)
 

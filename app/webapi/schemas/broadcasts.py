@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import ClassVar
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.keyboards.admin import BROADCAST_BUTTONS, DEFAULT_BROADCAST_BUTTONS
 
@@ -45,7 +45,8 @@ class BroadcastCreateRequest(BaseModel):
         'no_sub': 'no',
     }
 
-    @validator('target')
+    @field_validator('target')
+    @classmethod
     def validate_target(cls, value: str) -> str:
         normalized = value.strip().lower()
         normalized = cls._TARGET_ALIASES.get(normalized, normalized)
@@ -60,7 +61,8 @@ class BroadcastCreateRequest(BaseModel):
 
         raise ValueError('Unsupported target value')
 
-    @validator('selected_buttons', pre=True)
+    @field_validator('selected_buttons', mode='before')
+    @classmethod
     def validate_selected_buttons(cls, value):
         if value is None:
             return []
