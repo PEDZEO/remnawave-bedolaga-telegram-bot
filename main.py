@@ -16,6 +16,7 @@ from app.bootstrap.configuration_startup import load_bot_configuration_stage
 from app.bootstrap.log_rotation_startup import initialize_log_rotation_stage
 from app.bootstrap.contest_rotation_startup import initialize_contest_rotation_stage
 from app.bootstrap.localization_startup import prepare_localizations
+from app.bootstrap.maintenance_startup import start_maintenance_stage
 from app.bootstrap.monitoring_startup import start_monitoring_stage
 from app.bootstrap.payment_methods_startup import initialize_payment_methods_stage
 from app.bootstrap.payment_runtime import setup_payment_runtime
@@ -213,21 +214,7 @@ async def main():
 
         monitoring_task = await start_monitoring_stage(timeline)
 
-        async with timeline.stage(
-            'Служба техработ',
-            '🛡️',
-            success_message='Служба техработ запущена',
-        ) as stage:
-            if not settings.is_maintenance_monitoring_enabled():
-                maintenance_task = None
-                stage.skip('Мониторинг техработ отключен настройками')
-            elif not maintenance_service._check_task or maintenance_service._check_task.done():
-                maintenance_task = asyncio.create_task(maintenance_service.start_monitoring())
-                stage.log(f'Интервал проверки: {settings.MAINTENANCE_CHECK_INTERVAL}с')
-                stage.log(f'Повторных попыток проверки: {settings.get_maintenance_retry_attempts()}')
-            else:
-                maintenance_task = None
-                stage.skip('Служба техработ уже активна')
+        maintenance_task = await start_maintenance_stage(timeline)
 
         async with timeline.stage(
             'Мониторинг трафика',
