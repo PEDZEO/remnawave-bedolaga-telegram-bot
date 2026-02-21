@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 
 CampaignBonusType = Annotated[
@@ -27,7 +27,8 @@ class CampaignBase(BaseModel):
     tariff_id: int | None = Field(None, ge=1, description='ID тарифа для выдачи')
     tariff_duration_days: int | None = Field(None, ge=1, description='Длительность тарифа в днях')
 
-    @validator('name', 'start_parameter')
+    @field_validator('name', 'start_parameter')
+    @classmethod
     def strip_strings(cls, value: str) -> str:
         return value.strip()
 
@@ -35,29 +36,33 @@ class CampaignBase(BaseModel):
 class CampaignCreateRequest(CampaignBase):
     is_active: bool = True
 
-    @validator('balance_bonus_kopeks')
-    def validate_balance_bonus(cls, value: int, values: dict) -> int:
-        if values.get('bonus_type') == 'balance' and value <= 0:
+    @field_validator('balance_bonus_kopeks')
+    @classmethod
+    def validate_balance_bonus(cls, value: int, info: ValidationInfo) -> int:
+        if info.data.get('bonus_type') == 'balance' and value <= 0:
             raise ValueError('balance_bonus_kopeks must be positive for balance bonus')
         return value
 
-    @validator('subscription_duration_days')
-    def validate_subscription_bonus(cls, value: int | None, values: dict):
-        if values.get('bonus_type') == 'subscription':
+    @field_validator('subscription_duration_days')
+    @classmethod
+    def validate_subscription_bonus(cls, value: int | None, info: ValidationInfo):
+        if info.data.get('bonus_type') == 'subscription':
             if value is None or value <= 0:
                 raise ValueError('subscription_duration_days must be positive for subscription bonus')
         return value
 
-    @validator('tariff_id')
-    def validate_tariff_id(cls, value: int | None, values: dict):
-        if values.get('bonus_type') == 'tariff':
+    @field_validator('tariff_id')
+    @classmethod
+    def validate_tariff_id(cls, value: int | None, info: ValidationInfo):
+        if info.data.get('bonus_type') == 'tariff':
             if value is None or value <= 0:
                 raise ValueError('tariff_id must be specified for tariff bonus')
         return value
 
-    @validator('tariff_duration_days')
-    def validate_tariff_duration(cls, value: int | None, values: dict):
-        if values.get('bonus_type') == 'tariff':
+    @field_validator('tariff_duration_days')
+    @classmethod
+    def validate_tariff_duration(cls, value: int | None, info: ValidationInfo):
+        if info.data.get('bonus_type') == 'tariff':
             if value is None or value <= 0:
                 raise ValueError('tariff_duration_days must be positive for tariff bonus')
         return value
@@ -106,36 +111,41 @@ class CampaignUpdateRequest(BaseModel):
     tariff_duration_days: int | None = Field(None, ge=1)
     is_active: bool | None = None
 
-    @validator('name', 'start_parameter', pre=True)
+    @field_validator('name', 'start_parameter', mode='before')
+    @classmethod
     def strip_optional_strings(cls, value: str | None):
         if isinstance(value, str):
             return value.strip()
         return value
 
-    @validator('balance_bonus_kopeks')
-    def validate_balance_bonus(cls, value: int | None, values: dict):
-        bonus_type = values.get('bonus_type')
+    @field_validator('balance_bonus_kopeks')
+    @classmethod
+    def validate_balance_bonus(cls, value: int | None, info: ValidationInfo):
+        bonus_type = info.data.get('bonus_type')
         if bonus_type == 'balance' and value is not None and value <= 0:
             raise ValueError('balance_bonus_kopeks must be positive for balance bonus')
         return value
 
-    @validator('subscription_duration_days')
-    def validate_subscription_bonus(cls, value: int | None, values: dict):
-        bonus_type = values.get('bonus_type')
+    @field_validator('subscription_duration_days')
+    @classmethod
+    def validate_subscription_bonus(cls, value: int | None, info: ValidationInfo):
+        bonus_type = info.data.get('bonus_type')
         if bonus_type == 'subscription' and value is not None and value <= 0:
             raise ValueError('subscription_duration_days must be positive for subscription bonus')
         return value
 
-    @validator('tariff_id')
-    def validate_tariff_id(cls, value: int | None, values: dict):
-        bonus_type = values.get('bonus_type')
+    @field_validator('tariff_id')
+    @classmethod
+    def validate_tariff_id(cls, value: int | None, info: ValidationInfo):
+        bonus_type = info.data.get('bonus_type')
         if bonus_type == 'tariff' and value is not None and value <= 0:
             raise ValueError('tariff_id must be positive for tariff bonus')
         return value
 
-    @validator('tariff_duration_days')
-    def validate_tariff_duration(cls, value: int | None, values: dict):
-        bonus_type = values.get('bonus_type')
+    @field_validator('tariff_duration_days')
+    @classmethod
+    def validate_tariff_duration(cls, value: int | None, info: ValidationInfo):
+        bonus_type = info.data.get('bonus_type')
         if bonus_type == 'tariff' and value is not None and value <= 0:
             raise ValueError('tariff_duration_days must be positive for tariff bonus')
         return value
