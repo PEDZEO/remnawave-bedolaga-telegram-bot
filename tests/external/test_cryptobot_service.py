@@ -19,18 +19,13 @@ from app.config import settings
 from app.external.cryptobot import CryptoBotService
 
 
-@pytest.fixture
-def anyio_backend() -> str:
-    return 'asyncio'
-
-
 def _enable_token(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'CRYPTOBOT_API_TOKEN', 'token', raising=False)
     monkeypatch.setattr(type(settings), 'get_cryptobot_base_url', lambda self: 'https://cryptobot.test', raising=False)
     monkeypatch.setattr(settings, 'CRYPTOBOT_WEBHOOK_SECRET', 'secret', raising=False)
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_invoice_uses_make_request(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_token(monkeypatch)
     service = CryptoBotService()
@@ -60,7 +55,7 @@ async def test_create_invoice_uses_make_request(monkeypatch: pytest.MonkeyPatch)
     assert captured['data']['payload'] == 'payload'
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_make_request_returns_none_without_token(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'CRYPTOBOT_API_TOKEN', '', raising=False)
     service = CryptoBotService()

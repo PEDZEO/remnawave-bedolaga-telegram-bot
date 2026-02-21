@@ -16,11 +16,6 @@ if str(ROOT_DIR) not in sys.path:
 from app.services.payment.common import PaymentCommonMixin
 
 
-@pytest.fixture
-def anyio_backend() -> str:
-    return 'asyncio'
-
-
 class _FakeBot:
     def __init__(self) -> None:
         self.messages: list[dict] = []
@@ -49,7 +44,7 @@ class _PaymentServiceStub(PaymentCommonMixin):
         return InlineKeyboardMarkup(inline_keyboard=[])
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_send_payment_success_notification_recovers_missing_greenlet(monkeypatch: pytest.MonkeyPatch) -> None:
     service = _PaymentServiceStub()
     lazy_user = _LazyUser()
