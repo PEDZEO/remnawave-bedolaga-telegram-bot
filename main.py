@@ -7,6 +7,7 @@ import structlog
 
 sys.path.append(str(Path(__file__).parent))
 
+from app.bootstrap.backup_startup import initialize_backup_stage
 from app.bootstrap.bot_startup import setup_bot_stage
 from app.bootstrap.database_initialization import initialize_database_stage
 from app.bootstrap.database_startup import run_database_migration_stage
@@ -102,26 +103,7 @@ async def main():
         wire_core_services(bot, telegram_notifier)
         await connect_integration_services_stage(timeline, bot)
 
-        async with timeline.stage(
-            'Сервис бекапов',
-            '🗄️',
-            success_message='Сервис бекапов инициализирован',
-        ) as stage:
-            try:
-                backup_service.bot = bot
-                settings_obj = await backup_service.get_backup_settings()
-                if settings_obj.auto_backup_enabled:
-                    await backup_service.start_auto_backup()
-                    stage.log(
-                        'Автобекапы включены: интервал '
-                        f'{settings_obj.backup_interval_hours}ч, запуск {settings_obj.backup_time}'
-                    )
-                else:
-                    stage.log('Автобекапы отключены настройками')
-                stage.success('Сервис бекапов инициализирован')
-            except Exception as e:
-                stage.warning(f'Ошибка инициализации сервиса бекапов: {e}')
-                logger.error('❌ Ошибка инициализации сервиса бекапов', error=e)
+        await initialize_backup_stage(timeline, logger, bot)
 
         async with timeline.stage(
             'Сервис отчетов',
