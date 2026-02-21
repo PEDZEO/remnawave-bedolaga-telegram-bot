@@ -15,6 +15,7 @@ from app.bootstrap.localization_startup import prepare_localizations
 from app.bootstrap.payment_methods_startup import initialize_payment_methods_stage
 from app.bootstrap.runtime_logging import configure_runtime_logging
 from app.bootstrap.servers_startup import sync_servers_stage
+from app.bootstrap.services_startup import connect_integration_services_stage, wire_core_services
 from app.bootstrap.signals import install_signal_handlers
 from app.bootstrap.tariffs_startup import sync_tariffs_stage
 from app.config import settings
@@ -98,34 +99,8 @@ async def main():
         dp = None
         bot, dp = await setup_bot_stage(timeline)
 
-        monitoring_service.bot = bot
-        maintenance_service.set_bot(bot)
-        broadcast_service.set_bot(bot)
-        ban_notification_service.set_bot(bot)
-        traffic_monitoring_scheduler.set_bot(bot)
-        daily_subscription_service.set_bot(bot)
-        telegram_notifier.set_bot(bot)
-
-        # Initialize email broadcast service
-        from app.cabinet.services.email_service import email_service
-        from app.services.broadcast_service import email_broadcast_service
-
-        email_broadcast_service.set_email_service(email_service)
-
-        from app.services.admin_notification_service import AdminNotificationService
-
-        async with timeline.stage(
-            'Интеграция сервисов',
-            '🔗',
-            success_message='Сервисы подключены',
-        ) as stage:
-            admin_notification_service = AdminNotificationService(bot)
-            version_service.bot = bot
-            version_service.set_notification_service(admin_notification_service)
-            referral_contest_service.set_bot(bot)
-            stage.log(f'Репозиторий версий: {version_service.repo}')
-            stage.log(f'Текущая версия: {version_service.current_version}')
-            stage.success('Мониторинг, уведомления и рассылки подключены')
+        wire_core_services(bot, telegram_notifier)
+        await connect_integration_services_stage(timeline, bot)
 
         async with timeline.stage(
             'Сервис бекапов',
