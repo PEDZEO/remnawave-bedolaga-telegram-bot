@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 def _normalize_text(value: str) -> str:
@@ -27,7 +27,10 @@ class WelcomeTextCreateRequest(BaseModel):
     is_enabled: bool = True
     is_active: bool = True
 
-    _normalize_text = validator('text', allow_reuse=True)(_normalize_text)
+    @field_validator('text')
+    @classmethod
+    def validate_text(cls, value: str) -> str:
+        return _normalize_text(value)
 
 
 class WelcomeTextUpdateRequest(BaseModel):
@@ -35,8 +38,9 @@ class WelcomeTextUpdateRequest(BaseModel):
     is_enabled: bool | None = None
     is_active: bool | None = None
 
-    @validator('text')
-    def validate_text(cls, value):
+    @field_validator('text')
+    @classmethod
+    def validate_text(cls, value: str | None) -> str | None:
         if value is None:
             return value
         return _normalize_text(value)
