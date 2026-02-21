@@ -1,7 +1,15 @@
+from aiogram import Bot, Dispatcher
+
 from app.config import settings
+from app.utils.startup_timeline import StartupTimeline
 
 
-async def configure_telegram_webhook_stage(timeline, bot, dp, telegram_webhook_enabled: bool):
+async def configure_telegram_webhook_stage(
+    timeline: StartupTimeline,
+    bot: Bot,
+    dp: Dispatcher,
+    telegram_webhook_enabled: bool,
+) -> None:
     async with timeline.stage(
         'Telegram webhook',
         '🤖',

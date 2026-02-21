@@ -1,16 +1,22 @@
+from typing import Any
+
+from aiogram import Bot, Dispatcher
+
 from app.config import settings
+from app.services.payment_service import PaymentService
+from app.utils.startup_timeline import StartupTimeline
 from app.webapi.server import WebAPIServer
 from app.webserver.unified_app import create_unified_app
 
 
 async def start_web_server_stage(
-    timeline,
-    bot,
-    dp,
-    payment_service,
+    timeline: StartupTimeline,
+    bot: Bot,
+    dp: Dispatcher,
+    payment_service: PaymentService,
     telegram_webhook_enabled: bool,
     payment_webhooks_enabled: bool,
-):
+) -> tuple[Any, WebAPIServer | None]:
     web_app = None
     web_api_server = None
 
