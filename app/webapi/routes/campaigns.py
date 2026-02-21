@@ -160,7 +160,7 @@ async def update_campaign_endpoint(
     if not campaign:
         raise HTTPException(status.HTTP_404_NOT_FOUND, 'Campaign not found')
 
-    update_fields = payload.dict(exclude_unset=True)
+    update_fields = payload.model_dump(exclude_unset=True)
     if not update_fields:
         return _serialize_campaign(campaign)
 
