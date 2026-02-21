@@ -43,3 +43,16 @@ class RuntimeState:
         self.daily_subscription_task = runtime_tasks.daily_subscription_task
         self.version_check_task = runtime_tasks.version_check_task
         self.polling_task = runtime_tasks.polling_task
+
+    def build_shutdown_payload(self) -> dict[str, Any]:
+        return {
+            'monitoring_task': self.monitoring_task,
+            'maintenance_task': self.maintenance_task,
+            'version_check_task': self.version_check_task,
+            'traffic_monitoring_task': self.traffic_monitoring_task,
+            'daily_subscription_task': self.daily_subscription_task,
+            'polling_task': self.polling_task,
+            'bot': self.bot,
+            'web_api_server': self.web_api_server,
+            'telegram_webhook_enabled': self.telegram_webhook_enabled,
+        }
