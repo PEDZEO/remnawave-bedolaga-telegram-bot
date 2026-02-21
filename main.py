@@ -16,8 +16,7 @@ from app.bootstrap.runtime_tasks_startup import start_runtime_tasks_stage
 from app.bootstrap.shutdown_services import shutdown_runtime_services
 from app.bootstrap.shutdown_web import shutdown_web_runtime
 from app.bootstrap.signals import install_signal_handlers
-from app.bootstrap.startup_notification import send_startup_notification_safe
-from app.bootstrap.startup_summary import log_startup_summary
+from app.bootstrap.startup_finalize import finalize_startup_stage
 from app.config import settings
 from app.logging_config import setup_logging
 from app.utils.startup_timeline import StartupTimeline
@@ -80,8 +79,10 @@ async def main():
         version_check_task = runtime_startup_tasks.version_check_task
         polling_task = runtime_startup_tasks.polling_task
 
-        log_startup_summary(
+        await finalize_startup_stage(
             timeline,
+            logger,
+            bot=bot,
             telegram_webhook_enabled=telegram_webhook_enabled,
             monitoring_task=monitoring_task,
             maintenance_task=maintenance_task,
@@ -91,8 +92,6 @@ async def main():
             verification_providers=verification_providers,
         )
         summary_logged = True
-
-        await send_startup_notification_safe(logger, bot)
 
         runtime_tasks, auto_verification_active = await run_runtime_loop_stage(
             killer,
