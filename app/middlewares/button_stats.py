@@ -111,9 +111,6 @@ class ButtonStatsMiddleware(BaseMiddleware):
             if not callback_data:
                 return await handler(event, data)
 
-            # Получаем user_id
-            user_id = event.from_user.id if event.from_user else None
-
             # Определяем тип кнопки по callback_data
             button_type = self._determine_button_type(callback_data)
 
@@ -126,7 +123,10 @@ class ButtonStatsMiddleware(BaseMiddleware):
             asyncio.create_task(
                 self._log_button_click_async(
                     button_id=callback_data,
-                    user_id=user_id,
+                    # Не передаем user_id из callback middleware:
+                    # запись должна быть полностью безошибочной даже при
+                    # конкурентных удалениях/миграциях пользователей.
+                    user_id=None,
                     callback_data=callback_data,
                     button_type=button_type,
                     button_text=button_text,
