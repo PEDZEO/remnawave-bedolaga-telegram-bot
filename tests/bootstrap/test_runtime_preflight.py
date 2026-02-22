@@ -23,6 +23,22 @@ def test_build_preflight_banner_metadata_uses_settings_values(monkeypatch: pytes
     ]
 
 
+def test_build_preflight_runtime_objects_creates_logger_and_timeline(monkeypatch: pytest.MonkeyPatch) -> None:
+    logger = MagicMock()
+    timeline = MagicMock()
+    get_logger = MagicMock(return_value=logger)
+    startup_timeline_cls = MagicMock(return_value=timeline)
+    monkeypatch.setattr(runtime_preflight.structlog, 'get_logger', get_logger)
+    monkeypatch.setattr(runtime_preflight, 'StartupTimeline', startup_timeline_cls)
+
+    built_logger, built_timeline = runtime_preflight._build_preflight_runtime_objects()
+
+    assert built_logger is logger
+    assert built_timeline is timeline
+    get_logger.assert_called_once()
+    startup_timeline_cls.assert_called_once_with(logger, 'Bedolaga Remnawave Bot')
+
+
 @pytest.mark.asyncio
 async def test_prepare_runtime_preflight_logs_banner_from_helper(monkeypatch: pytest.MonkeyPatch) -> None:
     logger = MagicMock()
@@ -36,8 +52,7 @@ async def test_prepare_runtime_preflight_logs_banner_from_helper(monkeypatch: py
     )
     configure_runtime_logging = AsyncMock()
     monkeypatch.setattr(runtime_preflight, 'configure_runtime_logging', configure_runtime_logging)
-    monkeypatch.setattr(runtime_preflight.structlog, 'get_logger', lambda _name: logger)
-    monkeypatch.setattr(runtime_preflight, 'StartupTimeline', lambda _logger, _title: timeline)
+    monkeypatch.setattr(runtime_preflight, '_build_preflight_runtime_objects', lambda: (logger, timeline))
     prepare_localizations = AsyncMock()
     monkeypatch.setattr(runtime_preflight, 'prepare_localizations', prepare_localizations)
     metadata = [('k', 'v')]
