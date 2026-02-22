@@ -1,6 +1,7 @@
 from app.services.referral_contest_service import referral_contest_service
 from app.utils.startup_timeline import StartupTimeline
 
+from .startup_error_helpers import warn_startup_stage_error
 from .types import LoggerLike
 
 
@@ -17,5 +18,10 @@ async def initialize_referral_contests_stage(timeline: StartupTimeline, logger: 
             else:
                 stage.skip('Сервис конкурсов выключен настройками')
         except Exception as error:
-            stage.warning(f'Ошибка запуска сервиса конкурсов: {error}')
-            logger.error('❌ Ошибка запуска сервиса конкурсов', error=error)
+            warn_startup_stage_error(
+                stage=stage,
+                logger=logger,
+                stage_error_message='Ошибка запуска сервиса конкурсов',
+                logger_error_message='❌ Ошибка запуска сервиса конкурсов',
+                error=error,
+            )

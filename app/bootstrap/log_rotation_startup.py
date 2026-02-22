@@ -5,6 +5,7 @@ from aiogram import Bot
 from app.services.log_rotation_service import log_rotation_service
 from app.utils.startup_timeline import StartupTimeline
 
+from .startup_error_helpers import warn_startup_stage_error
 from .types import LoggerLike
 
 
@@ -30,5 +31,10 @@ async def initialize_log_rotation_stage(
                 next_dt = datetime.fromisoformat(status.next_rotation)
                 stage.log(f'Следующая ротация: {next_dt.strftime("%d.%m.%Y %H:%M")}')
         except Exception as error:
-            stage.warning(f'Ошибка запуска сервиса ротации логов: {error}')
-            logger.error('❌ Ошибка запуска сервиса ротации логов', error=error)
+            warn_startup_stage_error(
+                stage=stage,
+                logger=logger,
+                stage_error_message='Ошибка запуска сервиса ротации логов',
+                logger_error_message='❌ Ошибка запуска сервиса ротации логов',
+                error=error,
+            )

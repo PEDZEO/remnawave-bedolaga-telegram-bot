@@ -1,6 +1,7 @@
 from app.services.remnawave_sync_service import remnawave_sync_service
 from app.utils.startup_timeline import StartupTimeline
 
+from .startup_error_helpers import warn_startup_stage_error
 from .types import LoggerLike
 
 
@@ -23,5 +24,10 @@ async def initialize_remnawave_sync_stage(timeline: StartupTimeline, logger: Log
             else:
                 stage.log('Автосинхронизация отключена настройками')
         except Exception as error:
-            stage.warning(f'Ошибка запуска автосинхронизации: {error}')
-            logger.error('❌ Ошибка запуска автосинхронизации RemnaWave', error=error)
+            warn_startup_stage_error(
+                stage=stage,
+                logger=logger,
+                stage_error_message='Ошибка запуска автосинхронизации',
+                logger_error_message='❌ Ошибка запуска автосинхронизации RemnaWave',
+                error=error,
+            )
