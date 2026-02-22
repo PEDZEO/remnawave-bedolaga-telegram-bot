@@ -21,11 +21,6 @@ from app.config import settings
 from app.services.yookassa_service import YooKassaService
 
 
-@pytest.fixture
-def anyio_backend() -> str:
-    return 'asyncio'
-
-
 class DummyLoop:
     async def run_in_executor(self, _executor, func):
         return func()
@@ -48,7 +43,7 @@ def test_init_without_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     assert service.return_url == 'https://t.me/'
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     _prepare_config(monkeypatch)
     monkeypatch.setattr(settings, 'YOOKASSA_DEFAULT_RECEIPT_EMAIL', None, raising=False)
@@ -101,7 +96,7 @@ async def test_create_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result['status'] == 'pending'
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_payment_without_contacts(monkeypatch: pytest.MonkeyPatch) -> None:
     _prepare_config(monkeypatch)
     monkeypatch.setattr(settings, 'YOOKASSA_DEFAULT_RECEIPT_EMAIL', None, raising=False)
@@ -125,7 +120,7 @@ async def test_create_payment_without_contacts(monkeypatch: pytest.MonkeyPatch) 
     assert result.get('error') is True
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_payment_returns_none_when_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'YOOKASSA_SHOP_ID', '', raising=False)
     monkeypatch.setattr(settings, 'YOOKASSA_SECRET_KEY', '', raising=False)
@@ -139,7 +134,7 @@ async def test_create_payment_returns_none_when_not_configured(monkeypatch: pyte
     assert result is None
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_sbp_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     _prepare_config(monkeypatch)
     monkeypatch.setattr(asyncio, 'get_running_loop', DummyLoop, raising=False)
