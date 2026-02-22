@@ -5,6 +5,15 @@ from app.bootstrap.shutdown_pipeline import run_shutdown_pipeline
 from app.bootstrap.signals import install_signal_handlers
 
 
+async def _finalize_runtime_session_shutdown(state: RuntimeState, timeline, logger) -> None:
+    state.summary_logged = await run_shutdown_pipeline(
+        timeline,
+        logger,
+        summary_logged=state.summary_logged,
+        **state.build_shutdown_payload(),
+    )
+
+
 async def run_runtime_session(preflight: RuntimePreflightContext) -> None:
     logger = preflight.logger
     timeline = preflight.timeline
@@ -24,9 +33,4 @@ async def run_runtime_session(preflight: RuntimePreflightContext) -> None:
         logger.error('❌ Критическая ошибка при запуске', error=error)
         raise
     finally:
-        state.summary_logged = await run_shutdown_pipeline(
-            timeline,
-            logger,
-            summary_logged=state.summary_logged,
-            **state.build_shutdown_payload(),
-        )
+        await _finalize_runtime_session_shutdown(state, timeline, logger)
