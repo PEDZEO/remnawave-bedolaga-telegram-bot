@@ -20,6 +20,25 @@ async def _start_and_apply_runtime_tasks(
     state.apply_runtime_tasks(runtime_startup_tasks)
 
 
+async def _run_runtime_loop_and_apply_results(
+    killer: KillerLike,
+    logger: LoggerLike,
+    state: RuntimeState,
+) -> None:
+    runtime_tasks, state.auto_verification_active = await run_runtime_loop_stage(
+        killer,
+        logger,
+        monitoring_task=state.monitoring_task,
+        maintenance_task=state.maintenance_task,
+        version_check_task=state.version_check_task,
+        traffic_monitoring_task=state.traffic_monitoring_task,
+        daily_subscription_task=state.daily_subscription_task,
+        polling_task=state.polling_task,
+        auto_verification_active=state.auto_verification_active,
+    )
+    state.apply_runtime_tasks(runtime_tasks)
+
+
 async def run_startup_and_runtime_loop(
     timeline: StartupTimeline,
     logger: LoggerLike,
@@ -46,15 +65,4 @@ async def run_startup_and_runtime_loop(
     )
     state.summary_logged = True
 
-    runtime_tasks, state.auto_verification_active = await run_runtime_loop_stage(
-        killer,
-        logger,
-        monitoring_task=state.monitoring_task,
-        maintenance_task=state.maintenance_task,
-        version_check_task=state.version_check_task,
-        traffic_monitoring_task=state.traffic_monitoring_task,
-        daily_subscription_task=state.daily_subscription_task,
-        polling_task=state.polling_task,
-        auto_verification_active=state.auto_verification_active,
-    )
-    state.apply_runtime_tasks(runtime_tasks)
+    await _run_runtime_loop_and_apply_results(killer, logger, state)
