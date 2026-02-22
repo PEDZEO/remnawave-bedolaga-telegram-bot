@@ -122,6 +122,9 @@ async def test_run_shutdown_pipeline_calls_shutdown_stages(monkeypatch):
 
     timeline = MagicMock()
     logger = MagicMock()
+    dp = MagicMock()
+    bot = MagicMock()
+    web_api_server = MagicMock()
 
     result = await run_shutdown_pipeline(
         timeline,
@@ -133,13 +136,27 @@ async def test_run_shutdown_pipeline_calls_shutdown_stages(monkeypatch):
         traffic_monitoring_task=None,
         daily_subscription_task=None,
         polling_task=None,
-        dp=None,
-        bot=None,
-        web_api_server=None,
-        telegram_webhook_enabled=False,
+        dp=dp,
+        bot=bot,
+        web_api_server=web_api_server,
+        telegram_webhook_enabled=True,
     )
 
     assert result is True
     timeline.log_summary.assert_called_once()
-    shutdown_runtime.assert_awaited_once()
-    shutdown_web.assert_awaited_once()
+    shutdown_runtime.assert_awaited_once_with(
+        logger,
+        monitoring_task=None,
+        maintenance_task=None,
+        version_check_task=None,
+        traffic_monitoring_task=None,
+        daily_subscription_task=None,
+        polling_task=None,
+        dp=dp,
+    )
+    shutdown_web.assert_awaited_once_with(
+        logger,
+        bot=bot,
+        web_api_server=web_api_server,
+        telegram_webhook_enabled=True,
+    )
