@@ -1,9 +1,11 @@
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from zoneinfo import ZoneInfo
 
+import pytest
 from sqlalchemy.exc import IntegrityError
 
 
@@ -66,19 +68,17 @@ def test_deduplicate_ignores_records_without_expire_date():
     assert deduplicated[telegram_id] is valid
 
 
+@pytest.mark.asyncio
 async def test_get_or_create_user_handles_unique_violation(monkeypatch):
     service = _create_service()
-    db = AsyncMock()
+    rollback_mock = AsyncMock()
+    db = SimpleNamespace(rollback=rollback_mock)
 
     panel_user = {'telegramId': 555, 'username': 'existing'}
     existing_user = object()
 
     create_user_mock = AsyncMock(side_effect=IntegrityError('stmt', 'params', Exception('unique')))
     get_user_mock = AsyncMock(return_value=existing_user)
-    rollback_mock = AsyncMock()
-
-    db.rollback = rollback_mock
-
     monkeypatch.setattr('app.services.remnawave_service.create_user_no_commit', create_user_mock)
     monkeypatch.setattr(
         'app.services.remnawave_service.get_user_by_telegram_id',
@@ -94,9 +94,10 @@ async def test_get_or_create_user_handles_unique_violation(monkeypatch):
     rollback_mock.assert_awaited()
 
 
+@pytest.mark.asyncio
 async def test_get_or_create_user_creates_new(monkeypatch):
     service = _create_service()
-    db = AsyncMock()
+    db = SimpleNamespace()
 
     panel_user = {'telegramId': 777, 'username': 'new_user'}
     new_user = object()

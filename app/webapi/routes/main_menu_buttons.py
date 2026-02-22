@@ -91,7 +91,7 @@ async def update_main_menu_button_endpoint(
     if not button:
         raise HTTPException(status.HTTP_404_NOT_FOUND, 'Main menu button not found')
 
-    update_payload = payload.dict(exclude_unset=True)
+    update_payload = payload.model_dump(exclude_unset=True)
     button = await update_main_menu_button(db, button, **update_payload)
 
     MainMenuButtonService.invalidate_cache()

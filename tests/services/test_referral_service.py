@@ -3,12 +3,17 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import pytest
+
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from app.services import referral_service
+
+
+pytestmark = pytest.mark.asyncio
 
 
 async def test_commission_accrues_before_minimum_first_topup(monkeypatch):
@@ -25,9 +30,13 @@ async def test_commission_accrues_before_minimum_first_topup(monkeypatch):
         full_name='Referrer',
     )
 
+    class _DummyScalarResult:
+        def scalar_one_or_none(self):
+            return None
+
     db = SimpleNamespace(
         commit=AsyncMock(),
-        execute=AsyncMock(),
+        execute=AsyncMock(return_value=_DummyScalarResult()),
     )
 
     get_user_mock = AsyncMock(side_effect=[user, referrer])
@@ -62,4 +71,4 @@ async def test_commission_accrues_before_minimum_first_topup(monkeypatch):
     assert earning_call.kwargs['reason'] == 'referral_commission_topup'
 
     db.commit.assert_not_awaited()
-    db.execute.assert_not_awaited()
+    db.execute.assert_awaited_once()

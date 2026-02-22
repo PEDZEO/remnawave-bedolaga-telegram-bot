@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TicketMessageResponse(BaseModel):
@@ -17,8 +17,7 @@ class TicketMessageResponse(BaseModel):
     media_caption: str | None = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TicketResponse(BaseModel):
@@ -34,8 +33,7 @@ class TicketResponse(BaseModel):
     messages_count: int = 0
     last_message: TicketMessageResponse | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TicketDetailResponse(BaseModel):
@@ -51,8 +49,7 @@ class TicketDetailResponse(BaseModel):
     is_reply_blocked: bool = False
     messages: list[TicketMessageResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TicketListResponse(BaseModel):

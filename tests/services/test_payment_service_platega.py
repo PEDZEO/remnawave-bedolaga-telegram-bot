@@ -19,11 +19,6 @@ from app.config import settings
 from app.services.payment_service import PaymentService
 
 
-@pytest.fixture
-def anyio_backend() -> str:
-    return 'asyncio'
-
-
 class DummySession:
     async def commit(self) -> None:  # pragma: no cover - no custom logic required
         return None
@@ -82,7 +77,7 @@ def _make_service(stub: StubPlategaService | None) -> PaymentService:
     return service
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_platega_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubPlategaService()
     service = _make_service(stub)
@@ -133,7 +128,7 @@ async def test_create_platega_payment_success(monkeypatch: pytest.MonkeyPatch) -
     assert captured_args['metadata']['language'] == 'ru'
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_platega_payment_respects_limits_and_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubPlategaService()
     service = _make_service(stub)
@@ -174,7 +169,7 @@ async def test_create_platega_payment_respects_limits_and_configuration(monkeypa
     assert result is None
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_platega_payment_handles_service_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubPlategaService()
     stub.raise_error = RuntimeError('network down')

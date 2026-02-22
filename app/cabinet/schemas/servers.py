@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PromoGroupInfo(BaseModel):
@@ -32,8 +32,7 @@ class ServerListItem(BaseModel):
     availability_status: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ServerListResponse(BaseModel):
@@ -67,8 +66,7 @@ class ServerDetailResponse(BaseModel):
     created_at: datetime
     updated_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ServerUpdateRequest(BaseModel):

@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import structlog
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 DEFAULT_DISPLAY_NAME_BANNED_KEYWORDS: list[str] = [
@@ -681,7 +681,7 @@ class Settings(BaseSettings):
     APP_CONFIG_CACHE_TTL: int = 3600
 
     VERSION_CHECK_ENABLED: bool = True
-    VERSION_CHECK_REPO: str = 'fr1ngg/remnawave-bedolaga-telegram-bot'
+    VERSION_CHECK_REPO: str = 'PEDZEO/remnawave-bedolaga-telegram-bot'
     VERSION_CHECK_INTERVAL_HOURS: int = 1
 
     BACKUP_AUTO_ENABLED: bool = True
@@ -2539,7 +2539,7 @@ class Settings(BaseSettings):
     def get_ban_system_request_timeout(self) -> int:
         return max(1, self.BAN_SYSTEM_REQUEST_TIMEOUT)
 
-    model_config = {'env_file': '.env', 'env_file_encoding': 'utf-8', 'extra': 'ignore'}
+    model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
 
     @field_validator('TIMEZONE')
     @classmethod

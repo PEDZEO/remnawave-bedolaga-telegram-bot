@@ -3,7 +3,7 @@
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ==================== ENUMS ====================
@@ -38,8 +38,7 @@ class WheelPrizeDisplay(BaseModel):
     color: str
     prize_type: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class WheelConfigResponse(BaseModel):
@@ -112,8 +111,7 @@ class SpinHistoryItem(BaseModel):
     prize_value_kopeks: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SpinHistoryResponse(BaseModel):
@@ -149,8 +147,7 @@ class WheelPrizeAdminResponse(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdminWheelConfigResponse(BaseModel):
@@ -172,8 +169,7 @@ class AdminWheelConfigResponse(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UpdateWheelConfigRequest(BaseModel):
@@ -248,8 +244,7 @@ class AdminSpinItem(BaseModel):
     is_applied: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdminSpinsResponse(BaseModel):

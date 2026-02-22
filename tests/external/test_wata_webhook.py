@@ -31,12 +31,7 @@ class StubPublicKeyProvider:
         return self.public_key_pem
 
 
-@pytest.fixture
-def anyio_backend() -> str:
-    return 'asyncio'
-
-
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_verify_signature_success() -> None:
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     public_key = (
@@ -65,7 +60,7 @@ async def test_verify_signature_success() -> None:
     assert await handler._verify_signature(payload, signature) is True
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_verify_signature_fails_with_invalid_signature() -> None:
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     public_key = (
@@ -88,7 +83,7 @@ async def test_verify_signature_fails_with_invalid_signature() -> None:
     assert await handler._verify_signature(payload, bad_signature) is False
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_verify_signature_fails_without_public_key() -> None:
     handler = WataWebhookHandler(
         DummyPaymentService(),

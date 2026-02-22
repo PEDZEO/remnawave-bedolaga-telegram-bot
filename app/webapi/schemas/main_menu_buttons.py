@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.database.models import MainMenuButtonActionType, MainMenuButtonVisibility
 
@@ -43,8 +43,15 @@ class MainMenuButtonCreateRequest(BaseModel):
     is_active: bool = True
     display_order: int | None = Field(None, ge=0)
 
-    _normalize_text = validator('text', allow_reuse=True)(_clean_text)
-    _normalize_action_value = validator('action_value', allow_reuse=True)(_validate_action_value)
+    @field_validator('text')
+    @classmethod
+    def validate_text(cls, value: str) -> str:
+        return _clean_text(value)
+
+    @field_validator('action_value')
+    @classmethod
+    def validate_action_value(cls, value: str) -> str:
+        return _validate_action_value(value)
 
 
 class MainMenuButtonUpdateRequest(BaseModel):
@@ -55,14 +62,16 @@ class MainMenuButtonUpdateRequest(BaseModel):
     is_active: bool | None = None
     display_order: int | None = Field(None, ge=0)
 
-    @validator('text')
-    def validate_text(cls, value):
+    @field_validator('text')
+    @classmethod
+    def validate_text(cls, value: str | None) -> str | None:
         if value is None:
             return value
         return _clean_text(value)
 
-    @validator('action_value')
-    def validate_action_value(cls, value):
+    @field_validator('action_value')
+    @classmethod
+    def validate_action_value(cls, value: str | None) -> str | None:
         if value is None:
             return value
         return _validate_action_value(value)

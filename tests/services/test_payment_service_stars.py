@@ -17,12 +17,6 @@ from app.config import settings
 from app.services.payment_service import PaymentService
 
 
-@pytest.fixture
-def anyio_backend() -> str:
-    """Ограничиваем anyio тесты только бэкендом asyncio."""
-    return 'asyncio'
-
-
 class DummyBot:
     """Минимальная заглушка aiogram.Bot для тестов."""
 
@@ -124,7 +118,7 @@ class DummySubscriptionService:
         return object()
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_stars_invoice_calculates_stars(monkeypatch: pytest.MonkeyPatch) -> None:
     """Количество звёзд должно рассчитываться по курсу с округлением вниз и нижним порогом 1."""
     bot = DummyBot()
@@ -160,7 +154,7 @@ async def test_create_stars_invoice_calculates_stars(monkeypatch: pytest.MonkeyP
     assert '≈2 ⭐' in call['description']
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_stars_invoice_enforces_minimum_star(monkeypatch: pytest.MonkeyPatch) -> None:
     """При слишком маленькой сумме минимум должен составлять 1 звезду."""
     bot = DummyBot()
@@ -178,7 +172,7 @@ async def test_create_stars_invoice_enforces_minimum_star(monkeypatch: pytest.Mo
     assert prices[0].amount == 1
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_stars_invoice_uses_explicit_stars(monkeypatch: pytest.MonkeyPatch) -> None:
     """Если передано значение stars_amount, функция должна использовать его напрямую."""
     bot = DummyBot()
@@ -198,7 +192,7 @@ async def test_create_stars_invoice_uses_explicit_stars(monkeypatch: pytest.Monk
     assert '≈5 ⭐' in bot.calls[0]['description']
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_stars_invoice_rejects_invalid_rate(monkeypatch: pytest.MonkeyPatch) -> None:
     """Отрицательный или нулевой курс должен приводить к исключению."""
     bot = DummyBot()
@@ -213,7 +207,7 @@ async def test_create_stars_invoice_rejects_invalid_rate(monkeypatch: pytest.Mon
         )
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_stars_invoice_requires_bot() -> None:
     """Без экземпляра бота и stars_service функция должна отказывать."""
     service = _make_service(bot=None)
@@ -225,7 +219,7 @@ async def test_create_stars_invoice_requires_bot() -> None:
         )
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_process_stars_payment_simple_subscription_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

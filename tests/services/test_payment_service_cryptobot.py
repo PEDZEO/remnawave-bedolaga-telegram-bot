@@ -17,11 +17,6 @@ from app.database.crud import cryptobot as cryptobot_crud
 from app.services.payment_service import PaymentService
 
 
-@pytest.fixture
-def anyio_backend() -> str:
-    return 'asyncio'
-
-
 class DummySession:
     def __init__(self) -> None:
         self.added_objects: list[Any] = []
@@ -63,7 +58,7 @@ def _make_service(stub: StubCryptoBotService | None) -> PaymentService:
     return service
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_cryptobot_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     response = {
         'invoice_id': 12345,
@@ -112,7 +107,7 @@ async def test_create_cryptobot_payment_success(monkeypatch: pytest.MonkeyPatch)
     assert captured_args['amount'] == '12.50'
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_cryptobot_payment_returns_none_when_service_missing() -> None:
     service = _make_service(None)
     db = DummySession()
@@ -124,7 +119,7 @@ async def test_create_cryptobot_payment_returns_none_when_service_missing() -> N
     assert result is None
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_cryptobot_payment_handles_empty_response(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubCryptoBotService(response=None)
     service = _make_service(stub)

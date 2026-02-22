@@ -14,6 +14,9 @@ from app.services.traffic_monitoring_service import (
 )
 
 
+pytestmark = pytest.mark.asyncio
+
+
 @pytest.fixture
 def service():
     """Создаёт экземпляр сервиса для тестов."""

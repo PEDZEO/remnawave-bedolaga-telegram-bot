@@ -3,6 +3,9 @@ import pytest
 from app.services.user_cart_service import UserCartService
 
 
+pytestmark = pytest.mark.asyncio
+
+
 # Мок для Redis клиента
 class MockRedis:
     def __init__(self):

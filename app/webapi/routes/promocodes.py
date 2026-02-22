@@ -165,7 +165,7 @@ async def get_promocode(
     recent_uses = [_serialize_recent_use(use) for use in stats.get('recent_uses', [])]
 
     return PromoCodeDetailResponse(
-        **base.dict(),
+        **base.model_dump(),
         total_uses=stats.get('total_uses', 0),
         today_uses=stats.get('today_uses', 0),
         recent_uses=recent_uses,

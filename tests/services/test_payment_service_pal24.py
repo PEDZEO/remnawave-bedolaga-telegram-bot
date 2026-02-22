@@ -19,11 +19,6 @@ from app.services.pal24_service import Pal24APIError
 from app.services.payment_service import PaymentService
 
 
-@pytest.fixture
-def anyio_backend() -> str:
-    return 'asyncio'
-
-
 class DummySession:
     async def commit(self) -> None:  # pragma: no cover
         return None
@@ -90,7 +85,7 @@ def _make_service(stub: StubPal24Service | None) -> PaymentService:
     return service
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_pal24_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubPal24Service()
     service = _make_service(stub)
@@ -135,7 +130,7 @@ async def test_create_pal24_payment_success(monkeypatch: pytest.MonkeyPatch) -> 
     assert 'links' in captured_args['metadata']
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_pal24_payment_default_method(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubPal24Service()
     service = _make_service(stub)
@@ -167,7 +162,7 @@ async def test_create_pal24_payment_default_method(monkeypatch: pytest.MonkeyPat
     assert result['payment_method'] == 'sbp'
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_pal24_payment_limits_and_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubPal24Service()
     service = _make_service(stub)
@@ -205,7 +200,7 @@ async def test_create_pal24_payment_limits_and_configuration(monkeypatch: pytest
     assert result_config is None
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_pal24_payment_handles_api_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubPal24Service()
     stub.raise_error = Pal24APIError('api failed')
@@ -225,7 +220,7 @@ async def test_create_pal24_payment_handles_api_errors(monkeypatch: pytest.Monke
     assert result is None
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_get_pal24_payment_status_updates_from_remote(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubPal24Service()
     stub.status_response = {'status': 'SUCCESS'}

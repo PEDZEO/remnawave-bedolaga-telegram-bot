@@ -3,12 +3,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from aiohttp import web
-from aiohttp.test_utils import TestClient, TestServer
 
 from app.config import settings
 from app.external.yookassa_webhook import (
-    create_yookassa_webhook_app,
+    YooKassaWebhookHandler,
     resolve_yookassa_ip,
 )
 
@@ -101,13 +99,22 @@ def test_resolve_yookassa_ip_returns_none_when_no_candidates() -> None:
     assert resolve_yookassa_ip([], remote=None) is None
 
 
-async def _post_webhook(client: TestClient, payload: dict, **headers: str) -> web.Response:
+def _build_request(
+    payload: dict,
+    *,
+    headers: dict[str, str] | None = None,
+    remote: str | None = ALLOWED_IP,
+) -> SimpleNamespace:
     body = json.dumps(payload, ensure_ascii=False)
-    return await client.post(
-        settings.YOOKASSA_WEBHOOK_PATH,
-        data=body.encode('utf-8'),
-        headers=_build_headers(**headers),
+    request_headers = _build_headers(**(headers or {}))
+    request = SimpleNamespace(
+        method='POST',
+        path=settings.YOOKASSA_WEBHOOK_PATH,
+        headers=request_headers,
+        remote=remote,
     )
+    request.text = AsyncMock(return_value=body)
+    return request
 
 
 def _patch_get_db(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -117,7 +124,9 @@ def _patch_get_db(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_session = AsyncMock()
     mock_session.commit = AsyncMock()
     mock_session.rollback = AsyncMock()
-    mock_session.execute = AsyncMock()
+    execute_result = MagicMock()
+    execute_result.scalar_one_or_none.return_value = None
+    mock_session.execute = AsyncMock(return_value=execute_result)
 
     ctx = MagicMock()
     ctx.__aenter__ = AsyncMock(return_value=mock_session)
@@ -131,22 +140,12 @@ async def test_handle_webhook_success(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_get_db(monkeypatch)
 
     process_mock = AsyncMock(return_value=True)
-    service = SimpleNamespace(process_yookassa_webhook=process_mock)
+    handler = YooKassaWebhookHandler(SimpleNamespace(process_yookassa_webhook=process_mock))
 
-    app = create_yookassa_webhook_app(service)
-    async with TestClient(TestServer(app)) as client:
-        payload = {'event': 'payment.succeeded'}
-        body = json.dumps(payload, ensure_ascii=False)
-        response = await client.post(
-            settings.YOOKASSA_WEBHOOK_PATH,
-            data=body.encode('utf-8'),
-            headers=_build_headers(),
-        )
-        status = response.status
-        text = await response.text()
+    response = await handler.handle_webhook(_build_request({'event': 'payment.succeeded'}))
 
-    assert status == 400
-    assert text == 'No payment id'
+    assert response.status == 400
+    assert response.text == 'No payment id'
     process_mock.assert_not_awaited()
 
 
@@ -155,24 +154,14 @@ async def test_handle_webhook_trusts_cf_connecting_ip(monkeypatch: pytest.Monkey
     _patch_get_db(monkeypatch)
 
     process_mock = AsyncMock(return_value=True)
-    service = SimpleNamespace(process_yookassa_webhook=process_mock)
+    handler = YooKassaWebhookHandler(SimpleNamespace(process_yookassa_webhook=process_mock))
 
-    app = create_yookassa_webhook_app(service)
-    async with TestClient(TestServer(app)) as client:
-        payload = {'event': 'payment.succeeded'}
-        body = json.dumps(payload, ensure_ascii=False)
-        headers = _build_headers()
-        headers.pop('X-Forwarded-For')
-        response = await client.post(
-            settings.YOOKASSA_WEBHOOK_PATH,
-            data=body.encode('utf-8'),
-            headers=headers,
-        )
-        status = response.status
-        text = await response.text()
+    headers = _build_headers()
+    headers.pop('X-Forwarded-For')
+    response = await handler.handle_webhook(_build_request({'event': 'payment.succeeded'}, headers=headers))
 
-    assert status == 400
-    assert text == 'No payment id'
+    assert response.status == 400
+    assert response.text == 'No payment id'
     process_mock.assert_not_awaited()
 
 
@@ -181,22 +170,14 @@ async def test_handle_webhook_with_optional_signature(monkeypatch: pytest.Monkey
     _patch_get_db(monkeypatch)
 
     process_mock = AsyncMock(return_value=True)
-    service = SimpleNamespace(process_yookassa_webhook=process_mock)
+    handler = YooKassaWebhookHandler(SimpleNamespace(process_yookassa_webhook=process_mock))
 
-    app = create_yookassa_webhook_app(service)
-    async with TestClient(TestServer(app)) as client:
-        payload = {'event': 'payment.succeeded'}
-        body = json.dumps(payload, ensure_ascii=False)
-        response = await client.post(
-            settings.YOOKASSA_WEBHOOK_PATH,
-            data=body.encode('utf-8'),
-            headers=_build_headers(Signature='test-signature'),
-        )
-        status = response.status
-        text = await response.text()
+    response = await handler.handle_webhook(
+        _build_request({'event': 'payment.succeeded'}, headers={'Signature': 'test-signature'})
+    )
 
-    assert status == 400
-    assert text == 'No payment id'
+    assert response.status == 400
+    assert response.text == 'No payment id'
     process_mock.assert_not_awaited()
 
 
@@ -205,18 +186,9 @@ async def test_handle_webhook_accepts_canceled_event(monkeypatch: pytest.MonkeyP
     _patch_get_db(monkeypatch)
 
     process_mock = AsyncMock(return_value=True)
-    service = SimpleNamespace(process_yookassa_webhook=process_mock)
+    handler = YooKassaWebhookHandler(SimpleNamespace(process_yookassa_webhook=process_mock))
 
-    app = create_yookassa_webhook_app(service)
-    async with TestClient(TestServer(app)) as client:
-        payload = {'event': 'payment.canceled', 'object': {'id': 'yk_1'}}
-        response = await client.post(
-            settings.YOOKASSA_WEBHOOK_PATH,
-            data=json.dumps(payload).encode('utf-8'),
-            headers=_build_headers(),
-        )
+    response = await handler.handle_webhook(_build_request({'event': 'payment.canceled', 'object': {'id': 'yk_1'}}))
 
-        status = response.status
-
-    assert status == 200
+    assert response.status == 200
     process_mock.assert_awaited_once()

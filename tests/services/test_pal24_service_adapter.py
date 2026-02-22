@@ -53,12 +53,7 @@ def _enable_pal24(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'PAL24_SIGNATURE_TOKEN', 'sigsecret', raising=False)
 
 
-@pytest.fixture
-def anyio_backend() -> str:
-    return 'asyncio'
-
-
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_bill_success(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_pal24(monkeypatch)
     client = StubPal24Client()
@@ -85,7 +80,7 @@ async def test_create_bill_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert client.calls[0]['payment_method'] == 'BANK_CARD'
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_bill_requires_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_pal24(monkeypatch)
     client = StubPal24Client(configured=False)
@@ -100,7 +95,7 @@ async def test_create_bill_requires_configuration(monkeypatch: pytest.MonkeyPatc
         )
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_get_bill_payments(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_pal24(monkeypatch)
     client = StubPal24Client()

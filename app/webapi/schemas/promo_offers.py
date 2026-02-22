@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, ClassVar
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class PromoOfferUserInfo(BaseModel):
@@ -108,7 +108,8 @@ class PromoOfferBroadcastRequest(PromoOfferCreateRequest):
         'trial_users': 'trial',
     }
 
-    @validator('target')
+    @field_validator('target')
+    @classmethod
     def validate_target(cls, value: str | None) -> str | None:
         if value is None:
             return None

@@ -4,12 +4,17 @@ Tests for Promocode CRUD operations - focus on promo_group_id integration
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.database.crud.promocode import (
     create_promocode,
     get_promocode_by_code,
     get_promocodes_list,
 )
 from app.database.models import PromoCodeType
+
+
+pytestmark = pytest.mark.asyncio
 
 
 # Import fixtures

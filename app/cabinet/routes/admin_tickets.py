@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -37,8 +37,7 @@ class AdminTicketUserInfo(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdminTicketResponse(BaseModel):
@@ -55,8 +54,7 @@ class AdminTicketResponse(BaseModel):
     user: AdminTicketUserInfo | None = None
     last_message: TicketMessageResponse | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdminTicketDetailResponse(BaseModel):
@@ -73,8 +71,7 @@ class AdminTicketDetailResponse(BaseModel):
     user: AdminTicketUserInfo | None = None
     messages: list[TicketMessageResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdminTicketListResponse(BaseModel):

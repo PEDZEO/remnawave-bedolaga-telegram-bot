@@ -20,11 +20,6 @@ from app.services.payment_service import PaymentService
 from app.services.wata_service import WataService
 
 
-@pytest.fixture
-def anyio_backend() -> str:
-    return 'asyncio'
-
-
 class DummySession:
     async def commit(self) -> None:  # pragma: no cover - no logic required
         return None
@@ -95,7 +90,7 @@ def test_wata_service_parse_datetime_returns_naive_utc() -> None:
     assert parsed_with_offset.tzinfo is not None
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_wata_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     response = {
         'id': '123e4567-e89b-12d3-a456-426614174000',
@@ -139,7 +134,7 @@ async def test_create_wata_payment_success(monkeypatch: pytest.MonkeyPatch) -> N
     assert stub.calls and stub.calls[0]['amount_kopeks'] == 15000
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_wata_payment_respects_amount_limits(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubWataService({'id': 'link'})
     service = _make_service(stub)
@@ -166,7 +161,7 @@ async def test_create_wata_payment_respects_amount_limits(monkeypatch: pytest.Mo
     assert not stub.calls
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_wata_payment_returns_none_without_service() -> None:
     service = _make_service(None)
     db = DummySession()
@@ -180,7 +175,7 @@ async def test_create_wata_payment_returns_none_without_service() -> None:
     assert result is None
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_process_wata_webhook_updates_status(monkeypatch: pytest.MonkeyPatch) -> None:
     service = _make_service(None)
     db = DummySession()
@@ -256,7 +251,7 @@ async def test_process_wata_webhook_updates_status(monkeypatch: pytest.MonkeyPat
     assert update_kwargs['is_paid'] is False
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_process_wata_webhook_finalizes_paid(monkeypatch: pytest.MonkeyPatch) -> None:
     service = _make_service(None)
     db = DummySession()
@@ -329,7 +324,7 @@ async def test_process_wata_webhook_finalizes_paid(monkeypatch: pytest.MonkeyPat
     assert payment.metadata_json.get('last_webhook') == payload
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_process_wata_webhook_returns_false_when_payment_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -91,7 +91,7 @@ async def update_user_message_endpoint(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> UserMessageResponse:
-    update_payload = payload.dict(exclude_unset=True)
+    update_payload = payload.model_dump(exclude_unset=True)
     try:
         message = await update_user_message(db, message_id, **update_payload)
     except ValueError as error:

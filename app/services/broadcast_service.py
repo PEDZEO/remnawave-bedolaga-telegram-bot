@@ -271,7 +271,7 @@ class BroadcastService:
 
             for attempt in range(_TG_MAX_RETRIES):
                 # Глобальная пауза при FloodWait
-                now = asyncio.get_event_loop().time()
+                now = asyncio.get_running_loop().time()
                 if flood_wait_until > now:
                     await asyncio.sleep(flood_wait_until - now)
 
@@ -284,7 +284,7 @@ class BroadcastService:
 
                 except TelegramRetryAfter as e:
                     wait_seconds = e.retry_after + 1
-                    flood_wait_until = asyncio.get_event_loop().time() + wait_seconds
+                    flood_wait_until = asyncio.get_running_loop().time() + wait_seconds
                     logger.warning(
                         'FloodWait рассылки : Telegram просит сек (user попытка /)',
                         broadcast_id=broadcast_id,
@@ -344,7 +344,7 @@ class BroadcastService:
 
             # Обновляем прогресс в БД периодически
             processed = sent_count + failed_count + blocked_count
-            now = asyncio.get_event_loop().time()
+            now = asyncio.get_running_loop().time()
             if (
                 processed - last_progress_count >= _PROGRESS_UPDATE_MESSAGES
                 or now - last_progress_update >= _PROGRESS_MIN_INTERVAL_SEC
@@ -824,7 +824,7 @@ class EmailBroadcastService:
                 subject = self._render_template(config.email_subject, recipient)
 
                 try:
-                    loop = asyncio.get_event_loop()
+                    loop = asyncio.get_running_loop()
                     success = await loop.run_in_executor(
                         None,
                         self._email_service.send_email,
@@ -858,7 +858,7 @@ class EmailBroadcastService:
 
             # Обновляем прогресс периодически
             processed = sent_count + failed_count
-            now = asyncio.get_event_loop().time()
+            now = asyncio.get_running_loop().time()
             if (
                 processed - last_progress_count >= _PROGRESS_UPDATE_MESSAGES
                 or now - last_progress_time >= _PROGRESS_MIN_INTERVAL_SEC

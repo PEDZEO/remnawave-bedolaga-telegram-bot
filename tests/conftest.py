@@ -1,24 +1,88 @@
 """Глобальные фикстуры и настройки окружения для тестов."""
 
 import asyncio
-import inspect
+import base64
+import gc
+import hashlib
 import os
+import secrets
 import sys
 import types
+import uuid
+import warnings
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 
+pytest_plugins = ['tests.fixtures.promocode_fixtures']
+
+
+def _install_secrets_fallback_for_sandbox() -> None:
+    try:
+        secrets.token_hex(1)
+        return
+    except NotImplementedError:
+        pass
+
+    counter = {'value': 0}
+
+    def _fallback_token_bytes(nbytes: int | None = None) -> bytes:
+        if nbytes is None:
+            nbytes = 32
+        counter['value'] += 1
+        seed = f'{counter["value"]}:{nbytes}'.encode()
+        digest = hashlib.sha256(seed).digest()
+        needed = max(nbytes, 0)
+        while len(digest) < needed:
+            digest += hashlib.sha256(digest).digest()
+        return digest[:needed]
+
+    def _fallback_token_hex(nbytes: int | None = None) -> str:
+        return _fallback_token_bytes(nbytes).hex()
+
+    def _fallback_token_urlsafe(nbytes: int | None = None) -> str:
+        return base64.urlsafe_b64encode(_fallback_token_bytes(nbytes)).rstrip(b'=').decode()
+
+    secrets.token_bytes = _fallback_token_bytes
+    secrets.token_hex = _fallback_token_hex
+    secrets.token_urlsafe = _fallback_token_urlsafe
+
+
+_install_secrets_fallback_for_sandbox()
+
+
+def _install_uuid4_fallback_for_sandbox() -> None:
+    try:
+        uuid.uuid4()
+        return
+    except NotImplementedError:
+        pass
+
+    counter = {'value': 0}
+
+    def _fallback_uuid4() -> uuid.UUID:
+        counter['value'] += 1
+        return uuid.uuid5(uuid.NAMESPACE_URL, f'sandbox-{counter["value"]}')
+
+    uuid.uuid4 = _fallback_uuid4
+
+
+_install_uuid4_fallback_for_sandbox()
+
+
 # Add project root to Python path for imports
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+test_backup_dir = project_root / 'tests' / 'tmp' / 'backups'
+test_backup_dir.mkdir(parents=True, exist_ok=True)
 
 # Подменяем параметры подключения к БД, чтобы SQLAlchemy не требовал aiosqlite.
 os.environ.setdefault('DATABASE_MODE', 'postgresql')
 os.environ.setdefault('DATABASE_URL', 'postgresql+asyncpg://user:pass@localhost/test_db')
 os.environ.setdefault('BOT_TOKEN', 'test-token')
+os.environ.setdefault('BACKUP_LOCATION', str(test_backup_dir))
 
 # Создаём заглушки для драйверов, которых может не быть в окружении тестов.
 sys.modules.setdefault('asyncpg', types.ModuleType('asyncpg'))
@@ -66,8 +130,31 @@ if 'redis.asyncio' not in sys.modules:
     sys.modules['redis'] = redis_module
     sys.modules['redis.asyncio'] = redis_async_module
 
+# Минимальная заглушка uvicorn, чтобы избежать импорта multiprocessing в sandbox.
+if 'uvicorn' not in sys.modules:
+    uvicorn_module = types.ModuleType('uvicorn')
+
+    class _FakeConfig:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+
+    class _FakeServer:
+        def __init__(self, config=None):
+            self.config = config
+
+        async def serve(self):
+            return True
+
+    uvicorn_module.Config = _FakeConfig
+    uvicorn_module.Server = _FakeServer
+    uvicorn_module.run = lambda *args, **kwargs: None
+    sys.modules['uvicorn'] = uvicorn_module
+
 # Минимальная реализация SDK YooKassa, чтобы импорт сервисов не падал.
-if 'yookassa' not in sys.modules:
+try:
+    import yookassa as _real_yookassa  # noqa: F401
+except Exception:
     fake_yookassa = types.ModuleType('yookassa')
 
     class _FakeConfiguration:
@@ -162,6 +249,9 @@ def fixed_datetime() -> datetime:
 def pytest_configure(config: pytest.Config) -> None:
     """Регистрируем маркеры для асинхронных тестов."""
 
+    # Keep coroutine origins in warnings to pinpoint un-awaited AsyncMock calls.
+    sys.set_coroutine_origin_tracking_depth(10)
+
     config.addinivalue_line(
         'markers',
         'asyncio: запуск асинхронного теста через встроенный цикл событий',
@@ -172,45 +262,44 @@ def pytest_configure(config: pytest.Config) -> None:
     )
 
 
-def _unwrap_test(obj):
-    """Возвращает исходную функцию, снимая обёртки pytest и декораторов."""
-
-    unwrapped = obj
-    while hasattr(unwrapped, '__wrapped__'):
-        unwrapped = unwrapped.__wrapped__
-    return unwrapped
-
-
-@pytest.hookimpl(tryfirst=True)
-def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> bool | None:
-    """Позволяет запускать async def тесты без дополнительных плагинов."""
-
-    # Пропускаем если pytest-asyncio уже обработал этот тест
-    if hasattr(pyfuncitem, '_request') and hasattr(pyfuncitem._request, '_pyfuncitem'):
-        markers = list(pyfuncitem.iter_markers())
-        for marker in markers:
-            if marker.name in ('asyncio', 'anyio'):
-                # pytest-asyncio обработает этот тест
-                return None
-
-    test_func = _unwrap_test(pyfuncitem.obj)
-    if not inspect.iscoroutinefunction(test_func):
-        return None
-
-    # Проверяем, не обработан ли уже тест плагином pytest-asyncio
-    # Если pyfuncitem.obj не возвращает корутину - пропускаем
-    loop = asyncio.new_event_loop()
+def _close_event_loop(loop: asyncio.AbstractEventLoop | None) -> None:
+    if loop is None or loop.is_running() or loop.is_closed():
+        return
     try:
-        asyncio.set_event_loop(loop)
-        signature = inspect.signature(test_func)
-        call_kwargs = {name: value for name, value in pyfuncitem.funcargs.items() if name in signature.parameters}
-        coro = pyfuncitem.obj(**call_kwargs)
-        if coro is None:
-            # Уже обработано другим плагином
-            return None
-        loop.run_until_complete(coro)
-    finally:
-        asyncio.set_event_loop(None)
         loop.close()
+    except Exception:
+        return
 
-    return True
+
+def _close_orphan_event_loops() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', category=DeprecationWarning)
+        policy = asyncio.get_event_loop_policy()
+        try:
+            current_loop = policy.get_event_loop()
+        except RuntimeError:
+            current_loop = None
+
+    _close_event_loop(current_loop)
+    asyncio.set_event_loop(None)
+
+    policy_local = getattr(policy, '_local', None)
+    if policy_local is not None:
+        for value in vars(policy_local).values():
+            if isinstance(value, asyncio.AbstractEventLoop):
+                _close_event_loop(value)
+
+    for obj in gc.get_objects():
+        if isinstance(obj, asyncio.AbstractEventLoop):
+            _close_event_loop(obj)
+
+    gc.collect()
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """Close orphaned default event loop to avoid unraisable ResourceWarning at interpreter shutdown."""
+    _close_orphan_event_loops()
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    _close_orphan_event_loops()

@@ -18,11 +18,6 @@ from app.config import settings
 from app.services.payment_service import PaymentService
 
 
-@pytest.fixture
-def anyio_backend() -> str:
-    return 'asyncio'
-
-
 class DummySession:
     async def commit(self) -> None:  # pragma: no cover - метод вызывается, но без логики
         return None
@@ -59,7 +54,7 @@ def _make_service(stub: StubMulenPayService | None) -> PaymentService:
     return service
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_mulenpay_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     response = {'id': 123, 'paymentUrl': 'https://mulenpay/pay'}
     stub = StubMulenPayService(response)
@@ -105,7 +100,7 @@ async def test_create_mulenpay_payment_success(monkeypatch: pytest.MonkeyPatch) 
     assert captured_args['uuid'].startswith('mulen_77_')
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_mulenpay_payment_respects_amount_limits(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubMulenPayService({'id': 1})
     service = _make_service(stub)
@@ -132,7 +127,7 @@ async def test_create_mulenpay_payment_respects_amount_limits(monkeypatch: pytes
     assert not stub.calls
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_mulenpay_payment_returns_none_without_service() -> None:
     service = _make_service(None)
     db = DummySession()
@@ -146,7 +141,7 @@ async def test_create_mulenpay_payment_returns_none_without_service() -> None:
     assert result is None
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_process_mulenpay_callback_avoids_duplicate_transactions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -7,7 +7,10 @@ from app.utils.log_handlers import ExcludePaymentFilter, LevelFilterHandler
 from app.utils.payment_logger import configure_payment_logger
 
 
-async def configure_runtime_logging(file_formatter: logging.Formatter, console_formatter: logging.Formatter):
+async def configure_runtime_logging(
+    file_formatter: logging.Formatter,
+    console_formatter: logging.Formatter,
+) -> None:
     log_handlers = []
 
     if settings.is_log_rotation_enabled():

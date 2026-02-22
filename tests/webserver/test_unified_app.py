@@ -7,6 +7,7 @@ import pytest
 from fastapi import FastAPI, status
 
 from app.config import settings
+from app.services.disposable_email_service import disposable_email_service
 from app.services.payment_service import PaymentService
 
 
@@ -17,7 +18,7 @@ _backup_dir.mkdir(parents=True, exist_ok=True)
 from app.webserver.unified_app import create_unified_app
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_unified_app_health_reports_features(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     bot = AsyncMock()
     dispatcher = SimpleNamespace(feed_update=AsyncMock())
@@ -37,6 +38,8 @@ async def test_unified_app_health_reports_features(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(settings, 'WEBHOOK_ENQUEUE_TIMEOUT', 0.0, raising=False)
     monkeypatch.setattr(settings, 'WEBHOOK_WORKER_SHUTDOWN_TIMEOUT', 1.0, raising=False)
     monkeypatch.setattr(settings, 'MINIAPP_STATIC_PATH', str(miniapp_static_dir), raising=False)
+    monkeypatch.setattr(disposable_email_service, 'start', AsyncMock())
+    monkeypatch.setattr(disposable_email_service, 'stop', AsyncMock())
 
     app = create_unified_app(
         bot,
@@ -53,11 +56,8 @@ async def test_unified_app_health_reports_features(monkeypatch: pytest.MonkeyPat
 
     assert getattr(health_route, 'path', None) == '/health/unified'
 
-    await app.router.startup()
-    try:
+    async with app.router.lifespan_context(app):
         response = await health_route.endpoint()  # type: ignore[func-returns-value]
-    finally:
-        await app.router.shutdown()
 
     payload = json.loads(response.body.decode('utf-8'))  # type: ignore[attr-defined]
 
@@ -91,7 +91,7 @@ def _build_unified_app(monkeypatch: pytest.MonkeyPatch, docs_enabled: bool) -> F
     )
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_unified_app_health_path_without_admin(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = AsyncMock()
     dispatcher = SimpleNamespace(feed_update=AsyncMock())
@@ -127,7 +127,7 @@ def test_unified_app_docs_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     assert '/doc' not in registered_paths
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_unified_app_docs_enabled_with_alias(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _build_unified_app(monkeypatch, docs_enabled=True)
 

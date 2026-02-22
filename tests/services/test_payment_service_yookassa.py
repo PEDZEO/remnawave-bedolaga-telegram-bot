@@ -17,12 +17,6 @@ from app.config import settings
 from app.services.payment_service import PaymentService
 
 
-@pytest.fixture
-def anyio_backend() -> str:
-    """Запускаем async-тесты на asyncio, чтобы избежать зависимостей trio."""
-    return 'asyncio'
-
-
 class DummySession:
     """Простейшая заглушка AsyncSession."""
 
@@ -73,7 +67,7 @@ def _make_service(yookassa_service: StubYooKassaService | None) -> PaymentServic
     return service
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_yookassa_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """Успешное создание платежа формирует корректные метаданные и локальную запись."""
 
@@ -131,7 +125,7 @@ async def test_create_yookassa_payment_success(monkeypatch: pytest.MonkeyPatch) 
     assert isinstance(captured_args['yookassa_created_at'], datetime)
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_yookassa_payment_returns_none_when_service_missing() -> None:
     """Если сервис не настроен, метод должен вернуть None."""
     service = _make_service(None)
@@ -145,7 +139,7 @@ async def test_create_yookassa_payment_returns_none_when_service_missing() -> No
     assert result is None
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_yookassa_payment_handles_error_response(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ответ с ключом error должен приводить к None без записи в БД."""
     response = {'error': True}
@@ -176,7 +170,7 @@ async def test_create_yookassa_payment_handles_error_response(monkeypatch: pytes
     assert called is False
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_yookassa_sbp_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """Проверяем SBP-сценарий, включая передачу confirmation_token."""
 
@@ -216,7 +210,7 @@ async def test_create_yookassa_sbp_payment_success(monkeypatch: pytest.MonkeyPat
     assert captured_args['metadata_json']['type'] == 'balance_topup_sbp'
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_yookassa_sbp_payment_returns_none_on_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ошибочный ответ СБП не должен создавать запись."""
     response = {'error': 'invalid'}

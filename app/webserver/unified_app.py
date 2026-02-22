@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import structlog
@@ -142,26 +143,31 @@ def create_unified_app(
             shutdown_timeout=settings.get_webhook_shutdown_timeout(),
         )
         app.state.telegram_webhook_processor = telegram_processor
-
-        @app.on_event('startup')
-        async def start_telegram_webhook_processor() -> None:  # pragma: no cover - event hook
-            await telegram_processor.start()
-
-        @app.on_event('shutdown')
-        async def stop_telegram_webhook_processor() -> None:  # pragma: no cover - event hook
-            await telegram_processor.stop()
-
         app.include_router(telegram.create_telegram_router(bot, dispatcher, processor=telegram_processor))
     else:
         telegram_processor = None
 
-    @app.on_event('startup')
-    async def start_disposable_email_service() -> None:  # pragma: no cover - event hook
-        await disposable_email_service.start()
+    original_lifespan_context = app.router.lifespan_context
 
-    @app.on_event('shutdown')
-    async def stop_disposable_email_service() -> None:  # pragma: no cover - event hook
-        await disposable_email_service.stop()
+    @asynccontextmanager
+    async def unified_lifespan(fastapi_app: FastAPI):
+        async with original_lifespan_context(fastapi_app):
+            telegram_started = False
+            disposable_started = False
+            try:
+                if telegram_processor is not None:
+                    await telegram_processor.start()
+                    telegram_started = True
+                await disposable_email_service.start()
+                disposable_started = True
+                yield
+            finally:
+                if disposable_started:
+                    await disposable_email_service.stop()
+                if telegram_started:
+                    await telegram_processor.stop()
+
+    app.router.lifespan_context = unified_lifespan
 
     miniapp_mounted, miniapp_path = _mount_miniapp_static(app)
 
