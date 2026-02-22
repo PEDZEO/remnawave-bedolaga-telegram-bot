@@ -3,6 +3,7 @@ from aiogram import Bot
 from app.services.backup_service import backup_service
 from app.utils.startup_timeline import StartupTimeline
 
+from .startup_error_helpers import warn_startup_stage_error
 from .types import LoggerLike
 
 
@@ -29,5 +30,10 @@ async def initialize_backup_stage(
                 stage.log('Автобекапы отключены настройками')
             stage.success('Сервис бекапов инициализирован')
         except Exception as error:
-            stage.warning(f'Ошибка инициализации сервиса бекапов: {error}')
-            logger.error('❌ Ошибка инициализации сервиса бекапов', error=error)
+            warn_startup_stage_error(
+                stage=stage,
+                logger=logger,
+                stage_error_message='Ошибка инициализации сервиса бекапов',
+                logger_error_message='❌ Ошибка инициализации сервиса бекапов',
+                error=error,
+            )

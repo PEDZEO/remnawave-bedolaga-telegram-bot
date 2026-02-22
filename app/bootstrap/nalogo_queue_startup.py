@@ -3,6 +3,7 @@ from app.services.nalogo_queue_service import nalogo_queue_service
 from app.services.payment_service import PaymentService
 from app.utils.startup_timeline import StartupTimeline
 
+from .startup_error_helpers import warn_startup_stage_error
 from .types import LoggerLike
 
 
@@ -27,7 +28,12 @@ async def start_nalogo_queue_stage(
                 else:
                     stage.skip('Сервис не запущен')
             except Exception as error:
-                stage.warning(f'Ошибка запуска очереди чеков: {error}')
-                logger.error('❌ Ошибка запуска очереди чеков NaloGO', error=error)
+                warn_startup_stage_error(
+                    stage=stage,
+                    logger=logger,
+                    stage_error_message='Ошибка запуска очереди чеков',
+                    logger_error_message='❌ Ошибка запуска очереди чеков NaloGO',
+                    error=error,
+                )
         else:
             stage.skip('NaloGO отключен настройками')

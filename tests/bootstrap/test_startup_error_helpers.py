@@ -6,8 +6,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.bootstrap import (
+    backup_startup,
     contest_rotation_startup,
     log_rotation_startup,
+    nalogo_queue_startup,
     referral_contests_startup,
     remnawave_sync_startup,
     reporting_startup,
@@ -165,4 +167,49 @@ async def test_initialize_remnawave_sync_stage_uses_shared_error_helper(monkeypa
     assert kwargs['logger'] is logger
     assert kwargs['stage_error_message'] == 'Ошибка запуска автосинхронизации'
     assert kwargs['logger_error_message'] == '❌ Ошибка запуска автосинхронизации RemnaWave'
+    assert str(kwargs['error']) == 'boom'
+
+
+@pytest.mark.asyncio
+async def test_initialize_backup_stage_uses_shared_error_helper(monkeypatch: pytest.MonkeyPatch) -> None:
+    timeline = _TimelineStub()
+    logger = MagicMock()
+    bot = MagicMock()
+    helper = MagicMock()
+
+    monkeypatch.setattr(backup_startup, 'warn_startup_stage_error', helper)
+    monkeypatch.setattr(backup_startup.backup_service, 'get_backup_settings', AsyncMock(side_effect=RuntimeError('boom')))
+
+    await backup_startup.initialize_backup_stage(timeline, logger, bot)
+
+    helper.assert_called_once()
+    kwargs = helper.call_args.kwargs
+    assert kwargs['logger'] is logger
+    assert kwargs['stage_error_message'] == 'Ошибка инициализации сервиса бекапов'
+    assert kwargs['logger_error_message'] == '❌ Ошибка инициализации сервиса бекапов'
+    assert str(kwargs['error']) == 'boom'
+
+
+@pytest.mark.asyncio
+async def test_start_nalogo_queue_stage_uses_shared_error_helper(monkeypatch: pytest.MonkeyPatch) -> None:
+    timeline = _TimelineStub()
+    logger = MagicMock()
+    payment_service = MagicMock()
+    helper = MagicMock()
+
+    monkeypatch.setattr(nalogo_queue_startup, 'warn_startup_stage_error', helper)
+    monkeypatch.setattr(nalogo_queue_startup, 'settings', MagicMock(is_nalogo_enabled=lambda: True))
+    monkeypatch.setattr(
+        nalogo_queue_startup.nalogo_queue_service,
+        'start',
+        AsyncMock(side_effect=RuntimeError('boom')),
+    )
+
+    await nalogo_queue_startup.start_nalogo_queue_stage(timeline, logger, payment_service)
+
+    helper.assert_called_once()
+    kwargs = helper.call_args.kwargs
+    assert kwargs['logger'] is logger
+    assert kwargs['stage_error_message'] == 'Ошибка запуска очереди чеков'
+    assert kwargs['logger_error_message'] == '❌ Ошибка запуска очереди чеков NaloGO'
     assert str(kwargs['error']) == 'boom'
