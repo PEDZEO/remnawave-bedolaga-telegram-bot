@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from importlib import import_module
+from typing import Any, Final
 
 import structlog
 from aiogram import Bot
@@ -46,205 +48,79 @@ async def _call_crud(module_path: str, function_name: str, *args, **kwargs):
     return await crud_function(*args, **kwargs)
 
 
-async def create_yookassa_payment(*args, **kwargs):
-    return await _call_crud('app.database.crud.yookassa', 'create_yookassa_payment', *args, **kwargs)
+CrudWrapper = Callable[..., Awaitable[Any]]
+CrudFunctionRef = tuple[str, str]
+
+_CRUD_FUNCTIONS: Final[dict[str, CrudFunctionRef]] = {
+    'create_yookassa_payment': ('app.database.crud.yookassa', 'create_yookassa_payment'),
+    'update_yookassa_payment_status': ('app.database.crud.yookassa', 'update_yookassa_payment_status'),
+    'link_yookassa_payment_to_transaction': ('app.database.crud.yookassa', 'link_yookassa_payment_to_transaction'),
+    'get_yookassa_payment_by_id': ('app.database.crud.yookassa', 'get_yookassa_payment_by_id'),
+    'get_yookassa_payment_by_local_id': ('app.database.crud.yookassa', 'get_yookassa_payment_by_local_id'),
+    'create_transaction': ('app.database.crud.transaction', 'create_transaction'),
+    'get_transaction_by_external_id': ('app.database.crud.transaction', 'get_transaction_by_external_id'),
+    'add_user_balance': ('app.database.crud.user', 'add_user_balance'),
+    'get_user_by_id': ('app.database.crud.user', 'get_user_by_id'),
+    'get_user_by_telegram_id': ('app.database.crud.user', 'get_user_by_telegram_id'),
+    'create_mulenpay_payment': ('app.database.crud.mulenpay', 'create_mulenpay_payment'),
+    'get_mulenpay_payment_by_uuid': ('app.database.crud.mulenpay', 'get_mulenpay_payment_by_uuid'),
+    'get_mulenpay_payment_by_mulen_id': ('app.database.crud.mulenpay', 'get_mulenpay_payment_by_mulen_id'),
+    'get_mulenpay_payment_by_local_id': ('app.database.crud.mulenpay', 'get_mulenpay_payment_by_local_id'),
+    'update_mulenpay_payment_status': ('app.database.crud.mulenpay', 'update_mulenpay_payment_status'),
+    'update_mulenpay_payment_metadata': ('app.database.crud.mulenpay', 'update_mulenpay_payment_metadata'),
+    'link_mulenpay_payment_to_transaction': ('app.database.crud.mulenpay', 'link_mulenpay_payment_to_transaction'),
+    'create_pal24_payment': ('app.database.crud.pal24', 'create_pal24_payment'),
+    'get_pal24_payment_by_bill_id': ('app.database.crud.pal24', 'get_pal24_payment_by_bill_id'),
+    'get_pal24_payment_by_order_id': ('app.database.crud.pal24', 'get_pal24_payment_by_order_id'),
+    'get_pal24_payment_by_id': ('app.database.crud.pal24', 'get_pal24_payment_by_id'),
+    'update_pal24_payment_status': ('app.database.crud.pal24', 'update_pal24_payment_status'),
+    'link_pal24_payment_to_transaction': ('app.database.crud.pal24', 'link_pal24_payment_to_transaction'),
+    'create_wata_payment': ('app.database.crud.wata', 'create_wata_payment'),
+    'get_wata_payment_by_link_id': ('app.database.crud.wata', 'get_wata_payment_by_link_id'),
+    'get_wata_payment_by_id': ('app.database.crud.wata', 'get_wata_payment_by_id'),
+    'get_wata_payment_by_order_id': ('app.database.crud.wata', 'get_wata_payment_by_order_id'),
+    'update_wata_payment_status': ('app.database.crud.wata', 'update_wata_payment_status'),
+    'link_wata_payment_to_transaction': ('app.database.crud.wata', 'link_wata_payment_to_transaction'),
+    'create_platega_payment': ('app.database.crud.platega', 'create_platega_payment'),
+    'get_platega_payment_by_id': ('app.database.crud.platega', 'get_platega_payment_by_id'),
+    'get_platega_payment_by_id_for_update': ('app.database.crud.platega', 'get_platega_payment_by_id_for_update'),
+    'get_platega_payment_by_transaction_id': ('app.database.crud.platega', 'get_platega_payment_by_transaction_id'),
+    'get_platega_payment_by_correlation_id': ('app.database.crud.platega', 'get_platega_payment_by_correlation_id'),
+    'update_platega_payment': ('app.database.crud.platega', 'update_platega_payment'),
+    'link_platega_payment_to_transaction': ('app.database.crud.platega', 'link_platega_payment_to_transaction'),
+    'create_cryptobot_payment': ('app.database.crud.cryptobot', 'create_cryptobot_payment'),
+    'get_cryptobot_payment_by_invoice_id': ('app.database.crud.cryptobot', 'get_cryptobot_payment_by_invoice_id'),
+    'update_cryptobot_payment_status': ('app.database.crud.cryptobot', 'update_cryptobot_payment_status'),
+    'link_cryptobot_payment_to_transaction': ('app.database.crud.cryptobot', 'link_cryptobot_payment_to_transaction'),
+    'create_heleket_payment': ('app.database.crud.heleket', 'create_heleket_payment'),
+    'get_heleket_payment_by_uuid': ('app.database.crud.heleket', 'get_heleket_payment_by_uuid'),
+    'get_heleket_payment_by_id': ('app.database.crud.heleket', 'get_heleket_payment_by_id'),
+    'update_heleket_payment': ('app.database.crud.heleket', 'update_heleket_payment'),
+    'link_heleket_payment_to_transaction': ('app.database.crud.heleket', 'link_heleket_payment_to_transaction'),
+    'create_cloudpayments_payment': ('app.database.crud.cloudpayments', 'create_cloudpayments_payment'),
+    'get_cloudpayments_payment_by_invoice_id': ('app.database.crud.cloudpayments', 'get_cloudpayments_payment_by_invoice_id'),
+    'get_cloudpayments_payment_by_id': ('app.database.crud.cloudpayments', 'get_cloudpayments_payment_by_id'),
+    'update_cloudpayments_payment': ('app.database.crud.cloudpayments', 'update_cloudpayments_payment'),
+}
 
 
-async def update_yookassa_payment_status(*args, **kwargs):
-    return await _call_crud('app.database.crud.yookassa', 'update_yookassa_payment_status', *args, **kwargs)
+def _make_crud_wrapper(module_path: str, function_name: str) -> CrudWrapper:
+    async def _wrapper(*args, **kwargs):
+        return await _call_crud(module_path, function_name, *args, **kwargs)
+
+    _wrapper.__name__ = function_name
+    _wrapper.__qualname__ = function_name
+    _wrapper.__module__ = __name__
+    return _wrapper
 
 
-async def link_yookassa_payment_to_transaction(*args, **kwargs):
-    return await _call_crud('app.database.crud.yookassa', 'link_yookassa_payment_to_transaction', *args, **kwargs)
-
-
-async def get_yookassa_payment_by_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.yookassa', 'get_yookassa_payment_by_id', *args, **kwargs)
-
-
-async def get_yookassa_payment_by_local_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.yookassa', 'get_yookassa_payment_by_local_id', *args, **kwargs)
-
-
-async def create_transaction(*args, **kwargs):
-    return await _call_crud('app.database.crud.transaction', 'create_transaction', *args, **kwargs)
-
-
-async def get_transaction_by_external_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.transaction', 'get_transaction_by_external_id', *args, **kwargs)
-
-
-async def add_user_balance(*args, **kwargs):
-    return await _call_crud('app.database.crud.user', 'add_user_balance', *args, **kwargs)
-
-
-async def get_user_by_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.user', 'get_user_by_id', *args, **kwargs)
-
-
-async def get_user_by_telegram_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.user', 'get_user_by_telegram_id', *args, **kwargs)
-
-
-async def create_mulenpay_payment(*args, **kwargs):
-    return await _call_crud('app.database.crud.mulenpay', 'create_mulenpay_payment', *args, **kwargs)
-
-
-async def get_mulenpay_payment_by_uuid(*args, **kwargs):
-    return await _call_crud('app.database.crud.mulenpay', 'get_mulenpay_payment_by_uuid', *args, **kwargs)
-
-
-async def get_mulenpay_payment_by_mulen_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.mulenpay', 'get_mulenpay_payment_by_mulen_id', *args, **kwargs)
-
-
-async def get_mulenpay_payment_by_local_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.mulenpay', 'get_mulenpay_payment_by_local_id', *args, **kwargs)
-
-
-async def update_mulenpay_payment_status(*args, **kwargs):
-    return await _call_crud('app.database.crud.mulenpay', 'update_mulenpay_payment_status', *args, **kwargs)
-
-
-async def update_mulenpay_payment_metadata(*args, **kwargs):
-    return await _call_crud('app.database.crud.mulenpay', 'update_mulenpay_payment_metadata', *args, **kwargs)
-
-
-async def link_mulenpay_payment_to_transaction(*args, **kwargs):
-    return await _call_crud('app.database.crud.mulenpay', 'link_mulenpay_payment_to_transaction', *args, **kwargs)
-
-
-async def create_pal24_payment(*args, **kwargs):
-    return await _call_crud('app.database.crud.pal24', 'create_pal24_payment', *args, **kwargs)
-
-
-async def get_pal24_payment_by_bill_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.pal24', 'get_pal24_payment_by_bill_id', *args, **kwargs)
-
-
-async def get_pal24_payment_by_order_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.pal24', 'get_pal24_payment_by_order_id', *args, **kwargs)
-
-
-async def get_pal24_payment_by_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.pal24', 'get_pal24_payment_by_id', *args, **kwargs)
-
-
-async def update_pal24_payment_status(*args, **kwargs):
-    return await _call_crud('app.database.crud.pal24', 'update_pal24_payment_status', *args, **kwargs)
-
-
-async def link_pal24_payment_to_transaction(*args, **kwargs):
-    return await _call_crud('app.database.crud.pal24', 'link_pal24_payment_to_transaction', *args, **kwargs)
-
-
-async def create_wata_payment(*args, **kwargs):
-    return await _call_crud('app.database.crud.wata', 'create_wata_payment', *args, **kwargs)
-
-
-async def get_wata_payment_by_link_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.wata', 'get_wata_payment_by_link_id', *args, **kwargs)
-
-
-async def get_wata_payment_by_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.wata', 'get_wata_payment_by_id', *args, **kwargs)
+for _public_name, (_module_path, _function_name) in _CRUD_FUNCTIONS.items():
+    globals()[_public_name] = _make_crud_wrapper(_module_path, _function_name)
 
 
 # Алиас для совместимости с хендлерами
 async def get_wata_payment_by_local_id(*args, **kwargs):
     return await get_wata_payment_by_id(*args, **kwargs)
-
-
-async def get_wata_payment_by_order_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.wata', 'get_wata_payment_by_order_id', *args, **kwargs)
-
-
-async def update_wata_payment_status(*args, **kwargs):
-    return await _call_crud('app.database.crud.wata', 'update_wata_payment_status', *args, **kwargs)
-
-
-async def link_wata_payment_to_transaction(*args, **kwargs):
-    return await _call_crud('app.database.crud.wata', 'link_wata_payment_to_transaction', *args, **kwargs)
-
-
-async def create_platega_payment(*args, **kwargs):
-    return await _call_crud('app.database.crud.platega', 'create_platega_payment', *args, **kwargs)
-
-
-async def get_platega_payment_by_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.platega', 'get_platega_payment_by_id', *args, **kwargs)
-
-
-async def get_platega_payment_by_id_for_update(*args, **kwargs):
-    return await _call_crud('app.database.crud.platega', 'get_platega_payment_by_id_for_update', *args, **kwargs)
-
-
-async def get_platega_payment_by_transaction_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.platega', 'get_platega_payment_by_transaction_id', *args, **kwargs)
-
-
-async def get_platega_payment_by_correlation_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.platega', 'get_platega_payment_by_correlation_id', *args, **kwargs)
-
-
-async def update_platega_payment(*args, **kwargs):
-    return await _call_crud('app.database.crud.platega', 'update_platega_payment', *args, **kwargs)
-
-
-async def link_platega_payment_to_transaction(*args, **kwargs):
-    return await _call_crud('app.database.crud.platega', 'link_platega_payment_to_transaction', *args, **kwargs)
-
-
-async def create_cryptobot_payment(*args, **kwargs):
-    return await _call_crud('app.database.crud.cryptobot', 'create_cryptobot_payment', *args, **kwargs)
-
-
-async def get_cryptobot_payment_by_invoice_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.cryptobot', 'get_cryptobot_payment_by_invoice_id', *args, **kwargs)
-
-
-async def update_cryptobot_payment_status(*args, **kwargs):
-    return await _call_crud('app.database.crud.cryptobot', 'update_cryptobot_payment_status', *args, **kwargs)
-
-
-async def link_cryptobot_payment_to_transaction(*args, **kwargs):
-    return await _call_crud('app.database.crud.cryptobot', 'link_cryptobot_payment_to_transaction', *args, **kwargs)
-
-
-async def create_heleket_payment(*args, **kwargs):
-    return await _call_crud('app.database.crud.heleket', 'create_heleket_payment', *args, **kwargs)
-
-
-async def get_heleket_payment_by_uuid(*args, **kwargs):
-    return await _call_crud('app.database.crud.heleket', 'get_heleket_payment_by_uuid', *args, **kwargs)
-
-
-async def get_heleket_payment_by_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.heleket', 'get_heleket_payment_by_id', *args, **kwargs)
-
-
-async def update_heleket_payment(*args, **kwargs):
-    return await _call_crud('app.database.crud.heleket', 'update_heleket_payment', *args, **kwargs)
-
-
-async def link_heleket_payment_to_transaction(*args, **kwargs):
-    return await _call_crud('app.database.crud.heleket', 'link_heleket_payment_to_transaction', *args, **kwargs)
-
-
-async def create_cloudpayments_payment(*args, **kwargs):
-    return await _call_crud('app.database.crud.cloudpayments', 'create_cloudpayments_payment', *args, **kwargs)
-
-
-async def get_cloudpayments_payment_by_invoice_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.cloudpayments', 'get_cloudpayments_payment_by_invoice_id', *args, **kwargs)
-
-
-async def get_cloudpayments_payment_by_id(*args, **kwargs):
-    return await _call_crud('app.database.crud.cloudpayments', 'get_cloudpayments_payment_by_id', *args, **kwargs)
-
-
-async def update_cloudpayments_payment(*args, **kwargs):
-    return await _call_crud('app.database.crud.cloudpayments', 'update_cloudpayments_payment', *args, **kwargs)
 
 
 class PaymentService(
