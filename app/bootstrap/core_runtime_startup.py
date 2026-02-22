@@ -61,6 +61,11 @@ class PostPaymentBootstrapResult:
     auto_verification_active: bool
 
 
+@dataclass(frozen=True)
+class WebStartupResult:
+    web_api_server: WebAPIServer | None
+
+
 def _resolve_runtime_flags() -> RuntimeModeFlags:
     polling_enabled, telegram_webhook_enabled, payment_webhooks_enabled = resolve_runtime_mode()
     return RuntimeModeFlags(
@@ -113,6 +118,31 @@ async def _run_post_payment_bootstrap(
     )
 
 
+async def _run_web_startup_bootstrap(
+    timeline: StartupTimeline,
+    *,
+    bot: Bot,
+    dp: Dispatcher,
+    payment_service: PaymentService,
+    runtime_flags: RuntimeModeFlags,
+) -> WebStartupResult:
+    _web_app, web_api_server = await start_web_server_stage(
+        timeline,
+        bot,
+        dp,
+        payment_service,
+        telegram_webhook_enabled=runtime_flags.telegram_webhook_enabled,
+        payment_webhooks_enabled=runtime_flags.payment_webhooks_enabled,
+    )
+    await configure_telegram_webhook_stage(
+        timeline,
+        bot,
+        dp,
+        telegram_webhook_enabled=runtime_flags.telegram_webhook_enabled,
+    )
+    return WebStartupResult(web_api_server=web_api_server)
+
+
 async def start_core_runtime_stage(
     timeline: StartupTimeline,
     logger: LoggerLike,
@@ -131,19 +161,12 @@ async def start_core_runtime_stage(
     )
 
     runtime_flags = _resolve_runtime_flags()
-    _web_app, web_api_server = await start_web_server_stage(
+    web_startup_result = await _run_web_startup_bootstrap(
         timeline,
-        bot,
-        dp,
-        payment_service,
-        telegram_webhook_enabled=runtime_flags.telegram_webhook_enabled,
-        payment_webhooks_enabled=runtime_flags.payment_webhooks_enabled,
-    )
-    await configure_telegram_webhook_stage(
-        timeline,
-        bot,
-        dp,
-        telegram_webhook_enabled=runtime_flags.telegram_webhook_enabled,
+        bot=bot,
+        dp=dp,
+        payment_service=payment_service,
+        runtime_flags=runtime_flags,
     )
 
     return CoreRuntimeStartupContext(
@@ -154,5 +177,5 @@ async def start_core_runtime_stage(
         auto_verification_active=post_payment_bootstrap_result.auto_verification_active,
         polling_enabled=runtime_flags.polling_enabled,
         telegram_webhook_enabled=runtime_flags.telegram_webhook_enabled,
-        web_api_server=web_api_server,
+        web_api_server=web_startup_result.web_api_server,
     )

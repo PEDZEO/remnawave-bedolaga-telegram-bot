@@ -231,3 +231,50 @@ async def test_run_pre_runtime_bootstrap_preserves_sequence_and_bot_handoff(
         'log_rotation',
         'remnawave_sync',
     ]
+
+
+@pytest.mark.asyncio
+async def test_run_web_startup_bootstrap_propagates_runtime_flags(monkeypatch: pytest.MonkeyPatch) -> None:
+    startup = importlib.import_module('app.bootstrap.core_runtime_startup')
+    if not hasattr(startup, '_run_web_startup_bootstrap'):
+        sys.modules.pop('app.bootstrap.core_runtime_startup', None)
+        startup = importlib.import_module('app.bootstrap.core_runtime_startup')
+
+    timeline = MagicMock()
+    bot = MagicMock()
+    dp = MagicMock()
+    payment_service = MagicMock()
+    runtime_flags = startup.RuntimeModeFlags(
+        polling_enabled=False,
+        telegram_webhook_enabled=True,
+        payment_webhooks_enabled=False,
+    )
+    web_api_server = MagicMock()
+    start_web_server_stage = AsyncMock(return_value=(None, web_api_server))
+    configure_telegram_webhook_stage = AsyncMock()
+    monkeypatch.setattr(startup, 'start_web_server_stage', start_web_server_stage)
+    monkeypatch.setattr(startup, 'configure_telegram_webhook_stage', configure_telegram_webhook_stage)
+
+    result = await startup._run_web_startup_bootstrap(
+        timeline,
+        bot=bot,
+        dp=dp,
+        payment_service=payment_service,
+        runtime_flags=runtime_flags,
+    )
+
+    assert result.web_api_server is web_api_server
+    start_web_server_stage.assert_awaited_once_with(
+        timeline,
+        bot,
+        dp,
+        payment_service,
+        telegram_webhook_enabled=True,
+        payment_webhooks_enabled=False,
+    )
+    configure_telegram_webhook_stage.assert_awaited_once_with(
+        timeline,
+        bot,
+        dp,
+        telegram_webhook_enabled=True,
+    )
