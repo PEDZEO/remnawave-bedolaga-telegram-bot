@@ -4,7 +4,7 @@ import pytest
 
 from app.bootstrap.runtime_execution import run_runtime_loop_stage
 from app.bootstrap.runtime_tasks_startup import start_runtime_tasks_stage
-from app.bootstrap.shutdown_pipeline import run_shutdown_pipeline
+from app.bootstrap.shutdown_pipeline import _build_runtime_shutdown_kwargs, run_shutdown_pipeline
 
 
 @pytest.mark.asyncio
@@ -160,3 +160,33 @@ async def test_run_shutdown_pipeline_calls_shutdown_stages(monkeypatch):
         web_api_server=web_api_server,
         telegram_webhook_enabled=True,
     )
+
+
+def test_build_runtime_shutdown_kwargs_maps_all_fields() -> None:
+    monitoring_task = object()
+    maintenance_task = object()
+    version_check_task = object()
+    traffic_monitoring_task = object()
+    daily_subscription_task = object()
+    polling_task = object()
+    dp = object()
+
+    kwargs = _build_runtime_shutdown_kwargs(
+        monitoring_task=monitoring_task,
+        maintenance_task=maintenance_task,
+        version_check_task=version_check_task,
+        traffic_monitoring_task=traffic_monitoring_task,
+        daily_subscription_task=daily_subscription_task,
+        polling_task=polling_task,
+        dp=dp,
+    )
+
+    assert kwargs == {
+        'monitoring_task': monitoring_task,
+        'maintenance_task': maintenance_task,
+        'version_check_task': version_check_task,
+        'traffic_monitoring_task': traffic_monitoring_task,
+        'daily_subscription_task': daily_subscription_task,
+        'polling_task': polling_task,
+        'dp': dp,
+    }

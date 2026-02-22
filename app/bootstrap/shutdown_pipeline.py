@@ -46,6 +46,27 @@ async def _run_web_shutdown_stage(
     )
 
 
+def _build_runtime_shutdown_kwargs(
+    *,
+    monitoring_task: asyncio.Task | None,
+    maintenance_task: asyncio.Task | None,
+    version_check_task: asyncio.Task | None,
+    traffic_monitoring_task: asyncio.Task | None,
+    daily_subscription_task: asyncio.Task | None,
+    polling_task: asyncio.Task | None,
+    dp: Dispatcher | None,
+) -> dict[str, object]:
+    return {
+        'monitoring_task': monitoring_task,
+        'maintenance_task': maintenance_task,
+        'version_check_task': version_check_task,
+        'traffic_monitoring_task': traffic_monitoring_task,
+        'daily_subscription_task': daily_subscription_task,
+        'polling_task': polling_task,
+        'dp': dp,
+    }
+
+
 async def run_shutdown_pipeline(
     timeline: StartupTimeline,
     logger: LoggerLike,
@@ -70,13 +91,15 @@ async def run_shutdown_pipeline(
 
     await _run_runtime_shutdown_stage(
         logger,
-        monitoring_task=monitoring_task,
-        maintenance_task=maintenance_task,
-        version_check_task=version_check_task,
-        traffic_monitoring_task=traffic_monitoring_task,
-        daily_subscription_task=daily_subscription_task,
-        polling_task=polling_task,
-        dp=dp,
+        **_build_runtime_shutdown_kwargs(
+            monitoring_task=monitoring_task,
+            maintenance_task=maintenance_task,
+            version_check_task=version_check_task,
+            traffic_monitoring_task=traffic_monitoring_task,
+            daily_subscription_task=daily_subscription_task,
+            polling_task=polling_task,
+            dp=dp,
+        ),
     )
     await _run_web_shutdown_stage(
         logger,
