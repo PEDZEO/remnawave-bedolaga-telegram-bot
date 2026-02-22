@@ -1,4 +1,7 @@
 import asyncio
+import inspect
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from aiogram import Dispatcher
 
@@ -27,6 +30,22 @@ async def _cancel_task_if_running(task: asyncio.Task | None) -> None:
             pass
 
 
+async def _safe_shutdown_call(
+    logger: LoggerLike,
+    *,
+    info_message: str,
+    error_message: str,
+    shutdown_call: Callable[[], Awaitable[Any] | Any],
+) -> None:
+    logger.info(info_message)
+    try:
+        result = shutdown_call()
+        if inspect.isawaitable(result):
+            await result
+    except Exception as error:
+        logger.error(error_message, error=error)
+
+
 async def shutdown_runtime_services(
     logger: LoggerLike,
     *,
@@ -38,11 +57,12 @@ async def shutdown_runtime_services(
     polling_task: asyncio.Task | None,
     dp: Dispatcher | None,
 ) -> None:
-    logger.info('ℹ️ Остановка сервиса автопроверки пополнений...')
-    try:
-        await auto_payment_verification_service.stop()
-    except Exception as error:
-        logger.error('Ошибка остановки сервиса автопроверки пополнений', error=error)
+    await _safe_shutdown_call(
+        logger,
+        info_message='ℹ️ Остановка сервиса автопроверки пополнений...',
+        error_message='Ошибка остановки сервиса автопроверки пополнений',
+        shutdown_call=auto_payment_verification_service.stop,
+    )
 
     if monitoring_task and not monitoring_task.done():
         logger.info('ℹ️ Остановка службы мониторинга...')
@@ -68,48 +88,51 @@ async def shutdown_runtime_services(
         daily_subscription_service.stop_monitoring()
     await _cancel_task_if_running(daily_subscription_task)
 
-    logger.info('ℹ️ Остановка сервиса отчетов...')
-    try:
-        await reporting_service.stop()
-    except Exception as error:
-        logger.error('Ошибка остановки сервиса отчетов', error=error)
-
-    logger.info('ℹ️ Остановка сервиса конкурсов...')
-    try:
-        await referral_contest_service.stop()
-    except Exception as error:
-        logger.error('Ошибка остановки сервиса конкурсов', error=error)
-
-    logger.info('ℹ️ Остановка сервиса автосинхронизации RemnaWave...')
-    try:
-        await remnawave_sync_service.stop()
-    except Exception as error:
-        logger.error('Ошибка остановки автосинхронизации RemnaWave', error=error)
-
-    logger.info('ℹ️ Остановка ротации игр...')
-    try:
-        await contest_rotation_service.stop()
-    except Exception as error:
-        logger.error('Ошибка остановки ротации игр', error=error)
+    await _safe_shutdown_call(
+        logger,
+        info_message='ℹ️ Остановка сервиса отчетов...',
+        error_message='Ошибка остановки сервиса отчетов',
+        shutdown_call=reporting_service.stop,
+    )
+    await _safe_shutdown_call(
+        logger,
+        info_message='ℹ️ Остановка сервиса конкурсов...',
+        error_message='Ошибка остановки сервиса конкурсов',
+        shutdown_call=referral_contest_service.stop,
+    )
+    await _safe_shutdown_call(
+        logger,
+        info_message='ℹ️ Остановка сервиса автосинхронизации RemnaWave...',
+        error_message='Ошибка остановки автосинхронизации RemnaWave',
+        shutdown_call=remnawave_sync_service.stop,
+    )
+    await _safe_shutdown_call(
+        logger,
+        info_message='ℹ️ Остановка ротации игр...',
+        error_message='Ошибка остановки ротации игр',
+        shutdown_call=contest_rotation_service.stop,
+    )
 
     if settings.is_log_rotation_enabled():
-        logger.info('ℹ️ Остановка сервиса ротации логов...')
-        try:
-            await log_rotation_service.stop()
-        except Exception as error:
-            logger.error('Ошибка остановки сервиса ротации логов', error=error)
+        await _safe_shutdown_call(
+            logger,
+            info_message='ℹ️ Остановка сервиса ротации логов...',
+            error_message='Ошибка остановки сервиса ротации логов',
+            shutdown_call=log_rotation_service.stop,
+        )
 
-    logger.info('ℹ️ Остановка очереди чеков NaloGO...')
-    try:
-        await nalogo_queue_service.stop()
-    except Exception as error:
-        logger.error('Ошибка остановки очереди чеков NaloGO', error=error)
-
-    logger.info('ℹ️ Остановка сервиса бекапов...')
-    try:
-        await backup_service.stop_auto_backup()
-    except Exception as error:
-        logger.error('Ошибка остановки сервиса бекапов', error=error)
+    await _safe_shutdown_call(
+        logger,
+        info_message='ℹ️ Остановка очереди чеков NaloGO...',
+        error_message='Ошибка остановки очереди чеков NaloGO',
+        shutdown_call=nalogo_queue_service.stop,
+    )
+    await _safe_shutdown_call(
+        logger,
+        info_message='ℹ️ Остановка сервиса бекапов...',
+        error_message='Ошибка остановки сервиса бекапов',
+        shutdown_call=backup_service.stop_auto_backup,
+    )
 
     if polling_task and not polling_task.done():
         logger.info('ℹ️ Остановка polling...')
