@@ -57,27 +57,24 @@ class MenuLayoutStatsService:
         Args:
             user_id: Telegram ID пользователя (из middleware) или internal User.id (из API)
         """
-        # Вставляем запись одним SQL-выражением.
-        # user_id вычисляется подзапросом внутри INSERT:
-        # - если пользователь найден по telegram_id / internal id -> пишем User.id
-        # - если не найден -> пишем NULL
-        # Это устраняет race между SELECT и INSERT. Если FK все же нарушается
-        # (например, пользователь удален конкурентной транзакцией),
-        # повторяем запись без user_id.
-        resolved_user_id_expr: int | Any | None = None
+        # Разрешаем пользователя заранее и блокируем запись users (FOR KEY SHARE),
+        # чтобы конкурентное удаление не могло сгенерировать FK-ошибку во время INSERT.
+        resolved_user_id: int | None = None
         if user_id is not None:
             from app.database.models import User
 
-            resolved_user_id_expr = (
-                select(User.id).where(or_(User.telegram_id == user_id, User.id == user_id)).limit(1).scalar_subquery()
-            )
+            lookup_stmt = select(User.id).where(or_(User.telegram_id == user_id, User.id == user_id)).limit(1)
+            if not cls._is_sqlite():
+                lookup_stmt = lookup_stmt.with_for_update(key_share=True)
+            user_lookup_result = await db.execute(lookup_stmt)
+            resolved_user_id = user_lookup_result.scalar_one_or_none()
 
-        async def _insert_with_user_expr(user_expr: int | Any | None) -> ButtonClickLog | None:
+        async def _insert_with_user_id(user_id_value: int | None) -> ButtonClickLog | None:
             insert_stmt = (
                 insert(ButtonClickLog)
                 .values(
                     button_id=button_id,
-                    user_id=user_expr,
+                    user_id=user_id_value,
                     callback_data=callback_data,
                     button_type=button_type,
                     button_text=button_text,
@@ -92,11 +89,11 @@ class MenuLayoutStatsService:
             return await db.get(ButtonClickLog, inserted_id)
 
         try:
-            return await _insert_with_user_expr(resolved_user_id_expr)
+            return await _insert_with_user_id(resolved_user_id)
         except IntegrityError:
             await db.rollback()
             try:
-                return await _insert_with_user_expr(None)
+                return await _insert_with_user_id(None)
             except Exception:
                 await db.rollback()
                 return None

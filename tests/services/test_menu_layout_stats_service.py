@@ -22,6 +22,7 @@ async def test_log_button_click_retries_without_user_on_integrity_error() -> Non
     db = MagicMock()
     db.execute = AsyncMock(
         side_effect=[
+            _ScalarResult(142),
             IntegrityError('stmt', {}, Exception('fk')),
             _ScalarResult(101),
         ]
@@ -43,7 +44,7 @@ async def test_log_button_click_retries_without_user_on_integrity_error() -> Non
     assert result is click_obj
     assert db.rollback.await_count == 1
     assert db.commit.await_count == 1
-    assert db.execute.await_count == 2
+    assert db.execute.await_count == 3
 
-    fallback_insert = db.execute.await_args_list[1].args[0]
+    fallback_insert = db.execute.await_args_list[2].args[0]
     assert fallback_insert._values[ButtonClickLog.__table__.c.user_id].value is None
