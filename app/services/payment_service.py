@@ -40,56 +40,50 @@ logger = structlog.get_logger(__name__)
 
 
 # --- Совместимость: экспортируем функции, которые активно мокаются в тестах ---
+async def _call_crud(module_path: str, function_name: str, *args, **kwargs):
+    crud_module = import_module(module_path)
+    crud_function = getattr(crud_module, function_name)
+    return await crud_function(*args, **kwargs)
 
 
 async def create_yookassa_payment(*args, **kwargs):
-    yk_crud = import_module('app.database.crud.yookassa')
-    return await yk_crud.create_yookassa_payment(*args, **kwargs)
+    return await _call_crud('app.database.crud.yookassa', 'create_yookassa_payment', *args, **kwargs)
 
 
 async def update_yookassa_payment_status(*args, **kwargs):
-    yk_crud = import_module('app.database.crud.yookassa')
-    return await yk_crud.update_yookassa_payment_status(*args, **kwargs)
+    return await _call_crud('app.database.crud.yookassa', 'update_yookassa_payment_status', *args, **kwargs)
 
 
 async def link_yookassa_payment_to_transaction(*args, **kwargs):
-    yk_crud = import_module('app.database.crud.yookassa')
-    return await yk_crud.link_yookassa_payment_to_transaction(*args, **kwargs)
+    return await _call_crud('app.database.crud.yookassa', 'link_yookassa_payment_to_transaction', *args, **kwargs)
 
 
 async def get_yookassa_payment_by_id(*args, **kwargs):
-    yk_crud = import_module('app.database.crud.yookassa')
-    return await yk_crud.get_yookassa_payment_by_id(*args, **kwargs)
+    return await _call_crud('app.database.crud.yookassa', 'get_yookassa_payment_by_id', *args, **kwargs)
 
 
 async def get_yookassa_payment_by_local_id(*args, **kwargs):
-    yk_crud = import_module('app.database.crud.yookassa')
-    return await yk_crud.get_yookassa_payment_by_local_id(*args, **kwargs)
+    return await _call_crud('app.database.crud.yookassa', 'get_yookassa_payment_by_local_id', *args, **kwargs)
 
 
 async def create_transaction(*args, **kwargs):
-    transaction_crud = import_module('app.database.crud.transaction')
-    return await transaction_crud.create_transaction(*args, **kwargs)
+    return await _call_crud('app.database.crud.transaction', 'create_transaction', *args, **kwargs)
 
 
 async def get_transaction_by_external_id(*args, **kwargs):
-    transaction_crud = import_module('app.database.crud.transaction')
-    return await transaction_crud.get_transaction_by_external_id(*args, **kwargs)
+    return await _call_crud('app.database.crud.transaction', 'get_transaction_by_external_id', *args, **kwargs)
 
 
 async def add_user_balance(*args, **kwargs):
-    user_crud = import_module('app.database.crud.user')
-    return await user_crud.add_user_balance(*args, **kwargs)
+    return await _call_crud('app.database.crud.user', 'add_user_balance', *args, **kwargs)
 
 
 async def get_user_by_id(*args, **kwargs):
-    user_crud = import_module('app.database.crud.user')
-    return await user_crud.get_user_by_id(*args, **kwargs)
+    return await _call_crud('app.database.crud.user', 'get_user_by_id', *args, **kwargs)
 
 
 async def get_user_by_telegram_id(*args, **kwargs):
-    user_crud = import_module('app.database.crud.user')
-    return await user_crud.get_user_by_telegram_id(*args, **kwargs)
+    return await _call_crud('app.database.crud.user', 'get_user_by_telegram_id', *args, **kwargs)
 
 
 async def create_mulenpay_payment(*args, **kwargs):
