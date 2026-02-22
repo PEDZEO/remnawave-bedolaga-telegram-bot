@@ -9,7 +9,7 @@ from app.services.menu_layout.context import MenuContext
 from app.services.menu_layout.service import MenuLayoutService
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_build_button_connect_direct_mode_with_url():
     """Тест: кнопка connect с open_mode=direct и валидным URL должна создавать WebAppInfo."""
     button_config = {
@@ -39,7 +39,7 @@ async def test_build_button_connect_direct_mode_with_url():
     assert button.callback_data is None
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_build_button_connect_direct_mode_with_subscription_url():
     """Тест: кнопка connect с open_mode=direct должна получать URL из подписки."""
     button_config = {
@@ -77,7 +77,7 @@ async def test_build_button_connect_direct_mode_with_subscription_url():
         assert button.web_app.url == 'https://subscription.example.com/link'
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_build_button_connect_callback_mode():
     """Тест: кнопка connect с open_mode=callback должна создавать callback кнопку."""
     button_config = {
@@ -106,7 +106,7 @@ async def test_build_button_connect_callback_mode():
     assert button.web_app is None
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_build_button_connect_direct_mode_fallback_to_callback():
     """Тест: кнопка connect с open_mode=direct без URL должна fallback на callback."""
     button_config = {

@@ -51,7 +51,7 @@ def _webhook_path() -> str:
     return settings.get_telegram_webhook_path()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_webhook_without_secret() -> None:
     bot = AsyncMock()
     dispatcher = AsyncMock()
@@ -80,7 +80,7 @@ async def test_webhook_without_secret() -> None:
     assert args[0] is bot
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_webhook_with_secret(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = AsyncMock()
     dispatcher = AsyncMock()
@@ -113,7 +113,7 @@ async def test_webhook_with_secret(monkeypatch: pytest.MonkeyPatch) -> None:
     dispatcher.feed_update.assert_awaited_once()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_webhook_secret_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = AsyncMock()
     dispatcher = AsyncMock()
@@ -137,7 +137,7 @@ async def test_webhook_secret_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
     dispatcher.feed_update.assert_not_called()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_webhook_invalid_payload() -> None:
     bot = AsyncMock()
     dispatcher = AsyncMock()
@@ -155,7 +155,7 @@ async def test_webhook_invalid_payload() -> None:
     dispatcher.feed_update.assert_not_called()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_webhook_invalid_content_type() -> None:
     bot = AsyncMock()
     dispatcher = AsyncMock()
@@ -187,7 +187,7 @@ async def test_webhook_invalid_content_type() -> None:
     dispatcher.feed_update.assert_not_called()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_webhook_uses_processor() -> None:
     bot = AsyncMock()
     dispatcher = AsyncMock()
@@ -227,7 +227,7 @@ async def test_webhook_uses_processor() -> None:
     await processor.stop()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_webhook_processor_overloaded() -> None:
     bot = AsyncMock()
     dispatcher = AsyncMock()
@@ -261,7 +261,7 @@ async def test_webhook_processor_overloaded() -> None:
     await processor.stop()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_webhook_processor_not_running() -> None:
     bot = AsyncMock()
     dispatcher = AsyncMock()
@@ -289,7 +289,7 @@ async def test_webhook_processor_not_running() -> None:
     dispatcher.feed_update.assert_not_called()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_webhook_path_normalization(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = AsyncMock()
     dispatcher = AsyncMock()
@@ -310,7 +310,7 @@ async def test_webhook_path_normalization(monkeypatch: pytest.MonkeyPatch) -> No
     dispatcher.feed_update.assert_awaited_once()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_health_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = AsyncMock()
     dispatcher = AsyncMock()

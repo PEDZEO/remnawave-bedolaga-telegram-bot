@@ -18,7 +18,7 @@ _backup_dir.mkdir(parents=True, exist_ok=True)
 from app.webserver.unified_app import create_unified_app
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_unified_app_health_reports_features(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     bot = AsyncMock()
     dispatcher = SimpleNamespace(feed_update=AsyncMock())
@@ -91,7 +91,7 @@ def _build_unified_app(monkeypatch: pytest.MonkeyPatch, docs_enabled: bool) -> F
     )
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_unified_app_health_path_without_admin(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = AsyncMock()
     dispatcher = SimpleNamespace(feed_update=AsyncMock())
@@ -127,7 +127,7 @@ def test_unified_app_docs_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     assert '/doc' not in registered_paths
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_unified_app_docs_enabled_with_alias(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _build_unified_app(monkeypatch, docs_enabled=True)
 

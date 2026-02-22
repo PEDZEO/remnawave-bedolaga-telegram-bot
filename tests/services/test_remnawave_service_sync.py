@@ -16,9 +16,6 @@ if str(ROOT_DIR) not in sys.path:
 from app.services.remnawave_service import RemnaWaveService
 
 
-pytestmark = pytest.mark.anyio('asyncio')
-
-
 def _create_service() -> RemnaWaveService:
     service = RemnaWaveService.__new__(RemnaWaveService)
     service._panel_timezone = ZoneInfo('UTC')
@@ -71,6 +68,7 @@ def test_deduplicate_ignores_records_without_expire_date():
     assert deduplicated[telegram_id] is valid
 
 
+@pytest.mark.asyncio
 async def test_get_or_create_user_handles_unique_violation(monkeypatch):
     service = _create_service()
     rollback_mock = AsyncMock()
@@ -96,6 +94,7 @@ async def test_get_or_create_user_handles_unique_violation(monkeypatch):
     rollback_mock.assert_awaited()
 
 
+@pytest.mark.asyncio
 async def test_get_or_create_user_creates_new(monkeypatch):
     service = _create_service()
     db = SimpleNamespace()

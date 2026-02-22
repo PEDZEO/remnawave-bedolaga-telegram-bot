@@ -153,12 +153,7 @@ def _make_service(bot: DummyBot) -> PaymentService:
     return service
 
 
-@pytest.fixture
-def anyio_backend() -> str:
-    return 'asyncio'
-
-
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 @pytest.mark.parametrize('status_field', ['payment_status', 'status', 'paymentStatus'])
 async def test_process_mulenpay_callback_success(monkeypatch: pytest.MonkeyPatch, status_field: str) -> None:
     bot = DummyBot()
@@ -264,7 +259,7 @@ async def test_process_mulenpay_callback_success(monkeypatch: pytest.MonkeyPatch
     assert bot.sent_messages  # сообщение пользователю отправлено
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_process_cryptobot_webhook_success(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = DummyBot()
     service = _make_service(bot)
@@ -387,7 +382,7 @@ async def test_process_cryptobot_webhook_success(monkeypatch: pytest.MonkeyPatch
     assert admin_calls
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_process_heleket_webhook_success(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = DummyBot()
     service = _make_service(bot)
@@ -529,7 +524,7 @@ async def test_process_heleket_webhook_success(monkeypatch: pytest.MonkeyPatch) 
     referral_stub.process_referral_topup.assert_awaited_once()
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_process_yookassa_webhook_success(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = DummyBot()
     service = _make_service(bot)
@@ -636,7 +631,7 @@ async def test_process_yookassa_webhook_success(monkeypatch: pytest.MonkeyPatch)
     assert admin_calls
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_process_yookassa_webhook_uses_remote_status(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = DummyBot()
     service = _make_service(bot)
@@ -751,7 +746,7 @@ async def test_process_yookassa_webhook_uses_remote_status(monkeypatch: pytest.M
     assert admin_calls
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_process_yookassa_webhook_handles_cancellation(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = DummyBot()
     service = _make_service(bot)
@@ -807,7 +802,7 @@ async def test_process_yookassa_webhook_handles_cancellation(monkeypatch: pytest
     get_info_mock.assert_awaited_once_with('yk_cancel')
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_process_yookassa_webhook_restores_missing_payment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -954,7 +949,7 @@ async def test_process_yookassa_webhook_restores_missing_payment(
     assert admin_calls
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_process_yookassa_webhook_missing_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
     service = _make_service(DummyBot())
     db = FakeSession()
@@ -978,7 +973,7 @@ async def test_process_yookassa_webhook_missing_metadata(monkeypatch: pytest.Mon
     update_mock.assert_not_awaited()
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_process_yookassa_webhook_missing_id(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = DummyBot()
     service = _make_service(bot)
@@ -988,7 +983,7 @@ async def test_process_yookassa_webhook_missing_id(monkeypatch: pytest.MonkeyPat
     assert result is False
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_process_pal24_callback_success(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = DummyBot()
     service = _make_service(bot)
@@ -1123,7 +1118,7 @@ async def test_process_pal24_callback_success(monkeypatch: pytest.MonkeyPatch) -
     assert admin_calls
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_get_pal24_payment_status_auto_finalize(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = DummyBot()
     service = _make_service(bot)
@@ -1273,7 +1268,7 @@ async def test_get_pal24_payment_status_auto_finalize(monkeypatch: pytest.Monkey
     assert transactions and transactions[0]['user_id'] == 91
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_process_pal24_callback_payment_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = DummyBot()
     service = _make_service(bot)

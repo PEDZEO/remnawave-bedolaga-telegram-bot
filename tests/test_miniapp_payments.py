@@ -37,11 +37,6 @@ from app.webapi.schemas.miniapp import (
 )
 
 
-@pytest.fixture
-def anyio_backend():
-    return 'asyncio'
-
-
 def test_compute_cryptobot_limits_scale_with_rate():
     low_rate_min, low_rate_max = miniapp._compute_cryptobot_limits(70.0)
     high_rate_min, high_rate_max = miniapp._compute_cryptobot_limits(120.0)
@@ -89,7 +84,7 @@ def test_encode_decode_renewal_payload_preserves_snapshot():
     assert decoded.pricing_snapshot.get('server_ids') == [1, 2]
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_submit_subscription_renewal_uses_balance_when_sufficient(monkeypatch):
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False, raising=False)
     monkeypatch.setattr(settings, 'BOT_TOKEN', 'token', raising=False)
@@ -168,7 +163,7 @@ async def test_submit_subscription_renewal_uses_balance_when_sufficient(monkeypa
     assert captured['charge'] == 10000
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_submit_subscription_renewal_returns_cryptobot_invoice(monkeypatch):
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False, raising=False)
     monkeypatch.setattr(settings, 'BOT_TOKEN', 'token', raising=False)
@@ -259,7 +254,7 @@ async def test_submit_subscription_renewal_returns_cryptobot_invoice(monkeypatch
     assert created_calls.get('description') == 'Продление подписки на 30 дней'
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_submit_subscription_renewal_rounds_up_cryptobot_amount(monkeypatch):
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False, raising=False)
     monkeypatch.setattr(settings, 'BOT_TOKEN', 'token', raising=False)
@@ -343,7 +338,7 @@ async def test_submit_subscription_renewal_rounds_up_cryptobot_amount(monkeypatc
     assert response.payment_amount_kopeks == 9512
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_cryptobot_renewal_uses_pricing_snapshot(monkeypatch):
     module = sys.modules['app.services.payment.cryptobot']
     mixin = CryptoBotPaymentMixin()
@@ -426,7 +421,7 @@ async def test_cryptobot_renewal_uses_pricing_snapshot(monkeypatch):
     assert captured['linked'] == ('INV-1', 999)
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_cryptobot_renewal_accepts_changed_pricing_without_snapshot(monkeypatch):
     module = sys.modules['app.services.payment.cryptobot']
     mixin = CryptoBotPaymentMixin()
@@ -503,7 +498,7 @@ async def test_cryptobot_renewal_accepts_changed_pricing_without_snapshot(monkey
     assert captured['charge'] == 4000
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_cryptobot_webhook_uses_inline_payload_when_db_missing(monkeypatch):
     module = sys.modules['app.services.payment.cryptobot']
     mixin = CryptoBotPaymentMixin()
@@ -624,7 +619,7 @@ async def test_cryptobot_webhook_uses_inline_payload_when_db_missing(monkeypatch
     assert linked['value'] == (payment.invoice_id, 1234)
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_payment_link_pal24_uses_selected_option(monkeypatch):
     monkeypatch.setattr(settings, 'PAL24_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'PAL24_API_TOKEN', 'token', raising=False)
@@ -671,7 +666,7 @@ async def test_create_payment_link_pal24_uses_selected_option(monkeypatch):
     assert captured_calls and captured_calls[0]['payment_method'] == 'card'
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_payment_link_wata_returns_payload(monkeypatch):
     monkeypatch.setattr(settings, 'WATA_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'WATA_ACCESS_TOKEN', 'token', raising=False)
@@ -722,7 +717,7 @@ async def test_create_payment_link_wata_returns_payload(monkeypatch):
     assert captured_call.get('description')
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_resolve_yookassa_status_includes_identifiers(monkeypatch):
     payment = types.SimpleNamespace(
         id=55,
@@ -769,7 +764,7 @@ async def test_resolve_yookassa_status_includes_identifiers(monkeypatch):
     assert result.extra['started_at'] == '2024-01-01T00:00:00Z'
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_resolve_payment_status_supports_yookassa_sbp(monkeypatch):
     payment = types.SimpleNamespace(
         id=77,
@@ -821,7 +816,7 @@ async def test_resolve_payment_status_supports_yookassa_sbp(monkeypatch):
     assert result.extra['started_at'] == '2024-05-01T10:00:00Z'
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_resolve_pal24_status_includes_identifiers(monkeypatch):
     async def fake_get_pal24_payment_by_bill_id(db, bill_id):
         return None
@@ -884,7 +879,7 @@ async def test_resolve_pal24_status_includes_identifiers(monkeypatch):
     assert result.extra['remote_status'] == 'PAID'
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_resolve_wata_payment_status_success():
     paid_at = datetime.now(UTC)
     payment = types.SimpleNamespace(
@@ -936,7 +931,7 @@ async def test_resolve_wata_payment_status_success():
     assert result.extra['started_at'] == '2024-06-01T12:00:00Z'
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_resolve_wata_payment_status_uses_payment_link_lookup(monkeypatch):
     created_at = datetime.now(UTC)
     payment = types.SimpleNamespace(
@@ -990,7 +985,7 @@ async def test_resolve_wata_payment_status_uses_payment_link_lookup(monkeypatch)
     assert 'transaction' not in result.extra
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_payment_link_stars_normalizes_amount(monkeypatch):
     monkeypatch.setattr(settings, 'TELEGRAM_STARS_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'TELEGRAM_STARS_RATE_RUB', 1000.0, raising=False)
@@ -1054,7 +1049,7 @@ async def test_create_payment_link_stars_normalizes_amount(monkeypatch):
     assert captured.get('session_closed') is True
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_get_payment_methods_exposes_stars_min_amount(monkeypatch):
     monkeypatch.setattr(settings, 'TELEGRAM_STARS_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'TELEGRAM_STARS_RATE_RUB', 999.99, raising=False)
@@ -1076,7 +1071,7 @@ async def test_get_payment_methods_exposes_stars_min_amount(monkeypatch):
     assert stars_method.iframe_config is None
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_get_payment_methods_includes_wata(monkeypatch):
     monkeypatch.setattr(settings, 'WATA_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'WATA_ACCESS_TOKEN', 'token', raising=False)
@@ -1102,7 +1097,7 @@ async def test_get_payment_methods_includes_wata(monkeypatch):
     assert wata_method.iframe_config is None
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_get_payment_methods_marks_mulenpay_iframe(monkeypatch):
     monkeypatch.setattr(settings, 'MULENPAY_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'MULENPAY_API_KEY', 'api-key', raising=False)
@@ -1126,7 +1121,7 @@ async def test_get_payment_methods_marks_mulenpay_iframe(monkeypatch):
     assert str(mulenpay_method.iframe_config.expected_origin) == 'https://checkout.example'
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_find_recent_deposit_ignores_transactions_before_attempt():
     started_at = datetime(2024, 5, 1, 12, 0, 0, tzinfo=UTC)
 
@@ -1162,7 +1157,7 @@ async def test_find_recent_deposit_ignores_transactions_before_attempt():
     assert result is None
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_find_recent_deposit_accepts_recent_transactions():
     started_at = datetime(2024, 5, 1, 12, 0, 0, tzinfo=UTC)
 

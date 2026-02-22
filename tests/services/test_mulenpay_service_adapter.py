@@ -71,11 +71,6 @@ def _session_factory(responses: Sequence[Any]) -> Any:
     return _factory
 
 
-@pytest.fixture
-def anyio_backend() -> str:
-    return 'asyncio'
-
-
 def _enable_service(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(type(settings), 'is_mulenpay_enabled', lambda self: True, raising=False)
     monkeypatch.setattr(settings, 'MULENPAY_API_KEY', 'api', raising=False)
@@ -101,7 +96,7 @@ def test_format_and_signature(monkeypatch: pytest.MonkeyPatch) -> None:
     assert isinstance(signature, str) and len(signature) == 40
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_service(monkeypatch)
 
@@ -130,7 +125,7 @@ async def test_create_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert captured_payload['json_data']['language'] == 'ru'
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_payment_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_service(monkeypatch)
     service = MulenPayService()
@@ -149,7 +144,7 @@ async def test_create_payment_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result is None
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_get_payment(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_service(monkeypatch)
     service = MulenPayService()
@@ -162,7 +157,7 @@ async def test_get_payment(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result == {'id': 123, 'status': 'paid'}
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_request_success(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_service(monkeypatch)
     service = MulenPayService()
@@ -181,7 +176,7 @@ async def test_request_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result == response_payload
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_request_retries_on_server_error(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_service(monkeypatch)
     service = MulenPayService()
@@ -212,7 +207,7 @@ async def test_request_retries_on_server_error(monkeypatch: pytest.MonkeyPatch) 
     assert sleep_calls == [service._retry_delay]
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_request_returns_none_after_timeouts(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_service(monkeypatch)
     service = MulenPayService()
@@ -235,7 +230,7 @@ async def test_request_returns_none_after_timeouts(monkeypatch: pytest.MonkeyPat
     assert result is None
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_request_reraises_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_service(monkeypatch)
     service = MulenPayService()

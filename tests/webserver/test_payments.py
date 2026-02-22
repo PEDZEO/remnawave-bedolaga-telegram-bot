@@ -61,7 +61,7 @@ def _build_request(
     return Request(scope, receive)
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_tribute_webhook_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'TRIBUTE_ENABLED', True, raising=False)
 
@@ -99,7 +99,7 @@ async def test_tribute_webhook_success(monkeypatch: pytest.MonkeyPatch) -> None:
     process_mock.assert_awaited_once()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_yookassa_unknown_ip(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'YOOKASSA_ENABLED', True, raising=False)
 
@@ -124,7 +124,7 @@ async def test_yookassa_unknown_ip(monkeypatch: pytest.MonkeyPatch) -> None:
     service.process_yookassa_webhook.assert_not_awaited()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_yookassa_forbidden_ip(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'YOOKASSA_ENABLED', True, raising=False)
 
@@ -150,7 +150,7 @@ async def test_yookassa_forbidden_ip(monkeypatch: pytest.MonkeyPatch) -> None:
     service.process_yookassa_webhook.assert_not_awaited()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_yookassa_forbidden_ip_ignores_spoofed_header(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'YOOKASSA_ENABLED', True, raising=False)
 
@@ -176,7 +176,7 @@ async def test_yookassa_forbidden_ip_ignores_spoofed_header(monkeypatch: pytest.
     service.process_yookassa_webhook.assert_not_awaited()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_yookassa_forbidden_ip_ignores_spoofed_forwarded_chain(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'YOOKASSA_ENABLED', True, raising=False)
 
@@ -202,7 +202,7 @@ async def test_yookassa_forbidden_ip_ignores_spoofed_forwarded_chain(monkeypatch
     service.process_yookassa_webhook.assert_not_awaited()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_yookassa_allowed_ip(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'YOOKASSA_ENABLED', True, raising=False)
 
@@ -233,7 +233,7 @@ async def test_yookassa_allowed_ip(monkeypatch: pytest.MonkeyPatch) -> None:
     process_mock.assert_awaited_once()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_yookassa_allowed_via_forwarded_header_when_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'YOOKASSA_ENABLED', True, raising=False)
 
@@ -264,7 +264,7 @@ async def test_yookassa_allowed_via_forwarded_header_when_proxy(monkeypatch: pyt
     process_mock.assert_awaited_once()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_yookassa_allowed_via_cf_connecting_ip(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'YOOKASSA_ENABLED', True, raising=False)
 
@@ -295,7 +295,7 @@ async def test_yookassa_allowed_via_cf_connecting_ip(monkeypatch: pytest.MonkeyP
     process_mock.assert_awaited_once()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_yookassa_allowed_via_trusted_forwarded_chain(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'YOOKASSA_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'YOOKASSA_TRUSTED_PROXY_NETWORKS', '203.0.113.0/24', raising=False)
@@ -327,7 +327,7 @@ async def test_yookassa_allowed_via_trusted_forwarded_chain(monkeypatch: pytest.
     process_mock.assert_awaited_once()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_yookassa_allowed_via_trusted_public_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'YOOKASSA_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'YOOKASSA_TRUSTED_PROXY_NETWORKS', '198.51.100.0/24', raising=False)
@@ -359,7 +359,7 @@ async def test_yookassa_allowed_via_trusted_public_proxy(monkeypatch: pytest.Mon
     process_mock.assert_awaited_once()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_yookassa_webhook_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'YOOKASSA_ENABLED', True, raising=False)
 
@@ -391,7 +391,7 @@ async def test_yookassa_webhook_success(monkeypatch: pytest.MonkeyPatch) -> None
     process_mock.assert_awaited_once()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_yookassa_webhook_cancellation(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'YOOKASSA_ENABLED', True, raising=False)
 
@@ -423,7 +423,7 @@ async def test_yookassa_webhook_cancellation(monkeypatch: pytest.MonkeyPatch) ->
     process_mock.assert_awaited_once()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_yookassa_webhook_with_signature(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'YOOKASSA_ENABLED', True, raising=False)
 
@@ -455,7 +455,7 @@ async def test_yookassa_webhook_with_signature(monkeypatch: pytest.MonkeyPatch) 
     process_mock.assert_awaited_once()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_cryptobot_missing_signature(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'CRYPTOBOT_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'CRYPTOBOT_API_TOKEN', 'token', raising=False)
@@ -478,7 +478,7 @@ async def test_cryptobot_missing_signature(monkeypatch: pytest.MonkeyPatch) -> N
     assert payload['reason'] == 'missing_signature'
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_cryptobot_invalid_signature(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'CRYPTOBOT_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'CRYPTOBOT_API_TOKEN', 'token', raising=False)
