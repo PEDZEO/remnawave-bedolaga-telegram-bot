@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.21.0](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.20.0...v3.21.0) (2026-02-22)
+
+
+### New Features
+
+* **cabinet:** add menu layout stats endpoints ([4ea3c5f](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/4ea3c5f87e4562f40eb20bb7361f72e201953025))
+
 ## [3.20.0](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.19.0...v3.20.0) (2026-02-22)
 
 
