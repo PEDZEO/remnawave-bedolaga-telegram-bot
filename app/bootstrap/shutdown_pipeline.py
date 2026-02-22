@@ -67,6 +67,19 @@ def _build_runtime_shutdown_kwargs(
     }
 
 
+def _build_web_shutdown_kwargs(
+    *,
+    bot: Bot | None,
+    web_api_server: WebAPIServerLike | None,
+    telegram_webhook_enabled: bool,
+) -> dict[str, object]:
+    return {
+        'bot': bot,
+        'web_api_server': web_api_server,
+        'telegram_webhook_enabled': telegram_webhook_enabled,
+    }
+
+
 async def run_shutdown_pipeline(
     timeline: StartupTimeline,
     logger: LoggerLike,
@@ -103,9 +116,11 @@ async def run_shutdown_pipeline(
     )
     await _run_web_shutdown_stage(
         logger,
-        bot=bot,
-        web_api_server=web_api_server,
-        telegram_webhook_enabled=telegram_webhook_enabled,
+        **_build_web_shutdown_kwargs(
+            bot=bot,
+            web_api_server=web_api_server,
+            telegram_webhook_enabled=telegram_webhook_enabled,
+        ),
     )
 
     logger.info('✅ Завершение работы бота завершено')

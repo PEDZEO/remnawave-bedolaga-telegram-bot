@@ -4,7 +4,11 @@ import pytest
 
 from app.bootstrap.runtime_execution import run_runtime_loop_stage
 from app.bootstrap.runtime_tasks_startup import start_runtime_tasks_stage
-from app.bootstrap.shutdown_pipeline import _build_runtime_shutdown_kwargs, run_shutdown_pipeline
+from app.bootstrap.shutdown_pipeline import (
+    _build_runtime_shutdown_kwargs,
+    _build_web_shutdown_kwargs,
+    run_shutdown_pipeline,
+)
 
 
 @pytest.mark.asyncio
@@ -189,4 +193,21 @@ def test_build_runtime_shutdown_kwargs_maps_all_fields() -> None:
         'daily_subscription_task': daily_subscription_task,
         'polling_task': polling_task,
         'dp': dp,
+    }
+
+
+def test_build_web_shutdown_kwargs_maps_all_fields() -> None:
+    bot = object()
+    web_api_server = object()
+
+    kwargs = _build_web_shutdown_kwargs(
+        bot=bot,
+        web_api_server=web_api_server,
+        telegram_webhook_enabled=True,
+    )
+
+    assert kwargs == {
+        'bot': bot,
+        'web_api_server': web_api_server,
+        'telegram_webhook_enabled': True,
     }
