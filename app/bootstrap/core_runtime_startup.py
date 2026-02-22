@@ -42,6 +42,22 @@ class CoreRuntimeStartupContext:
     web_api_server: WebAPIServer | None
 
 
+@dataclass(frozen=True)
+class RuntimeModeFlags:
+    polling_enabled: bool
+    telegram_webhook_enabled: bool
+    payment_webhooks_enabled: bool
+
+
+def _resolve_runtime_flags() -> RuntimeModeFlags:
+    polling_enabled, telegram_webhook_enabled, payment_webhooks_enabled = resolve_runtime_mode()
+    return RuntimeModeFlags(
+        polling_enabled=polling_enabled,
+        telegram_webhook_enabled=telegram_webhook_enabled,
+        payment_webhooks_enabled=payment_webhooks_enabled,
+    )
+
+
 async def start_core_runtime_stage(
     timeline: StartupTimeline,
     logger: LoggerLike,
@@ -72,20 +88,20 @@ async def start_core_runtime_stage(
     await start_nalogo_queue_stage(timeline, logger, payment_service)
     await initialize_external_admin_stage(timeline, logger, bot)
 
-    polling_enabled, telegram_webhook_enabled, payment_webhooks_enabled = resolve_runtime_mode()
+    runtime_flags = _resolve_runtime_flags()
     _web_app, web_api_server = await start_web_server_stage(
         timeline,
         bot,
         dp,
         payment_service,
-        telegram_webhook_enabled=telegram_webhook_enabled,
-        payment_webhooks_enabled=payment_webhooks_enabled,
+        telegram_webhook_enabled=runtime_flags.telegram_webhook_enabled,
+        payment_webhooks_enabled=runtime_flags.payment_webhooks_enabled,
     )
     await configure_telegram_webhook_stage(
         timeline,
         bot,
         dp,
-        telegram_webhook_enabled=telegram_webhook_enabled,
+        telegram_webhook_enabled=runtime_flags.telegram_webhook_enabled,
     )
 
     return CoreRuntimeStartupContext(
@@ -94,7 +110,7 @@ async def start_core_runtime_stage(
         payment_service=payment_service,
         verification_providers=verification_providers,
         auto_verification_active=auto_verification_active,
-        polling_enabled=polling_enabled,
-        telegram_webhook_enabled=telegram_webhook_enabled,
+        polling_enabled=runtime_flags.polling_enabled,
+        telegram_webhook_enabled=runtime_flags.telegram_webhook_enabled,
         web_api_server=web_api_server,
     )
