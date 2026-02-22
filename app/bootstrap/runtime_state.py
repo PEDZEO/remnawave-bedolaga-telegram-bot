@@ -19,6 +19,7 @@ class ShutdownPayload(TypedDict):
     traffic_monitoring_task: asyncio.Task | None
     daily_subscription_task: asyncio.Task | None
     polling_task: asyncio.Task | None
+    dp: Dispatcher | None
     bot: Bot | None
     web_api_server: WebAPIServerLike | None
     telegram_webhook_enabled: bool
@@ -66,6 +67,7 @@ class RuntimeState:
             'traffic_monitoring_task': self.traffic_monitoring_task,
             'daily_subscription_task': self.daily_subscription_task,
             'polling_task': self.polling_task,
+            'dp': self.dp,
             'bot': self.bot,
             'web_api_server': self.web_api_server,
             'telegram_webhook_enabled': self.telegram_webhook_enabled,

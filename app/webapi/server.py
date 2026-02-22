@@ -106,5 +106,14 @@ class WebAPIServer:
 
         logger.info('🛑 Остановка административного API')
         self._server.should_exit = True
-        await self._task
+        try:
+            await asyncio.wait_for(self._task, timeout=10)
+        except TimeoutError:
+            logger.warning('Превышен таймаут остановки веб-API, форсируем завершение')
+            self._server.force_exit = True
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
         self._task = None

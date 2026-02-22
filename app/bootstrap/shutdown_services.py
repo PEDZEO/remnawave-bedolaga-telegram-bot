@@ -1,5 +1,7 @@
 import asyncio
 
+from aiogram import Dispatcher
+
 from app.bootstrap.types import LoggerLike
 from app.config import settings
 from app.services.backup_service import backup_service
@@ -34,6 +36,7 @@ async def shutdown_runtime_services(
     traffic_monitoring_task: asyncio.Task | None,
     daily_subscription_task: asyncio.Task | None,
     polling_task: asyncio.Task | None,
+    dp: Dispatcher | None,
 ) -> None:
     logger.info('ℹ️ Остановка сервиса автопроверки пополнений...')
     try:
@@ -110,4 +113,9 @@ async def shutdown_runtime_services(
 
     if polling_task and not polling_task.done():
         logger.info('ℹ️ Остановка polling...')
+        if dp is not None:
+            try:
+                await dp.stop_polling()
+            except Exception as error:
+                logger.error('Ошибка корректной остановки polling', error=error)
     await _cancel_task_if_running(polling_task)

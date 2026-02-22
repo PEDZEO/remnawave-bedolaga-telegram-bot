@@ -98,6 +98,7 @@ async def test_run_shutdown_pipeline_calls_shutdown_stages(monkeypatch):
         traffic_monitoring_task=None,
         daily_subscription_task=None,
         polling_task=None,
+        dp=None,
         bot=None,
         web_api_server=None,
         telegram_webhook_enabled=False,

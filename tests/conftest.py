@@ -262,30 +262,44 @@ def pytest_configure(config: pytest.Config) -> None:
     )
 
 
-def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    """Close orphaned default event loop to avoid unraisable ResourceWarning at interpreter shutdown."""
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', category=DeprecationWarning)
-        try:
-            loop = asyncio.get_event_loop_policy().get_event_loop()
-        except RuntimeError:
-            return
-
-    if loop.is_running():
+def _close_event_loop(loop: asyncio.AbstractEventLoop | None) -> None:
+    if loop is None or loop.is_running() or loop.is_closed():
+        return
+    try:
+        loop.close()
+    except Exception:
         return
 
-    if not loop.is_closed():
-        loop.close()
 
+def _close_orphan_event_loops() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', category=DeprecationWarning)
+        policy = asyncio.get_event_loop_policy()
+        try:
+            current_loop = policy.get_event_loop()
+        except RuntimeError:
+            current_loop = None
+
+    _close_event_loop(current_loop)
     asyncio.set_event_loop(None)
 
-    # Defensive cleanup for orphan loops created indirectly by async integrations.
+    policy_local = getattr(policy, '_local', None)
+    if policy_local is not None:
+        for value in vars(policy_local).values():
+            if isinstance(value, asyncio.AbstractEventLoop):
+                _close_event_loop(value)
+
     for obj in gc.get_objects():
-        if not isinstance(obj, asyncio.AbstractEventLoop):
-            continue
-        if obj.is_closed() or obj.is_running():
-            continue
-        try:
-            obj.close()
-        except Exception:
-            continue
+        if isinstance(obj, asyncio.AbstractEventLoop):
+            _close_event_loop(obj)
+
+    gc.collect()
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """Close orphaned default event loop to avoid unraisable ResourceWarning at interpreter shutdown."""
+    _close_orphan_event_loops()
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    _close_orphan_event_loops()

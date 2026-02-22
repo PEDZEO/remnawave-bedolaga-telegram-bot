@@ -1,6 +1,6 @@
 import asyncio
 
-from aiogram import Bot
+from aiogram import Bot, Dispatcher
 
 from app.bootstrap.shutdown_services import shutdown_runtime_services
 from app.bootstrap.shutdown_web import shutdown_web_runtime
@@ -19,6 +19,7 @@ async def run_shutdown_pipeline(
     traffic_monitoring_task: asyncio.Task | None,
     daily_subscription_task: asyncio.Task | None,
     polling_task: asyncio.Task | None,
+    dp: Dispatcher | None,
     bot: Bot | None,
     web_api_server: WebAPIServerLike | None,
     telegram_webhook_enabled: bool,
@@ -37,6 +38,7 @@ async def run_shutdown_pipeline(
         traffic_monitoring_task=traffic_monitoring_task,
         daily_subscription_task=daily_subscription_task,
         polling_task=polling_task,
+        dp=dp,
     )
     await shutdown_web_runtime(
         logger,
