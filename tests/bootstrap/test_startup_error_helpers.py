@@ -178,7 +178,9 @@ async def test_initialize_backup_stage_uses_shared_error_helper(monkeypatch: pyt
     helper = MagicMock()
 
     monkeypatch.setattr(backup_startup, 'warn_startup_stage_error', helper)
-    monkeypatch.setattr(backup_startup.backup_service, 'get_backup_settings', AsyncMock(side_effect=RuntimeError('boom')))
+    monkeypatch.setattr(
+        backup_startup.backup_service, 'get_backup_settings', AsyncMock(side_effect=RuntimeError('boom'))
+    )
 
     await backup_startup.initialize_backup_stage(timeline, logger, bot)
 

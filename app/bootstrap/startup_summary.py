@@ -68,8 +68,7 @@ def log_startup_summary(
     ]
     services_lines.append('Проверка пополнений: ' + ('Включена' if verification_providers else 'Отключена'))
     services_lines.append(
-        'Автопроверка пополнений: '
-        + ('Включена' if auto_payment_verification_service.is_running() else 'Отключена')
+        'Автопроверка пополнений: ' + ('Включена' if auto_payment_verification_service.is_running() else 'Отключена')
     )
     timeline.log_section('Активные фоновые сервисы', services_lines, icon='📄')
 

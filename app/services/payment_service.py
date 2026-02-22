@@ -98,7 +98,10 @@ _CRUD_FUNCTIONS: Final[dict[str, CrudFunctionRef]] = {
     'update_heleket_payment': ('app.database.crud.heleket', 'update_heleket_payment'),
     'link_heleket_payment_to_transaction': ('app.database.crud.heleket', 'link_heleket_payment_to_transaction'),
     'create_cloudpayments_payment': ('app.database.crud.cloudpayments', 'create_cloudpayments_payment'),
-    'get_cloudpayments_payment_by_invoice_id': ('app.database.crud.cloudpayments', 'get_cloudpayments_payment_by_invoice_id'),
+    'get_cloudpayments_payment_by_invoice_id': (
+        'app.database.crud.cloudpayments',
+        'get_cloudpayments_payment_by_invoice_id',
+    ),
     'get_cloudpayments_payment_by_id': ('app.database.crud.cloudpayments', 'get_cloudpayments_payment_by_id'),
     'update_cloudpayments_payment': ('app.database.crud.cloudpayments', 'update_cloudpayments_payment'),
 }

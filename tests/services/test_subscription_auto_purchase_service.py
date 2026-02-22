@@ -157,6 +157,7 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
         'app.services.subscription_auto_purchase_service.MiniAppSubscriptionPurchaseService',
         DummyMiniAppService,
     )
+
     async def get_user_cart_stub(_user_id):
         return cart_data
 
@@ -203,6 +204,7 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
         'app.services.subscription_auto_purchase_service.AdminNotificationService',
         lambda bot: admin_service,
     )
+
     # Мокаем get_user_by_id чтобы вернуть того же user
     async def get_user_by_id_stub(*args, **kwargs):
         return user
@@ -331,7 +333,9 @@ async def test_auto_purchase_saved_cart_after_topup_extension(monkeypatch):
         'app.services.subscription_auto_purchase_service.user_cart_service.delete_user_cart',
         delete_user_cart_stub,
     )
-    monkeypatch.setattr('app.services.subscription_auto_purchase_service.clear_subscription_checkout_draft', clear_checkout_draft_stub)
+    monkeypatch.setattr(
+        'app.services.subscription_auto_purchase_service.clear_subscription_checkout_draft', clear_checkout_draft_stub
+    )
 
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.get_texts',

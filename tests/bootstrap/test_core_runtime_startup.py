@@ -51,6 +51,7 @@ async def test_start_core_runtime_stage_propagates_runtime_mode_flags(monkeypatc
     monkeypatch.setattr(startup, 'initialize_log_rotation_stage', AsyncMock())
     monkeypatch.setattr(startup, 'initialize_remnawave_sync_stage', AsyncMock())
     monkeypatch.setattr(startup, 'setup_payment_runtime', lambda _bot: payment_service)
+
     async def _initialize_payment_verification_stage(*_args, **_kwargs):
         call_order.append('payment_verification')
         return ['provider-1'], True

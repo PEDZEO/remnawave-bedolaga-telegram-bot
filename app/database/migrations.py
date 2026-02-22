@@ -54,9 +54,7 @@ _LEGACY_REVISION_REMAP: dict[str, str] = {
 async def _get_current_alembic_revision(conn) -> str | None:
     """Return current revision from alembic_version table, if present."""
     revision = (
-        await conn.execute(
-            text('SELECT version_num FROM alembic_version ORDER BY version_num LIMIT 1')
-        )
+        await conn.execute(text('SELECT version_num FROM alembic_version ORDER BY version_num LIMIT 1'))
     ).scalar_one_or_none()
     if revision is None:
         return None
