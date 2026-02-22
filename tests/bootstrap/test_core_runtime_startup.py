@@ -33,6 +33,7 @@ async def test_start_core_runtime_stage_propagates_runtime_mode_flags(monkeypatc
     dp = MagicMock()
     payment_service = MagicMock()
     web_api_server = MagicMock()
+    call_order: list[str] = []
 
     monkeypatch.setattr(startup, 'run_database_migration_stage', AsyncMock())
     monkeypatch.setattr(startup, 'initialize_database_stage', AsyncMock())
@@ -50,13 +51,27 @@ async def test_start_core_runtime_stage_propagates_runtime_mode_flags(monkeypatc
     monkeypatch.setattr(startup, 'initialize_log_rotation_stage', AsyncMock())
     monkeypatch.setattr(startup, 'initialize_remnawave_sync_stage', AsyncMock())
     monkeypatch.setattr(startup, 'setup_payment_runtime', lambda _bot: payment_service)
+    async def _initialize_payment_verification_stage(*_args, **_kwargs):
+        call_order.append('payment_verification')
+        return ['provider-1'], True
+
+    async def _start_nalogo_queue_stage(*_args, **_kwargs):
+        call_order.append('nalogo_queue')
+
+    async def _initialize_external_admin_stage(*_args, **_kwargs):
+        call_order.append('external_admin')
+
     monkeypatch.setattr(
         startup,
         'initialize_payment_verification_stage',
-        AsyncMock(return_value=(['provider-1'], True)),
+        AsyncMock(side_effect=_initialize_payment_verification_stage),
     )
-    monkeypatch.setattr(startup, 'start_nalogo_queue_stage', AsyncMock())
-    monkeypatch.setattr(startup, 'initialize_external_admin_stage', AsyncMock())
+    monkeypatch.setattr(startup, 'start_nalogo_queue_stage', AsyncMock(side_effect=_start_nalogo_queue_stage))
+    monkeypatch.setattr(
+        startup,
+        'initialize_external_admin_stage',
+        AsyncMock(side_effect=_initialize_external_admin_stage),
+    )
     monkeypatch.setattr(
         startup,
         'resolve_runtime_mode',
@@ -93,3 +108,4 @@ async def test_start_core_runtime_stage_propagates_runtime_mode_flags(monkeypatc
         dp,
         telegram_webhook_enabled=True,
     )
+    assert call_order == ['payment_verification', 'nalogo_queue', 'external_admin']

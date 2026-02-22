@@ -49,12 +49,34 @@ class RuntimeModeFlags:
     payment_webhooks_enabled: bool
 
 
+@dataclass(frozen=True)
+class PostPaymentBootstrapResult:
+    verification_providers: list[str]
+    auto_verification_active: bool
+
+
 def _resolve_runtime_flags() -> RuntimeModeFlags:
     polling_enabled, telegram_webhook_enabled, payment_webhooks_enabled = resolve_runtime_mode()
     return RuntimeModeFlags(
         polling_enabled=polling_enabled,
         telegram_webhook_enabled=telegram_webhook_enabled,
         payment_webhooks_enabled=payment_webhooks_enabled,
+    )
+
+
+async def _run_post_payment_bootstrap(
+    timeline: StartupTimeline,
+    logger: LoggerLike,
+    *,
+    bot: Bot,
+    payment_service: PaymentService,
+) -> PostPaymentBootstrapResult:
+    verification_providers, auto_verification_active = await initialize_payment_verification_stage(timeline)
+    await start_nalogo_queue_stage(timeline, logger, payment_service)
+    await initialize_external_admin_stage(timeline, logger, bot)
+    return PostPaymentBootstrapResult(
+        verification_providers=verification_providers,
+        auto_verification_active=auto_verification_active,
     )
 
 
@@ -84,9 +106,12 @@ async def start_core_runtime_stage(
     await initialize_remnawave_sync_stage(timeline, logger)
 
     payment_service = setup_payment_runtime(bot)
-    verification_providers, auto_verification_active = await initialize_payment_verification_stage(timeline)
-    await start_nalogo_queue_stage(timeline, logger, payment_service)
-    await initialize_external_admin_stage(timeline, logger, bot)
+    post_payment_bootstrap_result = await _run_post_payment_bootstrap(
+        timeline,
+        logger,
+        bot=bot,
+        payment_service=payment_service,
+    )
 
     runtime_flags = _resolve_runtime_flags()
     _web_app, web_api_server = await start_web_server_stage(
@@ -108,8 +133,8 @@ async def start_core_runtime_stage(
         bot=bot,
         dp=dp,
         payment_service=payment_service,
-        verification_providers=verification_providers,
-        auto_verification_active=auto_verification_active,
+        verification_providers=post_payment_bootstrap_result.verification_providers,
+        auto_verification_active=post_payment_bootstrap_result.auto_verification_active,
         polling_enabled=runtime_flags.polling_enabled,
         telegram_webhook_enabled=runtime_flags.telegram_webhook_enabled,
         web_api_server=web_api_server,
