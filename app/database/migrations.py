@@ -42,6 +42,18 @@ _LEGACY_REVISION_REMAP: dict[str, str] = {
 }
 
 
+async def _get_current_alembic_revision(conn) -> str | None:
+    """Return current revision from alembic_version table, if present."""
+    revision = (
+        await conn.execute(
+            text('SELECT version_num FROM alembic_version ORDER BY version_num LIMIT 1')
+        )
+    ).scalar_one_or_none()
+    if revision is None:
+        return None
+    return str(revision)
+
+
 async def _remap_legacy_revision_if_needed() -> bool:
     """Rewrite known obsolete alembic_version values to current chain nodes."""
     from app.database.database import engine
@@ -51,26 +63,22 @@ async def _remap_legacy_revision_if_needed() -> bool:
         if not has_alembic:
             return False
 
-        current_revision = (
-            await conn.execute(
-                text('SELECT version_num FROM alembic_version ORDER BY version_num LIMIT 1')
-            )
-        ).scalar_one_or_none()
+        current_revision = await _get_current_alembic_revision(conn)
         if current_revision is None:
             return False
 
-        target_revision = _LEGACY_REVISION_REMAP.get(str(current_revision))
+        target_revision = _LEGACY_REVISION_REMAP.get(current_revision)
         if target_revision is None:
             return False
 
         await conn.execute(
             text('UPDATE alembic_version SET version_num = :target WHERE version_num = :current'),
-            {'target': target_revision, 'current': str(current_revision)},
+            {'target': target_revision, 'current': current_revision},
         )
 
     logger.warning(
         'Alembic revision remap applied for legacy database snapshot',
-        from_revision=str(current_revision),
+        from_revision=current_revision,
         to_revision=target_revision,
     )
     return True
