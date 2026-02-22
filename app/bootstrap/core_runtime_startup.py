@@ -50,6 +50,12 @@ class RuntimeModeFlags:
 
 
 @dataclass(frozen=True)
+class PreRuntimeBootstrapResult:
+    bot: Bot
+    dp: Dispatcher
+
+
+@dataclass(frozen=True)
 class PostPaymentBootstrapResult:
     verification_providers: list[str]
     auto_verification_active: bool
@@ -62,6 +68,33 @@ def _resolve_runtime_flags() -> RuntimeModeFlags:
         telegram_webhook_enabled=telegram_webhook_enabled,
         payment_webhooks_enabled=payment_webhooks_enabled,
     )
+
+
+async def _run_pre_runtime_bootstrap(
+    timeline: StartupTimeline,
+    logger: LoggerLike,
+    telegram_notifier: TelegramNotifierLike,
+) -> PreRuntimeBootstrapResult:
+    await run_database_migration_stage(timeline, logger)
+    await initialize_database_stage(timeline)
+    await sync_tariffs_stage(timeline, logger)
+    await sync_servers_stage(timeline, logger)
+    await initialize_payment_methods_stage(timeline, logger)
+    await load_bot_configuration_stage(timeline, logger)
+
+    bot, dp = await setup_bot_stage(timeline)
+    wire_core_services(bot, telegram_notifier)
+    await connect_integration_services_stage(timeline, bot)
+
+    await initialize_backup_stage(timeline, logger, bot)
+    await initialize_reporting_stage(timeline, logger, bot)
+    await initialize_referral_contests_stage(timeline, logger)
+    await initialize_contest_rotation_stage(timeline, logger, bot)
+    if settings.is_log_rotation_enabled():
+        await initialize_log_rotation_stage(timeline, logger, bot)
+
+    await initialize_remnawave_sync_stage(timeline, logger)
+    return PreRuntimeBootstrapResult(bot=bot, dp=dp)
 
 
 async def _run_post_payment_bootstrap(
@@ -85,25 +118,9 @@ async def start_core_runtime_stage(
     logger: LoggerLike,
     telegram_notifier: TelegramNotifierLike,
 ) -> CoreRuntimeStartupContext:
-    await run_database_migration_stage(timeline, logger)
-    await initialize_database_stage(timeline)
-    await sync_tariffs_stage(timeline, logger)
-    await sync_servers_stage(timeline, logger)
-    await initialize_payment_methods_stage(timeline, logger)
-    await load_bot_configuration_stage(timeline, logger)
-
-    bot, dp = await setup_bot_stage(timeline)
-    wire_core_services(bot, telegram_notifier)
-    await connect_integration_services_stage(timeline, bot)
-
-    await initialize_backup_stage(timeline, logger, bot)
-    await initialize_reporting_stage(timeline, logger, bot)
-    await initialize_referral_contests_stage(timeline, logger)
-    await initialize_contest_rotation_stage(timeline, logger, bot)
-    if settings.is_log_rotation_enabled():
-        await initialize_log_rotation_stage(timeline, logger, bot)
-
-    await initialize_remnawave_sync_stage(timeline, logger)
+    pre_runtime_bootstrap_result = await _run_pre_runtime_bootstrap(timeline, logger, telegram_notifier)
+    bot = pre_runtime_bootstrap_result.bot
+    dp = pre_runtime_bootstrap_result.dp
 
     payment_service = setup_payment_runtime(bot)
     post_payment_bootstrap_result = await _run_post_payment_bootstrap(

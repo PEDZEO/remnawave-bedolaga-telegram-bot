@@ -109,3 +109,125 @@ async def test_start_core_runtime_stage_propagates_runtime_mode_flags(monkeypatc
         telegram_webhook_enabled=True,
     )
     assert call_order == ['payment_verification', 'nalogo_queue', 'external_admin']
+
+
+@pytest.mark.asyncio
+async def test_run_pre_runtime_bootstrap_preserves_sequence_and_bot_handoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    startup = importlib.import_module('app.bootstrap.core_runtime_startup')
+    if not hasattr(startup, 'run_database_migration_stage'):
+        sys.modules.pop('app.bootstrap.core_runtime_startup', None)
+        startup = importlib.import_module('app.bootstrap.core_runtime_startup')
+
+    timeline = MagicMock()
+    logger = MagicMock()
+    telegram_notifier = MagicMock()
+    bot = MagicMock()
+    dp = MagicMock()
+    call_order: list[str] = []
+
+    async def _run_database_migration_stage(*_args, **_kwargs):
+        call_order.append('db_migration')
+
+    async def _initialize_database_stage(*_args, **_kwargs):
+        call_order.append('db_init')
+
+    async def _sync_tariffs_stage(*_args, **_kwargs):
+        call_order.append('sync_tariffs')
+
+    async def _sync_servers_stage(*_args, **_kwargs):
+        call_order.append('sync_servers')
+
+    async def _initialize_payment_methods_stage(*_args, **_kwargs):
+        call_order.append('payment_methods')
+
+    async def _load_bot_configuration_stage(*_args, **_kwargs):
+        call_order.append('load_bot_config')
+
+    async def _setup_bot_stage(*_args, **_kwargs):
+        call_order.append('setup_bot')
+        return bot, dp
+
+    def _wire_core_services(*_args, **_kwargs):
+        call_order.append('wire_core_services')
+
+    async def _connect_integration_services_stage(*_args, **_kwargs):
+        call_order.append('connect_integrations')
+
+    async def _initialize_backup_stage(*_args, **_kwargs):
+        call_order.append('backup')
+
+    async def _initialize_reporting_stage(*_args, **_kwargs):
+        call_order.append('reporting')
+
+    async def _initialize_referral_contests_stage(*_args, **_kwargs):
+        call_order.append('referral_contests')
+
+    async def _initialize_contest_rotation_stage(*_args, **_kwargs):
+        call_order.append('contest_rotation')
+
+    async def _initialize_log_rotation_stage(*_args, **_kwargs):
+        call_order.append('log_rotation')
+
+    async def _initialize_remnawave_sync_stage(*_args, **_kwargs):
+        call_order.append('remnawave_sync')
+
+    monkeypatch.setattr(startup, 'run_database_migration_stage', AsyncMock(side_effect=_run_database_migration_stage))
+    monkeypatch.setattr(startup, 'initialize_database_stage', AsyncMock(side_effect=_initialize_database_stage))
+    monkeypatch.setattr(startup, 'sync_tariffs_stage', AsyncMock(side_effect=_sync_tariffs_stage))
+    monkeypatch.setattr(startup, 'sync_servers_stage', AsyncMock(side_effect=_sync_servers_stage))
+    monkeypatch.setattr(
+        startup,
+        'initialize_payment_methods_stage',
+        AsyncMock(side_effect=_initialize_payment_methods_stage),
+    )
+    monkeypatch.setattr(startup, 'load_bot_configuration_stage', AsyncMock(side_effect=_load_bot_configuration_stage))
+    monkeypatch.setattr(startup, 'setup_bot_stage', AsyncMock(side_effect=_setup_bot_stage))
+    monkeypatch.setattr(startup, 'wire_core_services', MagicMock(side_effect=_wire_core_services))
+    monkeypatch.setattr(
+        startup,
+        'connect_integration_services_stage',
+        AsyncMock(side_effect=_connect_integration_services_stage),
+    )
+    monkeypatch.setattr(startup, 'initialize_backup_stage', AsyncMock(side_effect=_initialize_backup_stage))
+    monkeypatch.setattr(startup, 'initialize_reporting_stage', AsyncMock(side_effect=_initialize_reporting_stage))
+    monkeypatch.setattr(
+        startup,
+        'initialize_referral_contests_stage',
+        AsyncMock(side_effect=_initialize_referral_contests_stage),
+    )
+    monkeypatch.setattr(
+        startup,
+        'initialize_contest_rotation_stage',
+        AsyncMock(side_effect=_initialize_contest_rotation_stage),
+    )
+    monkeypatch.setattr(startup, 'initialize_log_rotation_stage', AsyncMock(side_effect=_initialize_log_rotation_stage))
+    monkeypatch.setattr(
+        startup,
+        'initialize_remnawave_sync_stage',
+        AsyncMock(side_effect=_initialize_remnawave_sync_stage),
+    )
+    monkeypatch.setattr(startup, 'settings', types.SimpleNamespace(is_log_rotation_enabled=lambda: True))
+
+    result = await startup._run_pre_runtime_bootstrap(timeline, logger, telegram_notifier)
+
+    assert result.bot is bot
+    assert result.dp is dp
+    assert call_order == [
+        'db_migration',
+        'db_init',
+        'sync_tariffs',
+        'sync_servers',
+        'payment_methods',
+        'load_bot_config',
+        'setup_bot',
+        'wire_core_services',
+        'connect_integrations',
+        'backup',
+        'reporting',
+        'referral_contests',
+        'contest_rotation',
+        'log_rotation',
+        'remnawave_sync',
+    ]
