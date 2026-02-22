@@ -7,6 +7,19 @@ from app.bootstrap.types import KillerLike, LoggerLike, TelegramNotifierLike
 from app.utils.startup_timeline import StartupTimeline
 
 
+async def _start_and_apply_runtime_tasks(
+    timeline: StartupTimeline,
+    state: RuntimeState,
+) -> None:
+    runtime_startup_tasks = await start_runtime_tasks_stage(
+        timeline,
+        dp=state.dp,
+        bot=state.bot,
+        polling_enabled=state.polling_enabled,
+    )
+    state.apply_runtime_tasks(runtime_startup_tasks)
+
+
 async def run_startup_and_runtime_loop(
     timeline: StartupTimeline,
     logger: LoggerLike,
@@ -17,13 +30,7 @@ async def run_startup_and_runtime_loop(
     runtime_context = await start_core_runtime_stage(timeline, logger, telegram_notifier)
     state.apply_core_runtime(runtime_context)
 
-    runtime_startup_tasks = await start_runtime_tasks_stage(
-        timeline,
-        dp=state.dp,
-        bot=state.bot,
-        polling_enabled=state.polling_enabled,
-    )
-    state.apply_runtime_tasks(runtime_startup_tasks)
+    await _start_and_apply_runtime_tasks(timeline, state)
 
     await finalize_startup_stage(
         timeline,

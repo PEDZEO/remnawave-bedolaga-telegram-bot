@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import sys
 import types
 from unittest.mock import AsyncMock, MagicMock
@@ -20,7 +21,10 @@ if 'app.bootstrap.bot_startup' not in sys.modules:
 
 @pytest.mark.asyncio
 async def test_start_core_runtime_stage_propagates_runtime_mode_flags(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.bootstrap import core_runtime_startup as startup
+    startup = importlib.import_module('app.bootstrap.core_runtime_startup')
+    if not hasattr(startup, 'run_database_migration_stage'):
+        sys.modules.pop('app.bootstrap.core_runtime_startup', None)
+        startup = importlib.import_module('app.bootstrap.core_runtime_startup')
 
     timeline = MagicMock()
     logger = MagicMock()
