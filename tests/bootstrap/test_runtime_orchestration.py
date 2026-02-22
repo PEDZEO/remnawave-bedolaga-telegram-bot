@@ -103,6 +103,14 @@ async def test_run_runtime_loop_stage_returns_previous_state_on_error(monkeypatc
     assert runtime_tasks.polling_task is None
     assert auto_verification_active is True
     logger.error.assert_called_once()
+    watchdog_mock.assert_awaited_once()
+    called_runtime_tasks = watchdog_mock.await_args.args[2]
+    assert called_runtime_tasks.monitoring_task is None
+    assert called_runtime_tasks.maintenance_task is None
+    assert called_runtime_tasks.version_check_task is None
+    assert called_runtime_tasks.traffic_monitoring_task is None
+    assert called_runtime_tasks.daily_subscription_task is None
+    assert called_runtime_tasks.polling_task is None
 
 
 @pytest.mark.asyncio
