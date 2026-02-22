@@ -17,6 +17,13 @@ class RuntimePreflightContext:
     telegram_notifier: TelegramNotifierLike
 
 
+def _build_preflight_banner_metadata() -> list[tuple[str, str]]:
+    return [
+        ('Уровень логирования', settings.LOG_LEVEL),
+        ('Режим БД', settings.DATABASE_MODE),
+    ]
+
+
 async def prepare_runtime_preflight() -> RuntimePreflightContext:
     file_formatter, console_formatter, telegram_notifier = setup_logging()
     await configure_runtime_logging(file_formatter, console_formatter)
@@ -25,12 +32,7 @@ async def prepare_runtime_preflight() -> RuntimePreflightContext:
     # handled inside setup_logging() / logging_config.py.
     logger = structlog.get_logger(__name__)
     timeline = StartupTimeline(logger, 'Bedolaga Remnawave Bot')
-    timeline.log_banner(
-        [
-            ('Уровень логирования', settings.LOG_LEVEL),
-            ('Режим БД', settings.DATABASE_MODE),
-        ]
-    )
+    timeline.log_banner(_build_preflight_banner_metadata())
     await prepare_localizations(timeline, logger)
 
     return RuntimePreflightContext(
