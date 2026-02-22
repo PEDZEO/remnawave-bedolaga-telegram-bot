@@ -1,5 +1,7 @@
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Any
 
 from aiogram import Bot, Dispatcher
 
@@ -22,6 +24,14 @@ class RuntimeStartupTasks:
     polling_task: asyncio.Task | None
 
 
+async def _start_stage_task(
+    stage_startup: Callable[..., Awaitable[asyncio.Task | None]],
+    *args: Any,
+    **kwargs: Any,
+) -> asyncio.Task | None:
+    return await stage_startup(*args, **kwargs)
+
+
 async def start_runtime_tasks_stage(
     timeline: StartupTimeline,
     *,
@@ -29,12 +39,12 @@ async def start_runtime_tasks_stage(
     bot: Bot,
     polling_enabled: bool,
 ) -> RuntimeStartupTasks:
-    monitoring_task = await start_monitoring_stage(timeline)
-    maintenance_task = await start_maintenance_stage(timeline)
-    traffic_monitoring_task = await start_traffic_monitoring_stage(timeline)
-    daily_subscription_task = await start_daily_subscription_stage(timeline)
-    version_check_task = await start_version_check_stage(timeline)
-    polling_task = await start_polling_stage(timeline, dp, bot, polling_enabled=polling_enabled)
+    monitoring_task = await _start_stage_task(start_monitoring_stage, timeline)
+    maintenance_task = await _start_stage_task(start_maintenance_stage, timeline)
+    traffic_monitoring_task = await _start_stage_task(start_traffic_monitoring_stage, timeline)
+    daily_subscription_task = await _start_stage_task(start_daily_subscription_stage, timeline)
+    version_check_task = await _start_stage_task(start_version_check_stage, timeline)
+    polling_task = await _start_stage_task(start_polling_stage, timeline, dp, bot, polling_enabled=polling_enabled)
 
     return RuntimeStartupTasks(
         monitoring_task=monitoring_task,

@@ -9,6 +9,8 @@ from app.bootstrap.shutdown_pipeline import run_shutdown_pipeline
 
 @pytest.mark.asyncio
 async def test_start_runtime_tasks_stage_wires_all_startups(monkeypatch):
+    call_order: list[str] = []
+
     monitoring_task = object()
     maintenance_task = object()
     traffic_task = object()
@@ -16,12 +18,36 @@ async def test_start_runtime_tasks_stage_wires_all_startups(monkeypatch):
     version_task = object()
     polling_task = object()
 
-    start_monitoring = AsyncMock(return_value=monitoring_task)
-    start_maintenance = AsyncMock(return_value=maintenance_task)
-    start_traffic = AsyncMock(return_value=traffic_task)
-    start_daily = AsyncMock(return_value=daily_task)
-    start_version = AsyncMock(return_value=version_task)
-    start_polling = AsyncMock(return_value=polling_task)
+    async def _start_monitoring(*_args, **_kwargs):
+        call_order.append('monitoring')
+        return monitoring_task
+
+    async def _start_maintenance(*_args, **_kwargs):
+        call_order.append('maintenance')
+        return maintenance_task
+
+    async def _start_traffic(*_args, **_kwargs):
+        call_order.append('traffic')
+        return traffic_task
+
+    async def _start_daily(*_args, **_kwargs):
+        call_order.append('daily')
+        return daily_task
+
+    async def _start_version(*_args, **_kwargs):
+        call_order.append('version')
+        return version_task
+
+    async def _start_polling(*_args, **_kwargs):
+        call_order.append('polling')
+        return polling_task
+
+    start_monitoring = AsyncMock(side_effect=_start_monitoring)
+    start_maintenance = AsyncMock(side_effect=_start_maintenance)
+    start_traffic = AsyncMock(side_effect=_start_traffic)
+    start_daily = AsyncMock(side_effect=_start_daily)
+    start_version = AsyncMock(side_effect=_start_version)
+    start_polling = AsyncMock(side_effect=_start_polling)
 
     monkeypatch.setattr('app.bootstrap.runtime_tasks_startup.start_monitoring_stage', start_monitoring)
     monkeypatch.setattr('app.bootstrap.runtime_tasks_startup.start_maintenance_stage', start_maintenance)
@@ -49,6 +75,7 @@ async def test_start_runtime_tasks_stage_wires_all_startups(monkeypatch):
     start_daily.assert_awaited_once_with(timeline)
     start_version.assert_awaited_once_with(timeline)
     start_polling.assert_awaited_once_with(timeline, dp, bot, polling_enabled=False)
+    assert call_order == ['monitoring', 'maintenance', 'traffic', 'daily', 'version', 'polling']
 
 
 @pytest.mark.asyncio
