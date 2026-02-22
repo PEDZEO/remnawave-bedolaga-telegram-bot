@@ -39,6 +39,19 @@ async def _run_runtime_loop_and_apply_results(
     state.apply_runtime_tasks(runtime_tasks)
 
 
+def _build_startup_finalize_kwargs(state: RuntimeState) -> dict[str, object]:
+    return {
+        'bot': state.bot,
+        'telegram_webhook_enabled': state.telegram_webhook_enabled,
+        'monitoring_task': state.monitoring_task,
+        'maintenance_task': state.maintenance_task,
+        'traffic_monitoring_task': state.traffic_monitoring_task,
+        'daily_subscription_task': state.daily_subscription_task,
+        'version_check_task': state.version_check_task,
+        'verification_providers': state.verification_providers,
+    }
+
+
 async def run_startup_and_runtime_loop(
     timeline: StartupTimeline,
     logger: LoggerLike,
@@ -51,18 +64,7 @@ async def run_startup_and_runtime_loop(
 
     await _start_and_apply_runtime_tasks(timeline, state)
 
-    await finalize_startup_stage(
-        timeline,
-        logger,
-        bot=state.bot,
-        telegram_webhook_enabled=state.telegram_webhook_enabled,
-        monitoring_task=state.monitoring_task,
-        maintenance_task=state.maintenance_task,
-        traffic_monitoring_task=state.traffic_monitoring_task,
-        daily_subscription_task=state.daily_subscription_task,
-        version_check_task=state.version_check_task,
-        verification_providers=state.verification_providers,
-    )
+    await finalize_startup_stage(timeline, logger, **_build_startup_finalize_kwargs(state))
     state.summary_logged = True
 
     await _run_runtime_loop_and_apply_results(killer, logger, state)

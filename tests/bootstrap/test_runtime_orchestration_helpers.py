@@ -90,3 +90,28 @@ async def test_run_runtime_loop_and_apply_results_updates_state(monkeypatch: pyt
     )
     assert state.auto_verification_active is False
     state.apply_runtime_tasks.assert_called_once_with(runtime_tasks)
+
+
+def test_build_startup_finalize_kwargs_maps_runtime_state_fields() -> None:
+    state = MagicMock()
+    state.bot = object()
+    state.telegram_webhook_enabled = True
+    state.monitoring_task = object()
+    state.maintenance_task = object()
+    state.traffic_monitoring_task = object()
+    state.daily_subscription_task = object()
+    state.version_check_task = object()
+    state.verification_providers = ['provider-a']
+
+    kwargs = runtime_orchestration._build_startup_finalize_kwargs(state)
+
+    assert kwargs == {
+        'bot': state.bot,
+        'telegram_webhook_enabled': True,
+        'monitoring_task': state.monitoring_task,
+        'maintenance_task': state.maintenance_task,
+        'traffic_monitoring_task': state.traffic_monitoring_task,
+        'daily_subscription_task': state.daily_subscription_task,
+        'version_check_task': state.version_check_task,
+        'verification_providers': ['provider-a'],
+    }
