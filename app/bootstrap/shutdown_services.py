@@ -46,6 +46,26 @@ async def _safe_shutdown_call(
         logger.error(error_message, error=error)
 
 
+async def _shutdown_runtime_task(
+    logger: LoggerLike,
+    *,
+    task: asyncio.Task | None,
+    info_message: str,
+    shutdown_call: Callable[[], Awaitable[Any] | Any] | None = None,
+    error_message: str | None = None,
+) -> None:
+    if task and not task.done():
+        logger.info(info_message)
+        if shutdown_call is not None and error_message is not None:
+            try:
+                result = shutdown_call()
+                if inspect.isawaitable(result):
+                    await result
+            except Exception as error:
+                logger.error(error_message, error=error)
+    await _cancel_task_if_running(task)
+
+
 async def shutdown_runtime_services(
     logger: LoggerLike,
     *,
@@ -64,29 +84,39 @@ async def shutdown_runtime_services(
         shutdown_call=auto_payment_verification_service.stop,
     )
 
-    if monitoring_task and not monitoring_task.done():
-        logger.info('ℹ️ Остановка службы мониторинга...')
-        monitoring_service.stop_monitoring()
-    await _cancel_task_if_running(monitoring_task)
-
-    if maintenance_task and not maintenance_task.done():
-        logger.info('ℹ️ Остановка службы техработ...')
-        await maintenance_service.stop_monitoring()
-    await _cancel_task_if_running(maintenance_task)
-
-    if version_check_task and not version_check_task.done():
-        logger.info('ℹ️ Остановка сервиса проверки версий...')
-    await _cancel_task_if_running(version_check_task)
-
-    if traffic_monitoring_task and not traffic_monitoring_task.done():
-        logger.info('ℹ️ Остановка мониторинга трафика...')
-        traffic_monitoring_scheduler.stop_monitoring()
-    await _cancel_task_if_running(traffic_monitoring_task)
-
-    if daily_subscription_task and not daily_subscription_task.done():
-        logger.info('ℹ️ Остановка сервиса суточных подписок...')
-        daily_subscription_service.stop_monitoring()
-    await _cancel_task_if_running(daily_subscription_task)
+    await _shutdown_runtime_task(
+        logger,
+        task=monitoring_task,
+        info_message='ℹ️ Остановка службы мониторинга...',
+        shutdown_call=monitoring_service.stop_monitoring,
+        error_message='Ошибка остановки службы мониторинга',
+    )
+    await _shutdown_runtime_task(
+        logger,
+        task=maintenance_task,
+        info_message='ℹ️ Остановка службы техработ...',
+        shutdown_call=maintenance_service.stop_monitoring,
+        error_message='Ошибка остановки службы техработ',
+    )
+    await _shutdown_runtime_task(
+        logger,
+        task=version_check_task,
+        info_message='ℹ️ Остановка сервиса проверки версий...',
+    )
+    await _shutdown_runtime_task(
+        logger,
+        task=traffic_monitoring_task,
+        info_message='ℹ️ Остановка мониторинга трафика...',
+        shutdown_call=traffic_monitoring_scheduler.stop_monitoring,
+        error_message='Ошибка остановки мониторинга трафика',
+    )
+    await _shutdown_runtime_task(
+        logger,
+        task=daily_subscription_task,
+        info_message='ℹ️ Остановка сервиса суточных подписок...',
+        shutdown_call=daily_subscription_service.stop_monitoring,
+        error_message='Ошибка остановки сервиса суточных подписок',
+    )
 
     await _safe_shutdown_call(
         logger,
