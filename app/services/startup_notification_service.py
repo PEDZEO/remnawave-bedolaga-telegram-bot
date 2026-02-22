@@ -39,10 +39,11 @@ CRASH_ERROR_MESSAGE_MAX_LENGTH: Final[int] = 1000
 CRASH_ERROR_PREVIEW_LENGTH: Final[int] = 200
 
 # URL-ы
-GITHUB_BOT_URL: Final[str] = 'https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot'
-GITHUB_CABINET_URL: Final[str] = 'https://github.com/BEDOLAGA-DEV/bedolaga-cabinet'
+GITHUB_BOT_URL: Final[str] = 'https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot'
+GITHUB_CABINET_URL: Final[str] = 'https://github.com/PEDZEO/cabinet-frontend'
 COMMUNITY_URL: Final[str] = 'https://t.me/+wTdMtSWq8YdmZmVi'
-DEVELOPER_CONTACT_URL: Final[str] = 'https://t.me/fringg'
+DEVELOPER_CONTACT_URL: Final[str] = 'https://t.me/pedzeo'
+FORK_SIGNATURE: Final[str] = 'Fork PEDZEO'
 
 # Ключевые слова для определения типа ошибки
 WEBHOOK_ERROR_KEYWORDS: Final[tuple[str, ...]] = ('webhook', 'failed to resolve host')
@@ -231,7 +232,8 @@ class StartupNotificationService:
             timestamp = format_local_datetime(datetime.now(UTC), DATETIME_FORMAT)
 
             message = (
-                f'<b>Remnawave Bedolaga Bot</b>\n\n'
+                f'<b>Remnawave Bedolaga Bot</b>\n'
+                f'<i>{FORK_SIGNATURE}</i>\n\n'
                 f'✅ Бот успешно запущен\n\n'
                 f'<blockquote expandable>{system_info}</blockquote>\n\n'
                 f'<i>{timestamp}</i>'
@@ -415,7 +417,8 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
 
         # Текст сообщения
         message_text = (
-            f'<b>Remnawave Bedolaga Bot</b>\n\n'
+            f'<b>Remnawave Bedolaga Bot</b>\n'
+            f'<i>{FORK_SIGNATURE}</i>\n\n'
             f'❌ Бот упал с ошибкой\n\n'
             f'<b>Тип:</b> <code>{error_type}</code>\n'
             f'<b>Сообщение:</b> <code>{error_message[:CRASH_ERROR_PREVIEW_LENGTH]}</code>\n'
