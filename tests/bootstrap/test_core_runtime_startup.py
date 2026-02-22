@@ -278,3 +278,42 @@ async def test_run_web_startup_bootstrap_propagates_runtime_flags(monkeypatch: p
         dp,
         telegram_webhook_enabled=True,
     )
+
+
+def test_build_core_runtime_startup_context_maps_all_fields() -> None:
+    startup = importlib.import_module('app.bootstrap.core_runtime_startup')
+    if not hasattr(startup, '_build_core_runtime_startup_context'):
+        sys.modules.pop('app.bootstrap.core_runtime_startup', None)
+        startup = importlib.import_module('app.bootstrap.core_runtime_startup')
+
+    bot = MagicMock()
+    dp = MagicMock()
+    payment_service = MagicMock()
+    post_payment_bootstrap_result = startup.PostPaymentBootstrapResult(
+        verification_providers=['provider-a', 'provider-b'],
+        auto_verification_active=True,
+    )
+    runtime_flags = startup.RuntimeModeFlags(
+        polling_enabled=False,
+        telegram_webhook_enabled=True,
+        payment_webhooks_enabled=False,
+    )
+    web_startup_result = startup.WebStartupResult(web_api_server=MagicMock())
+
+    context = startup._build_core_runtime_startup_context(
+        bot=bot,
+        dp=dp,
+        payment_service=payment_service,
+        post_payment_bootstrap_result=post_payment_bootstrap_result,
+        runtime_flags=runtime_flags,
+        web_startup_result=web_startup_result,
+    )
+
+    assert context.bot is bot
+    assert context.dp is dp
+    assert context.payment_service is payment_service
+    assert context.verification_providers == ['provider-a', 'provider-b']
+    assert context.auto_verification_active is True
+    assert context.polling_enabled is False
+    assert context.telegram_webhook_enabled is True
+    assert context.web_api_server is web_startup_result.web_api_server

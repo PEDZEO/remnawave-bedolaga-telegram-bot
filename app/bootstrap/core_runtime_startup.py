@@ -143,6 +143,27 @@ async def _run_web_startup_bootstrap(
     return WebStartupResult(web_api_server=web_api_server)
 
 
+def _build_core_runtime_startup_context(
+    *,
+    bot: Bot,
+    dp: Dispatcher,
+    payment_service: PaymentService,
+    post_payment_bootstrap_result: PostPaymentBootstrapResult,
+    runtime_flags: RuntimeModeFlags,
+    web_startup_result: WebStartupResult,
+) -> CoreRuntimeStartupContext:
+    return CoreRuntimeStartupContext(
+        bot=bot,
+        dp=dp,
+        payment_service=payment_service,
+        verification_providers=post_payment_bootstrap_result.verification_providers,
+        auto_verification_active=post_payment_bootstrap_result.auto_verification_active,
+        polling_enabled=runtime_flags.polling_enabled,
+        telegram_webhook_enabled=runtime_flags.telegram_webhook_enabled,
+        web_api_server=web_startup_result.web_api_server,
+    )
+
+
 async def start_core_runtime_stage(
     timeline: StartupTimeline,
     logger: LoggerLike,
@@ -169,13 +190,11 @@ async def start_core_runtime_stage(
         runtime_flags=runtime_flags,
     )
 
-    return CoreRuntimeStartupContext(
+    return _build_core_runtime_startup_context(
         bot=bot,
         dp=dp,
         payment_service=payment_service,
-        verification_providers=post_payment_bootstrap_result.verification_providers,
-        auto_verification_active=post_payment_bootstrap_result.auto_verification_active,
-        polling_enabled=runtime_flags.polling_enabled,
-        telegram_webhook_enabled=runtime_flags.telegram_webhook_enabled,
-        web_api_server=web_startup_result.web_api_server,
+        post_payment_bootstrap_result=post_payment_bootstrap_result,
+        runtime_flags=runtime_flags,
+        web_startup_result=web_startup_result,
     )
