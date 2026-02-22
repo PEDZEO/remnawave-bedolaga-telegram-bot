@@ -49,3 +49,35 @@ async def test_shutdown_runtime_task_skips_finished_task() -> None:
     logger.info.assert_not_called()
     logger.error.assert_not_called()
     shutdown_call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_safe_shutdown_calls_forwards_specs_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    logger = MagicMock()
+    stop_a = MagicMock()
+    stop_b = MagicMock()
+    received_calls: list[tuple[object, str, str, object]] = []
+
+    async def _fake_safe_shutdown_call(
+        logger_arg: object,
+        *,
+        info_message: str,
+        error_message: str,
+        shutdown_call: object,
+    ) -> None:
+        received_calls.append((logger_arg, info_message, error_message, shutdown_call))
+
+    monkeypatch.setattr(shutdown_services, '_safe_shutdown_call', _fake_safe_shutdown_call)
+
+    await shutdown_services._run_safe_shutdown_calls(
+        logger,
+        shutdown_calls=(
+            ('stop-a', 'error-a', stop_a),
+            ('stop-b', 'error-b', stop_b),
+        ),
+    )
+
+    assert received_calls == [
+        (logger, 'stop-a', 'error-a', stop_a),
+        (logger, 'stop-b', 'error-b', stop_b),
+    ]

@@ -66,6 +66,20 @@ async def _shutdown_runtime_task(
     await _cancel_task_if_running(task)
 
 
+async def _run_safe_shutdown_calls(
+    logger: LoggerLike,
+    *,
+    shutdown_calls: tuple[tuple[str, str, Callable[[], Awaitable[Any] | Any]], ...],
+) -> None:
+    for info_message, error_message, shutdown_call in shutdown_calls:
+        await _safe_shutdown_call(
+            logger,
+            info_message=info_message,
+            error_message=error_message,
+            shutdown_call=shutdown_call,
+        )
+
+
 async def shutdown_runtime_services(
     logger: LoggerLike,
     *,
@@ -118,29 +132,30 @@ async def shutdown_runtime_services(
         error_message='Ошибка остановки сервиса суточных подписок',
     )
 
-    await _safe_shutdown_call(
+    await _run_safe_shutdown_calls(
         logger,
-        info_message='ℹ️ Остановка сервиса отчетов...',
-        error_message='Ошибка остановки сервиса отчетов',
-        shutdown_call=reporting_service.stop,
-    )
-    await _safe_shutdown_call(
-        logger,
-        info_message='ℹ️ Остановка сервиса конкурсов...',
-        error_message='Ошибка остановки сервиса конкурсов',
-        shutdown_call=referral_contest_service.stop,
-    )
-    await _safe_shutdown_call(
-        logger,
-        info_message='ℹ️ Остановка сервиса автосинхронизации RemnaWave...',
-        error_message='Ошибка остановки автосинхронизации RemnaWave',
-        shutdown_call=remnawave_sync_service.stop,
-    )
-    await _safe_shutdown_call(
-        logger,
-        info_message='ℹ️ Остановка ротации игр...',
-        error_message='Ошибка остановки ротации игр',
-        shutdown_call=contest_rotation_service.stop,
+        shutdown_calls=(
+            (
+                'ℹ️ Остановка сервиса отчетов...',
+                'Ошибка остановки сервиса отчетов',
+                reporting_service.stop,
+            ),
+            (
+                'ℹ️ Остановка сервиса конкурсов...',
+                'Ошибка остановки сервиса конкурсов',
+                referral_contest_service.stop,
+            ),
+            (
+                'ℹ️ Остановка сервиса автосинхронизации RemnaWave...',
+                'Ошибка остановки автосинхронизации RemnaWave',
+                remnawave_sync_service.stop,
+            ),
+            (
+                'ℹ️ Остановка ротации игр...',
+                'Ошибка остановки ротации игр',
+                contest_rotation_service.stop,
+            ),
+        ),
     )
 
     if settings.is_log_rotation_enabled():
@@ -151,17 +166,20 @@ async def shutdown_runtime_services(
             shutdown_call=log_rotation_service.stop,
         )
 
-    await _safe_shutdown_call(
+    await _run_safe_shutdown_calls(
         logger,
-        info_message='ℹ️ Остановка очереди чеков NaloGO...',
-        error_message='Ошибка остановки очереди чеков NaloGO',
-        shutdown_call=nalogo_queue_service.stop,
-    )
-    await _safe_shutdown_call(
-        logger,
-        info_message='ℹ️ Остановка сервиса бекапов...',
-        error_message='Ошибка остановки сервиса бекапов',
-        shutdown_call=backup_service.stop_auto_backup,
+        shutdown_calls=(
+            (
+                'ℹ️ Остановка очереди чеков NaloGO...',
+                'Ошибка остановки очереди чеков NaloGO',
+                nalogo_queue_service.stop,
+            ),
+            (
+                'ℹ️ Остановка сервиса бекапов...',
+                'Ошибка остановки сервиса бекапов',
+                backup_service.stop_auto_backup,
+            ),
+        ),
     )
 
     if polling_task and not polling_task.done():
