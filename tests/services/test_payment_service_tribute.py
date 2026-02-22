@@ -16,11 +16,6 @@ from app.config import settings
 from app.services.payment_service import PaymentService
 
 
-@pytest.fixture
-def anyio_backend() -> str:
-    return 'asyncio'
-
-
 def _make_service() -> PaymentService:
     service = PaymentService.__new__(PaymentService)  # type: ignore[call-arg]
     service.bot = None
@@ -33,7 +28,7 @@ def _make_service() -> PaymentService:
     return service
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_tribute_payment_requires_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     service = _make_service()
     monkeypatch.setattr(settings, 'TRIBUTE_ENABLED', False, raising=False)
@@ -42,7 +37,7 @@ async def test_create_tribute_payment_requires_enabled(monkeypatch: pytest.Monke
         await service.create_tribute_payment(1000, 1, 'Пополнение')
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.asyncio
 async def test_create_tribute_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     service = _make_service()
     monkeypatch.setattr(settings, 'TRIBUTE_ENABLED', True, raising=False)
