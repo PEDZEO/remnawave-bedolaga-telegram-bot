@@ -25,6 +25,21 @@ class ShutdownPayload(TypedDict):
     telegram_webhook_enabled: bool
 
 
+def _compose_shutdown_payload(state: 'RuntimeState') -> ShutdownPayload:
+    return {
+        'monitoring_task': state.monitoring_task,
+        'maintenance_task': state.maintenance_task,
+        'version_check_task': state.version_check_task,
+        'traffic_monitoring_task': state.traffic_monitoring_task,
+        'daily_subscription_task': state.daily_subscription_task,
+        'polling_task': state.polling_task,
+        'dp': state.dp,
+        'bot': state.bot,
+        'web_api_server': state.web_api_server,
+        'telegram_webhook_enabled': state.telegram_webhook_enabled,
+    }
+
+
 @dataclass
 class RuntimeState:
     bot: Bot | None = None
@@ -60,15 +75,4 @@ class RuntimeState:
         self.polling_task = runtime_tasks.polling_task
 
     def build_shutdown_payload(self) -> ShutdownPayload:
-        return {
-            'monitoring_task': self.monitoring_task,
-            'maintenance_task': self.maintenance_task,
-            'version_check_task': self.version_check_task,
-            'traffic_monitoring_task': self.traffic_monitoring_task,
-            'daily_subscription_task': self.daily_subscription_task,
-            'polling_task': self.polling_task,
-            'dp': self.dp,
-            'bot': self.bot,
-            'web_api_server': self.web_api_server,
-            'telegram_webhook_enabled': self.telegram_webhook_enabled,
-        }
+        return _compose_shutdown_payload(self)
