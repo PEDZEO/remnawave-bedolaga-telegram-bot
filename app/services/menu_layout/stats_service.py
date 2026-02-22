@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import Integer, and_, case, desc, func, insert, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -56,28 +57,27 @@ class MenuLayoutStatsService:
         Args:
             user_id: Telegram ID пользователя (из middleware) или internal User.id (из API)
         """
-        try:
-            # Вставляем запись одним SQL-выражением.
-            # user_id вычисляется подзапросом внутри INSERT:
-            # - если пользователь найден по telegram_id / internal id -> пишем User.id
-            # - если не найден -> пишем NULL
-            # Это устраняет race между SELECT и INSERT, из-за которого могла падать FK.
-            resolved_user_id_expr: int | Any | None = None
-            if user_id is not None:
-                from app.database.models import User
+        # Вставляем запись одним SQL-выражением.
+        # user_id вычисляется подзапросом внутри INSERT:
+        # - если пользователь найден по telegram_id / internal id -> пишем User.id
+        # - если не найден -> пишем NULL
+        # Это устраняет race между SELECT и INSERT. Если FK все же нарушается
+        # (например, пользователь удален конкурентной транзакцией),
+        # повторяем запись без user_id.
+        resolved_user_id_expr: int | Any | None = None
+        if user_id is not None:
+            from app.database.models import User
 
-                resolved_user_id_expr = (
-                    select(User.id)
-                    .where(or_(User.telegram_id == user_id, User.id == user_id))
-                    .limit(1)
-                    .scalar_subquery()
-                )
+            resolved_user_id_expr = (
+                select(User.id).where(or_(User.telegram_id == user_id, User.id == user_id)).limit(1).scalar_subquery()
+            )
 
+        async def _insert_with_user_expr(user_expr: int | Any | None) -> ButtonClickLog | None:
             insert_stmt = (
                 insert(ButtonClickLog)
                 .values(
                     button_id=button_id,
-                    user_id=resolved_user_id_expr,
+                    user_id=user_expr,
                     callback_data=callback_data,
                     button_type=button_type,
                     button_text=button_text,
@@ -90,6 +90,16 @@ class MenuLayoutStatsService:
             if inserted_id is None:
                 return None
             return await db.get(ButtonClickLog, inserted_id)
+
+        try:
+            return await _insert_with_user_expr(resolved_user_id_expr)
+        except IntegrityError:
+            await db.rollback()
+            try:
+                return await _insert_with_user_expr(None)
+            except Exception:
+                await db.rollback()
+                return None
         except Exception:
             await db.rollback()
             return None
