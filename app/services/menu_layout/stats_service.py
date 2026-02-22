@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import Integer, and_, case, desc, func, select
+from sqlalchemy import Integer, and_, case, desc, func, insert, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -57,33 +57,39 @@ class MenuLayoutStatsService:
             user_id: Telegram ID пользователя (из middleware) или internal User.id (из API)
         """
         try:
-            # Проверяем существование пользователя перед вставкой
-            # чтобы избежать ошибки foreign key в логах БД
-            # user_id может быть telegram_id (из middleware) или internal id (из API)
-            actual_user_id = None
+            # Вставляем запись одним SQL-выражением.
+            # user_id вычисляется подзапросом внутри INSERT:
+            # - если пользователь найден по telegram_id / internal id -> пишем User.id
+            # - если не найден -> пишем NULL
+            # Это устраняет race между SELECT и INSERT, из-за которого могла падать FK.
+            resolved_user_id_expr: int | Any | None = None
             if user_id is not None:
-                from sqlalchemy import or_, select
-
                 from app.database.models import User
 
-                # Пробуем найти пользователя по telegram_id или по internal id
-                result = await db.execute(
-                    select(User.id).where(or_(User.telegram_id == user_id, User.id == user_id)).limit(1)
+                resolved_user_id_expr = (
+                    select(User.id)
+                    .where(or_(User.telegram_id == user_id, User.id == user_id))
+                    .limit(1)
+                    .scalar_subquery()
                 )
-                found_user_id = result.scalar_one_or_none()
-                if found_user_id is not None:
-                    actual_user_id = found_user_id  # Используем internal User.id для FK
 
-            click_log = ButtonClickLog(
-                button_id=button_id,
-                user_id=actual_user_id,
-                callback_data=callback_data,
-                button_type=button_type,
-                button_text=button_text,
+            insert_stmt = (
+                insert(ButtonClickLog)
+                .values(
+                    button_id=button_id,
+                    user_id=resolved_user_id_expr,
+                    callback_data=callback_data,
+                    button_type=button_type,
+                    button_text=button_text,
+                )
+                .returning(ButtonClickLog.id)
             )
-            db.add(click_log)
+            result = await db.execute(insert_stmt)
+            inserted_id = result.scalar_one_or_none()
             await db.commit()
-            return click_log
+            if inserted_id is None:
+                return None
+            return await db.get(ButtonClickLog, inserted_id)
         except Exception:
             await db.rollback()
             return None
