@@ -5,7 +5,7 @@ from pathlib import Path
 import structlog
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 
 logger = structlog.get_logger(__name__)
@@ -36,11 +36,51 @@ async def _needs_auto_stamp() -> bool:
 
 
 _INITIAL_REVISION = '0001'
+_LEGACY_REVISION_REMAP: dict[str, str] = {
+    # Legacy branch value from older server snapshots no longer present in new chain.
+    '0004': '0003',
+}
+
+
+async def _remap_legacy_revision_if_needed() -> bool:
+    """Rewrite known obsolete alembic_version values to current chain nodes."""
+    from app.database.database import engine
+
+    async with engine.begin() as conn:
+        has_alembic = await conn.run_sync(lambda sync_conn: inspect(sync_conn).has_table('alembic_version'))
+        if not has_alembic:
+            return False
+
+        current_revision = (
+            await conn.execute(
+                text('SELECT version_num FROM alembic_version ORDER BY version_num LIMIT 1')
+            )
+        ).scalar_one_or_none()
+        if current_revision is None:
+            return False
+
+        target_revision = _LEGACY_REVISION_REMAP.get(str(current_revision))
+        if target_revision is None:
+            return False
+
+        await conn.execute(
+            text('UPDATE alembic_version SET version_num = :target WHERE version_num = :current'),
+            {'target': target_revision, 'current': str(current_revision)},
+        )
+
+    logger.warning(
+        'Alembic revision remap applied for legacy database snapshot',
+        from_revision=str(current_revision),
+        to_revision=target_revision,
+    )
+    return True
 
 
 async def run_alembic_upgrade() -> None:
     """Run ``alembic upgrade head``, auto-stamping existing databases first."""
     import asyncio
+
+    await _remap_legacy_revision_if_needed()
 
     if await _needs_auto_stamp():
         logger.warning(
