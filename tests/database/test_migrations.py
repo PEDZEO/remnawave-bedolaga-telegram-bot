@@ -37,3 +37,21 @@ async def test_run_alembic_upgrade_applies_legacy_remap(monkeypatch: pytest.Monk
     stamp_mock.assert_not_awaited()
     upgrade_mock.assert_called_once_with(cfg, 'head')
 
+
+@pytest.mark.asyncio
+async def test_stamp_alembic_head_runs_stamp_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = object()
+    monkeypatch.setattr(migrations, '_get_alembic_config', lambda: cfg)
+
+    stamp_mock = Mock()
+    monkeypatch.setattr(migrations.command, 'stamp', stamp_mock)
+
+    async def run_in_executor(_executor, fn, *args):
+        fn(*args)
+
+    fake_loop = SimpleNamespace(run_in_executor=run_in_executor)
+    monkeypatch.setattr('asyncio.get_running_loop', lambda: fake_loop)
+
+    await migrations.stamp_alembic_head()
+
+    stamp_mock.assert_called_once_with(cfg, 'head')

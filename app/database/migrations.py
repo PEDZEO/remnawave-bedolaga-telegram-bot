@@ -1,6 +1,8 @@
 """Programmatic Alembic migration runner for bot startup."""
 
+import asyncio
 from pathlib import Path
+from typing import Any
 
 import structlog
 from alembic import command
@@ -21,6 +23,13 @@ def _get_alembic_config() -> Config:
     cfg = Config(str(_ALEMBIC_INI))
     cfg.set_main_option('sqlalchemy.url', settings.get_database_url())
     return cfg
+
+
+async def _run_alembic_command(func: Any, cfg: Config, *args: Any) -> None:
+    """Run blocking Alembic command in thread executor."""
+    loop = asyncio.get_running_loop()
+    # Offload to thread where env.py can safely call asyncio.run() for its own loop.
+    await loop.run_in_executor(None, func, cfg, *args)
 
 
 async def _needs_auto_stamp() -> bool:
@@ -86,8 +95,6 @@ async def _remap_legacy_revision_if_needed() -> bool:
 
 async def run_alembic_upgrade() -> None:
     """Run ``alembic upgrade head``, auto-stamping existing databases first."""
-    import asyncio
-
     await _remap_legacy_revision_if_needed()
 
     if await _needs_auto_stamp():
@@ -97,10 +104,7 @@ async def run_alembic_upgrade() -> None:
         await _stamp_alembic_revision(_INITIAL_REVISION)
 
     cfg = _get_alembic_config()
-    loop = asyncio.get_running_loop()
-    # run_in_executor offloads to a thread where env.py can safely
-    # call asyncio.run() to create its own event loop.
-    await loop.run_in_executor(None, command.upgrade, cfg, 'head')
+    await _run_alembic_command(command.upgrade, cfg, 'head')
     logger.info('Alembic миграции применены')
 
 
@@ -111,9 +115,6 @@ async def stamp_alembic_head() -> None:
 
 async def _stamp_alembic_revision(revision: str) -> None:
     """Stamp the DB at a specific revision without running migrations."""
-    import asyncio
-
     cfg = _get_alembic_config()
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, command.stamp, cfg, revision)
+    await _run_alembic_command(command.stamp, cfg, revision)
     logger.info('Alembic: база отмечена как актуальная', revision=revision)
