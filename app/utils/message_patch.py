@@ -51,6 +51,18 @@ _original_answer = Message.answer
 _original_edit_text = Message.edit_text
 
 
+async def _text_answer(self: Message, text: str = None, **kwargs):
+    """Обёртка над оригинальным Message.answer с подавлением web page preview."""
+    kwargs.setdefault('disable_web_page_preview', True)
+    return await _original_answer(self, text, **kwargs)
+
+
+async def _text_edit(self: Message, text: str, **kwargs):
+    """Обёртка над оригинальным Message.edit_text с подавлением web page preview."""
+    kwargs.setdefault('disable_web_page_preview', True)
+    return await _original_edit_text(self, text, **kwargs)
+
+
 def _get_language(message: Message) -> str | None:
     try:
         user = message.from_user
@@ -122,11 +134,14 @@ def is_topic_required_error(error: Exception) -> bool:
 async def _answer_with_photo(self: Message, text: str = None, **kwargs):
     # Уважаем флаг в рантайме: если логотип выключен — не подменяем ответ
     if not settings.ENABLE_LOGO_MODE:
+        # Фото-сообщения не показывают web page preview, текстовые — показывают.
+        # Подавляем превью чтобы поведение не менялось при переключении режима логотипа.
+        kwargs.setdefault('disable_web_page_preview', True)
         return await _original_answer(self, text, **kwargs)
     # Если caption слишком длинный для фото — отправим как текст
     try:
         if text is not None and len(text) > 900:
-            return await _original_answer(self, text, **kwargs)
+            return await _text_answer(self, text, **kwargs)
     except Exception:
         pass
     language = _get_language(self)
@@ -144,27 +159,27 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
                 fallback_text = append_privacy_hint(text, language)
                 safe_kwargs = prepare_privacy_safe_kwargs(kwargs)
                 try:
-                    return await _original_answer(self, fallback_text, **safe_kwargs)
+                    return await _text_answer(self, fallback_text, **safe_kwargs)
                 except TelegramBadRequest as inner_error:
                     if is_topic_required_error(inner_error):
                         return None
                     raise
             # Фоллбек, если Telegram ругается на caption или другое ограничение: отправим как текст
             try:
-                return await _original_answer(self, text, **kwargs)
+                return await _text_answer(self, text, **kwargs)
             except TelegramBadRequest as inner_error:
                 if is_topic_required_error(inner_error):
                     return None
                 raise
         except Exception:
             try:
-                return await _original_answer(self, text, **kwargs)
+                return await _text_answer(self, text, **kwargs)
             except TelegramBadRequest as inner_error:
                 if is_topic_required_error(inner_error):
                     return None
                 raise
     try:
-        return await _original_answer(self, text, **kwargs)
+        return await _text_answer(self, text, **kwargs)
     except TelegramBadRequest as error:
         if is_topic_required_error(error):
             return None
@@ -174,6 +189,7 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
 async def _edit_with_photo(self: Message, text: str, **kwargs):
     # Уважаем флаг в рантайме: если логотип выключен — не подменяем редактирование
     if not settings.ENABLE_LOGO_MODE:
+        kwargs.setdefault('disable_web_page_preview', True)
         return await _original_edit_text(self, text, **kwargs)
     if self.photo:
         language = _get_language(self)
@@ -184,7 +200,7 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
                     await self.delete()
                 except Exception:
                     pass
-                return await _original_answer(self, text, **kwargs)
+                return await _text_answer(self, text, **kwargs)
         except Exception:
             pass
         if await asyncio.to_thread(LOGO_PATH.exists):
@@ -211,7 +227,7 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
                 except Exception:
                     pass
                 try:
-                    return await _original_answer(self, fallback_text, **safe_kwargs)
+                    return await _text_answer(self, fallback_text, **safe_kwargs)
                 except TelegramBadRequest as inner_error:
                     if is_topic_required_error(inner_error):
                         return None
@@ -222,14 +238,14 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
             except Exception:
                 pass
             try:
-                return await _original_answer(self, text, **kwargs)
+                return await _text_answer(self, text, **kwargs)
             except TelegramBadRequest as inner_error:
                 if is_topic_required_error(inner_error):
                     return None
                 raise
     # Обработка ошибок MESSAGE_ID_INVALID для сообщений без фото
     try:
-        return await _original_edit_text(self, text, **kwargs)
+        return await _text_edit(self, text, **kwargs)
     except TelegramBadRequest as error:
         if is_topic_required_error(error):
             return None
@@ -240,7 +256,5 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
 
 
 def patch_message_methods():
-    if not settings.ENABLE_LOGO_MODE:
-        return
     Message.answer = _answer_with_photo
     Message.edit_text = _edit_with_photo
