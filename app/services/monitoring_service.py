@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any
 
 import structlog
-from aiogram.enums import ChatMemberStatus
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,6 +70,9 @@ from app.utils.timezone import format_local_datetime
 
 # Кулдаун между повторными уведомлениями об автоплатеже с недостаточным балансом (6 часов)
 AUTOPAY_INSUFFICIENT_BALANCE_COOLDOWN_SECONDS: int = 21600
+
+# Размер батча для проверки подписок на каналы (keyset pagination)
+_CHANNEL_CHECK_BATCH_SIZE: int = 100
 
 
 logger = structlog.get_logger(__name__)
@@ -526,22 +528,39 @@ class MonitoringService:
             logger.error('Ошибка проверки истекающих тестовых подписок', error=e)
 
     async def _check_trial_channel_subscriptions(self, db: AsyncSession):
-        from app.database.crud.subscription import is_recently_updated_by_webhook
+        """Background reconciliation of channel subscriptions (rate-limited).
+
+        Processes subscriptions in batches using keyset pagination to avoid
+        loading all trial subscriptions into memory at once. Each batch gets
+        a fresh DB session to avoid holding a connection pool slot for hours.
+
+        When CHANNEL_REQUIRED_FOR_ALL is True, checks ALL active subscriptions
+        (not just trials). Otherwise only checks trial subscriptions.
+        """
+        from app.database.crud.subscription import is_active_paid_subscription, is_recently_updated_by_webhook
 
         if not settings.CHANNEL_IS_REQUIRED_SUB:
             return
 
-        if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE:
-            logger.debug('ℹ️ Проверка отписок от канала отключена — деактивация триальных подписок не требуется')
-            return
-
-        channel_id = settings.CHANNEL_SUB_ID
-        if not channel_id:
+        if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE and not settings.CHANNEL_REQUIRED_FOR_ALL:
+            logger.debug('Channel unsubscribe check disabled')
             return
 
         if not self.bot:
-            logger.debug('⚠️ Пропускаем проверку подписки на канал — бот недоступен')
+            logger.debug('Skipping channel subscription check - bot unavailable')
             return
+
+        from app.database.crud.required_channel import upsert_user_channel_sub
+        from app.services.channel_subscription_service import channel_subscription_service
+        from app.utils.cache import ChannelSubCache
+
+        channels = await channel_subscription_service.get_required_channels()
+        if not channels:
+            return
+
+        # Ensure bot is set on service
+        if not channel_subscription_service.bot:
+            channel_subscription_service.bot = self.bot
 
         try:
             now = datetime.now(UTC)
@@ -549,166 +568,214 @@ class MonitoringService:
                 NotificationSettingsService.are_notifications_globally_enabled()
                 and NotificationSettingsService.is_trial_channel_unsubscribed_enabled()
             )
-            result = await db.execute(
-                select(Subscription)
-                .join(Subscription.user)
-                .options(
-                    selectinload(Subscription.user),
-                    selectinload(Subscription.tariff),
-                )
-                .where(
-                    and_(
-                        Subscription.is_trial.is_(True),
-                        Subscription.end_date > now,
-                        Subscription.status.in_(
-                            [
-                                SubscriptionStatus.ACTIVE.value,
-                                SubscriptionStatus.DISABLED.value,
-                            ]
-                        ),
-                        User.status == UserStatus.ACTIVE.value,
-                    )
-                )
-            )
-
-            subscriptions = result.scalars().all()
-            if not subscriptions:
-                return
 
             disabled_count = 0
             restored_count = 0
+            checked_count = 0
+            last_id = 0
 
-            for subscription in subscriptions:
-                user = subscription.user
-                if not user or not user.telegram_id:
-                    continue
+            # Build the trial/all filter based on CHANNEL_REQUIRED_FOR_ALL setting
+            from sqlalchemy import true as sa_true
 
-                try:
-                    member = await self.bot.get_chat_member(channel_id, user.telegram_id)
-                    member_status = member.status
-                    is_member = member_status in (
-                        ChatMemberStatus.MEMBER,
-                        ChatMemberStatus.ADMINISTRATOR,
-                        ChatMemberStatus.CREATOR,
-                    )
-                except TelegramForbiddenError as error:
-                    logger.error(
-                        '❌ Не удалось проверить подписку пользователя на канал : бот заблокирован',
-                        telegram_id=user.telegram_id,
-                        channel_id=channel_id,
-                        error=error,
-                    )
-                    continue
-                except TelegramBadRequest as error:
-                    # PARTICIPANT_ID_INVALID - пользователь никогда не был в канале, это нормально
-                    logger.warning(
-                        '⚠️ Ошибка Telegram при проверке подписки пользователя',
-                        telegram_id=user.telegram_id,
-                        error=error,
-                    )
-                    continue
-                except Exception as error:
-                    logger.error(
-                        '❌ Неожиданная ошибка при проверке подписки пользователя',
-                        telegram_id=user.telegram_id,
-                        error=error,
-                    )
-                    continue
+            is_trial_filter = (
+                sa_true() if settings.CHANNEL_REQUIRED_FOR_ALL else Subscription.is_trial.is_(True)
+            )
 
-                if subscription.status == SubscriptionStatus.ACTIVE.value and subscription.is_trial and not is_member:
-                    if is_recently_updated_by_webhook(subscription):
-                        logger.debug(
-                            'Пропуск деактивации trial подписки : обновлена вебхуком недавно',
-                            subscription_id=subscription.id,
+            while True:
+                # Fresh session per batch to avoid long-running connections
+                async with AsyncSessionLocal() as batch_db:
+                    result = await batch_db.execute(
+                        select(Subscription)
+                        .join(Subscription.user)
+                        .options(
+                            selectinload(Subscription.user),
+                            selectinload(Subscription.tariff),
                         )
-                        continue
-                    subscription = await deactivate_subscription(db, subscription)
-                    disabled_count += 1
-                    logger.info(
-                        '🚫 Триальная подписка пользователя (ID) отключена из-за отписки от канала',
-                        telegram_id=user.telegram_id,
-                        subscription_id=subscription.id,
+                        .where(
+                            and_(
+                                Subscription.id > last_id,
+                                is_trial_filter,
+                                Subscription.end_date > now,
+                                Subscription.status.in_(
+                                    [
+                                        SubscriptionStatus.ACTIVE.value,
+                                        SubscriptionStatus.DISABLED.value,
+                                    ]
+                                ),
+                                User.status == UserStatus.ACTIVE.value,
+                            )
+                        )
+                        .order_by(Subscription.id)
+                        .limit(_CHANNEL_CHECK_BATCH_SIZE)
                     )
 
-                    if user.remnawave_uuid:
-                        try:
-                            await self.subscription_service.disable_remnawave_user(user.remnawave_uuid)
-                        except Exception as api_error:
-                            logger.error(
-                                '❌ Не удалось отключить пользователя RemnaWave',
-                                remnawave_uuid=user.remnawave_uuid,
-                                api_error=api_error,
+                    subscriptions = result.scalars().all()
+                    if not subscriptions:
+                        break
+
+                    last_id = subscriptions[-1].id
+
+                    for subscription in subscriptions:
+                        user = subscription.user
+                        if not user or not user.telegram_id:
+                            continue
+
+                        # Existing guard: skip if recently updated by webhook
+                        if is_recently_updated_by_webhook(subscription):
+                            logger.debug(
+                                'Skipping subscription: recently updated by webhook',
+                                subscription_id=subscription.id,
+                            )
+                            continue
+
+                        checked_count += 1
+
+                        # Rate-limited check for ALL channels
+                        all_subscribed = True
+                        for ch in channels:
+                            is_member = await channel_subscription_service._rate_limited_check(
+                                user.telegram_id, ch['channel_id']
+                            )
+                            # Update DB + cache
+                            await upsert_user_channel_sub(
+                                batch_db, user.telegram_id, ch['channel_id'], is_member
+                            )
+                            await ChannelSubCache.set_sub_status(
+                                user.telegram_id, ch['channel_id'], is_member
                             )
 
-                    if notifications_allowed:
-                        if not await notification_sent(
-                            db,
-                            user.id,
-                            subscription.id,
-                            'trial_channel_unsubscribed',
-                        ):
-                            sent = await self._send_trial_channel_unsubscribed_notification(user)
-                            if sent:
-                                await record_notification(
-                                    db,
+                            if not is_member:
+                                all_subscribed = False
+
+                        # DEACTIVATE: was active, now not subscribed to all
+                        if subscription.status == SubscriptionStatus.ACTIVE.value and not all_subscribed:
+                            # Guard: always skip paid subscriptions (user paid money)
+                            if is_active_paid_subscription(subscription):
+                                continue
+
+                            subscription = await deactivate_subscription(batch_db, subscription)
+                            disabled_count += 1
+                            logger.info(
+                                'Subscription deactivated (channel unsubscribe)',
+                                telegram_id=user.telegram_id,
+                                subscription_id=subscription.id,
+                                is_trial=subscription.is_trial,
+                            )
+
+                            if user.remnawave_uuid:
+                                try:
+                                    await self.subscription_service.disable_remnawave_user(
+                                        user.remnawave_uuid
+                                    )
+                                except Exception as api_error:
+                                    logger.error(
+                                        'Failed to disable RemnaWave user',
+                                        remnawave_uuid=user.remnawave_uuid,
+                                        api_error=api_error,
+                                    )
+
+                            if notifications_allowed:
+                                if not await notification_sent(
+                                    batch_db,
                                     user.id,
                                     subscription.id,
                                     'trial_channel_unsubscribed',
+                                ):
+                                    sent = await self._send_trial_channel_unsubscribed_notification(user)
+                                    if sent:
+                                        await record_notification(
+                                            batch_db,
+                                            user.id,
+                                            subscription.id,
+                                            'trial_channel_unsubscribed',
+                                        )
+
+                        # REACTIVATE: was disabled, now subscribed to all
+                        elif subscription.status == SubscriptionStatus.DISABLED.value and all_subscribed:
+                            # Guard: traffic limit exhausted
+                            if (
+                                subscription.traffic_limit_gb
+                                and subscription.traffic_used_gb is not None
+                                and subscription.traffic_used_gb >= subscription.traffic_limit_gb
+                            ):
+                                logger.debug(
+                                    'Skipping reactivation: traffic exhausted',
+                                    subscription_id=subscription.id,
+                                    traffic_used=subscription.traffic_used_gb,
+                                    traffic_limit=subscription.traffic_limit_gb,
                                 )
-                elif subscription.status == SubscriptionStatus.DISABLED.value and subscription.is_trial and is_member:
-                    if is_recently_updated_by_webhook(subscription):
-                        logger.debug(
-                            'Пропуск реактивации trial подписки : обновлена вебхуком недавно',
-                            subscription_id=subscription.id,
-                        )
-                        continue
-                    subscription.status = SubscriptionStatus.ACTIVE.value
-                    subscription.updated_at = datetime.now(UTC)
-                    await db.commit()
-                    await db.refresh(subscription)
-                    restored_count += 1
+                                continue
 
-                    logger.info(
-                        '✅ Триальная подписка пользователя (ID) восстановлена после повторной подписки на канал',
-                        telegram_id=user.telegram_id,
-                        subscription_id=subscription.id,
-                    )
+                            # Guard: disabled by webhook, not by monitoring
+                            if (
+                                subscription.last_webhook_update_at
+                                and subscription.updated_at
+                                and subscription.last_webhook_update_at
+                                >= subscription.updated_at - timedelta(seconds=10)
+                            ):
+                                logger.debug(
+                                    'Skipping reactivation: disabled by RemnaWave panel',
+                                    subscription_id=subscription.id,
+                                    last_webhook_at=subscription.last_webhook_update_at,
+                                    updated_at=subscription.updated_at,
+                                )
+                                continue
 
-                    try:
-                        if user.remnawave_uuid:
-                            await self.subscription_service.update_remnawave_user(db, subscription)
-                        else:
-                            await self.subscription_service.create_remnawave_user(db, subscription)
-                    except Exception as api_error:
-                        logger.error(
-                            '❌ Не удалось обновить RemnaWave пользователя',
-                            telegram_id=user.telegram_id,
-                            api_error=api_error,
-                        )
+                            subscription.status = SubscriptionStatus.ACTIVE.value
+                            subscription.updated_at = datetime.now(UTC)
+                            restored_count += 1
 
-                    await clear_notification_by_type(
-                        db,
-                        subscription.id,
-                        'trial_channel_unsubscribed',
-                    )
+                            logger.info(
+                                'Subscription restored (channel resubscribe)',
+                                telegram_id=user.telegram_id,
+                                subscription_id=subscription.id,
+                                is_trial=subscription.is_trial,
+                            )
+
+                            try:
+                                if user.remnawave_uuid:
+                                    await self.subscription_service.update_remnawave_user(
+                                        batch_db, subscription
+                                    )
+                                else:
+                                    await self.subscription_service.create_remnawave_user(
+                                        batch_db, subscription
+                                    )
+                            except Exception as api_error:
+                                logger.error(
+                                    'Failed to update RemnaWave user',
+                                    telegram_id=user.telegram_id,
+                                    api_error=api_error,
+                                )
+
+                            await clear_notification_by_type(
+                                batch_db,
+                                subscription.id,
+                                'trial_channel_unsubscribed',
+                            )
+
+                    # Commit all changes for this batch
+                    await batch_db.commit()
 
             if disabled_count or restored_count:
+                check_scope = 'all' if settings.CHANNEL_REQUIRED_FOR_ALL else 'trial'
                 await self._log_monitoring_event(
                     db,
                     'trial_channel_subscription_check',
                     (
-                        f'Проверено {len(subscriptions)} триальных подписок: отключено {disabled_count}, '
-                        f'восстановлено {restored_count}'
+                        f'Checked {checked_count} {check_scope} subscriptions: '
+                        f'disabled {disabled_count}, restored {restored_count}'
                     ),
                     {
-                        'checked': len(subscriptions),
+                        'checked': checked_count,
                         'disabled': disabled_count,
                         'restored': restored_count,
+                        'scope': check_scope,
                     },
                 )
 
         except Exception as error:
-            logger.error('Ошибка проверки подписки на канал для триальных пользователей', error=error)
+            logger.error('Error checking channel subscriptions', error=error)
 
     async def _check_expired_subscription_followups(self, db: AsyncSession):
         if not NotificationSettingsService.are_notifications_globally_enabled():
@@ -1315,16 +1382,16 @@ class MonitoringService:
 
             from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+            from app.services.channel_subscription_service import channel_subscription_service
+
+            unsubscribed = await channel_subscription_service.get_unsubscribed_channels(user.telegram_id)
+
             buttons = []
-            if settings.CHANNEL_LINK:
-                buttons.append(
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t('CHANNEL_SUBSCRIBE_BUTTON', '🔗 Подписаться'),
-                            url=settings.CHANNEL_LINK,
-                        )
-                    ]
-                )
+            for ch in unsubscribed:
+                link = ch.get('channel_link')
+                if link:
+                    title = ch.get('title') or texts.t('CHANNEL_SUBSCRIBE_BUTTON', '🔗 Подписаться')
+                    buttons.append([InlineKeyboardButton(text=f'🔗 {title}', url=link)])
             buttons.append(
                 [
                     InlineKeyboardButton(
