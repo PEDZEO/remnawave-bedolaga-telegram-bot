@@ -191,6 +191,11 @@ from .miniapp_helpers.payment.request import (
     normalize_amount_kopeks,
 )
 from .miniapp_helpers.payment_status.dispatcher import resolve_payment_status_entry
+from .miniapp_helpers.promo.discount import extract_promo_discounts
+from .miniapp_helpers.promo.offer import (
+    extract_offer_extra,
+    normalize_effect_type,
+)
 from .miniapp_helpers.promo_models import (
     ActiveOfferContext,
     build_promo_offer_models,
@@ -211,11 +216,6 @@ from .miniapp_misc_helpers import (
     is_remnawave_configured,
     resolve_display_name,
     serialize_transaction,
-)
-from .miniapp_promo_discount_helpers import extract_promo_discounts
-from .miniapp_promo_offer_helpers import (
-    extract_offer_extra,
-    normalize_effect_type,
 )
 from .miniapp_purchase_selection_helpers import merge_purchase_selection_from_request
 from .miniapp_renewal_message_helpers import (

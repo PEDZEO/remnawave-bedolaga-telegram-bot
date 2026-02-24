@@ -10,7 +10,8 @@ from sqlalchemy.orm import selectinload
 from app.database.crud.promo_offer_template import get_promo_offer_template_by_id
 from app.database.models import PromoOfferTemplate, Subscription, SubscriptionTemporaryAccess, User
 
-from ..miniapp_promo_offer_helpers import (
+from ..schemas.miniapp import MiniAppConnectedServer, MiniAppPromoOffer
+from .promo.offer import (
     determine_offer_icon,
     extract_offer_duration_hours,
     extract_offer_extra,
@@ -21,7 +22,6 @@ from ..miniapp_promo_offer_helpers import (
     format_offer_message,
     normalize_effect_type,
 )
-from ..schemas.miniapp import MiniAppConnectedServer, MiniAppPromoOffer
 from .runtime import resolve_connected_servers
 
 
