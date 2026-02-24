@@ -10,7 +10,7 @@ from app.services.subscription_renewal_service import (
     encode_payment_payload,
 )
 
-from ..cryptobot_helpers import compute_cryptobot_limits, get_usd_to_rub_rate
+from ...miniapp_cryptobot_helpers import compute_cryptobot_limits, get_usd_to_rub_rate
 from .renewal_submit import (
     compute_amount_usd_from_kopeks,
     ensure_cryptobot_amount_limits,
