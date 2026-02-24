@@ -147,6 +147,7 @@ from ..schemas.miniapp import (
     MiniAppTariffSwitchRequest,
     MiniAppTariffSwitchResponse,
     MiniAppTrafficTopupRequest,
+    MiniAppTrafficTopupResponse,
 )
 from .miniapp_auth_helpers import authorize_miniapp_user, ensure_paid_subscription
 from .miniapp_autopay_helpers import (
@@ -207,6 +208,12 @@ from .miniapp_helpers.subscription.settings import (
 from .miniapp_helpers.tariff.model import build_tariff_model
 from .miniapp_helpers.tariff.switch import calculate_tariff_switch_cost
 from .miniapp_helpers.tariff.switch_context import resolve_tariff_switch_context
+from .miniapp_helpers.tariff.topup import (
+    build_topup_description,
+    calculate_topup_price,
+    get_tariff_for_topup,
+    validate_topup_package,
+)
 from .miniapp_helpers.tariff_state import (
     build_current_tariff_model,
     get_current_tariff_model,
@@ -3918,8 +3925,6 @@ async def purchase_traffic_topup_endpoint(
     from app.database.crud.transaction import create_transaction
     from app.database.crud.user import subtract_user_balance
     from app.database.models import TransactionType
-    from app.utils.pricing_utils import calculate_prorated_price
-    from app.webapi.schemas.miniapp import MiniAppTrafficTopupResponse
 
     user = await authorize_miniapp_user(payload.init_data, db)
     subscription = ensure_paid_subscription(user)
@@ -3935,97 +3940,12 @@ async def purchase_traffic_topup_endpoint(
             },
         )
 
-    # Проверяем наличие тарифа
-    tariff_id = getattr(subscription, 'tariff_id', None)
-    if not tariff_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'no_tariff',
-                'message': 'Subscription has no tariff',
-            },
-        )
-
-    tariff = await get_tariff_by_id(db, tariff_id)
-    if not tariff:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                'code': 'tariff_not_found',
-                'message': 'Tariff not found',
-            },
-        )
-
-    # Проверяем, разрешена ли докупка трафика
-    if not getattr(tariff, 'traffic_topup_enabled', False):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                'code': 'traffic_topup_disabled',
-                'message': 'Traffic top-up is disabled for this tariff',
-            },
-        )
-
-    # Проверяем безлимит
-    if tariff.traffic_limit_gb == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'unlimited_traffic',
-                'message': 'Cannot add traffic to unlimited subscription',
-            },
-        )
-
-    # Проверяем лимит докупки трафика
-    max_topup_limit = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
-    if max_topup_limit > 0:
-        current_traffic = subscription.traffic_limit_gb or 0
-        new_traffic = current_traffic + payload.gb
-        if new_traffic > max_topup_limit:
-            available_gb = max(0, max_topup_limit - current_traffic)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    'code': 'topup_limit_exceeded',
-                    'message': f'Traffic top-up limit exceeded. Maximum allowed: {max_topup_limit} GB, current: {current_traffic} GB, available: {available_gb} GB',
-                    'max_limit_gb': max_topup_limit,
-                    'current_gb': current_traffic,
-                    'available_gb': available_gb,
-                },
-            )
-
-    # Получаем цену пакета
-    packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
-    if payload.gb not in packages:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'invalid_package',
-                'message': f'Traffic package {payload.gb}GB is not available',
-            },
-        )
-
-    base_price_kopeks = packages[payload.gb]
-
-    # Применяем скидку промогруппы на трафик
-    traffic_discount_percent = 0
-    promo_group = (
-        user.get_primary_promo_group()
-        if hasattr(user, 'get_primary_promo_group')
-        else getattr(user, 'promo_group', None)
-    )
-    if promo_group:
-        apply_to_addons = getattr(promo_group, 'apply_discounts_to_addons', True)
-        if apply_to_addons:
-            traffic_discount_percent = max(0, min(100, int(getattr(promo_group, 'traffic_discount_percent', 0) or 0)))
-
-    if traffic_discount_percent > 0:
-        base_price_kopeks = int(base_price_kopeks * (100 - traffic_discount_percent) / 100)
-
-    # Пропорциональный расчет цены с учетом оставшегося времени подписки
-    final_price, months_charged = calculate_prorated_price(
+    tariff = await get_tariff_for_topup(db, subscription)
+    base_price_kopeks = validate_topup_package(subscription, tariff, payload.gb)
+    final_price, traffic_discount_percent = calculate_topup_price(
+        user,
+        subscription,
         base_price_kopeks,
-        subscription.end_date,
     )
 
     # Проверяем баланс
@@ -4041,10 +3961,7 @@ async def purchase_traffic_topup_endpoint(
         )
 
     # Списываем баланс
-    if traffic_discount_percent > 0:
-        traffic_description = f'Докупка {payload.gb} ГБ трафика (скидка {traffic_discount_percent}%)'
-    else:
-        traffic_description = f'Докупка {payload.gb} ГБ трафика'
+    traffic_description = build_topup_description(payload.gb, traffic_discount_percent)
     success = await subtract_user_balance(db, user, final_price, traffic_description)
     if not success:
         raise HTTPException(
