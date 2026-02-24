@@ -28,12 +28,15 @@ async def create_renewal_cryptobot_payment(
     missing_amount: int,
     description: str,
     pricing_snapshot,
+    rate_resolver=get_usd_to_rub_rate,
+    limits_calculator=compute_cryptobot_limits,
+    payment_service_factory=PaymentService,
 ) -> dict:
     if not settings.is_cryptobot_enabled():
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
 
-    rate = await get_usd_to_rub_rate()
-    min_amount_kopeks, max_amount_kopeks = compute_cryptobot_limits(rate)
+    rate = await rate_resolver()
+    min_amount_kopeks, max_amount_kopeks = limits_calculator(rate)
     ensure_cryptobot_amount_limits(
         missing_amount=missing_amount,
         min_amount_kopeks=min_amount_kopeks,
@@ -51,7 +54,7 @@ async def create_renewal_cryptobot_payment(
     )
     payment_payload = encode_payment_payload(descriptor)
 
-    payment_service = PaymentService()
+    payment_service = payment_service_factory()
     result = await payment_service.create_cryptobot_payment(
         db=db,
         user_id=user.id,

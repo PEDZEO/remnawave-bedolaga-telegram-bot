@@ -7,6 +7,7 @@ from aiogram import BaseMiddleware, Bot, types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, TelegramObject, Update
+from redis import asyncio as aioredis
 
 from app.config import settings
 from app.database.crud.campaign import get_campaign_by_start_parameter
@@ -32,35 +33,72 @@ REDIS_PAYLOAD_TTL = 3600  # 1 hour
 
 
 async def save_pending_payload_to_redis(telegram_id: int, payload: str) -> bool:
-    """Save pending_start_payload to Redis via the shared cache singleton."""
+    """Save pending_start_payload to Redis (legacy aioredis-compatible API + cache fallback)."""
+    key = f'{REDIS_PAYLOAD_KEY_PREFIX}{telegram_id}'
     try:
-        key = f'{REDIS_PAYLOAD_KEY_PREFIX}{telegram_id}'
-        result = await cache.set(key, payload, expire=REDIS_PAYLOAD_TTL)
+        redis = aioredis.from_url(settings.REDIS_URL)
+        try:
+            result = await redis.set(key, payload, ex=REDIS_PAYLOAD_TTL)
+        finally:
+            await redis.aclose()
         if result:
             logger.info('Saved pending payload to Redis', payload=payload, telegram_id=telegram_id)
         return result
     except Exception as e:
-        logger.error('Failed to save payload to Redis', telegram_id=telegram_id, error=e)
-        return False
+        logger.error('Failed to save payload to Redis via aioredis', telegram_id=telegram_id, error=e)
+        try:
+            return await cache.set(key, payload, expire=REDIS_PAYLOAD_TTL)
+        except Exception as fallback_error:
+            logger.error(
+                'Failed to save payload to Redis via cache fallback',
+                telegram_id=telegram_id,
+                error=fallback_error,
+            )
+            return False
 
 
 async def get_pending_payload_from_redis(telegram_id: int) -> str | None:
-    """Get pending_start_payload from Redis via the shared cache singleton."""
+    """Get pending_start_payload from Redis (legacy aioredis-compatible API + cache fallback)."""
+    key = f'{REDIS_PAYLOAD_KEY_PREFIX}{telegram_id}'
     try:
-        key = f'{REDIS_PAYLOAD_KEY_PREFIX}{telegram_id}'
-        return await cache.get(key)
+        redis = aioredis.from_url(settings.REDIS_URL)
+        try:
+            value = await redis.get(key)
+        finally:
+            await redis.aclose()
+        if isinstance(value, bytes):
+            return value.decode('utf-8', errors='ignore')
+        return value
     except Exception as e:
-        logger.debug('Failed to get payload from Redis', telegram_id=telegram_id, error=e)
-        return None
+        logger.debug('Failed to get payload from Redis via aioredis', telegram_id=telegram_id, error=e)
+        try:
+            value = await cache.get(key)
+            if isinstance(value, bytes):
+                return value.decode('utf-8', errors='ignore')
+            return value
+        except Exception as fallback_error:
+            logger.debug(
+                'Failed to get payload from Redis via cache fallback',
+                telegram_id=telegram_id,
+                error=fallback_error,
+            )
+            return None
 
 
 async def delete_pending_payload_from_redis(telegram_id: int) -> None:
-    """Delete pending_start_payload from Redis via the shared cache singleton."""
+    """Delete pending_start_payload from Redis (legacy aioredis-compatible API + cache fallback)."""
+    key = f'{REDIS_PAYLOAD_KEY_PREFIX}{telegram_id}'
     try:
-        key = f'{REDIS_PAYLOAD_KEY_PREFIX}{telegram_id}'
-        await cache.delete(key)
+        redis = aioredis.from_url(settings.REDIS_URL)
+        try:
+            await redis.delete(key)
+        finally:
+            await redis.aclose()
     except Exception:
-        pass
+        try:
+            await cache.delete(key)
+        except Exception:
+            pass
 
 
 class ChannelCheckerMiddleware(BaseMiddleware):

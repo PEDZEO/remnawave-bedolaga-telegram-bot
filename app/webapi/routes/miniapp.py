@@ -36,7 +36,7 @@ from app.database.models import (
 )
 from app.services.faq_service import FaqService
 from app.services.maintenance_service import maintenance_service
-from app.services.payment_service import PaymentService
+from app.services.payment_service import PaymentService, get_wata_payment_by_link_id
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.promo_offer_service import promo_offer_service
 from app.services.promocode_service import PromoCodeService
@@ -133,14 +133,20 @@ from ..schemas.miniapp import (
     MiniAppTrafficTopupRequest,
     MiniAppTrafficTopupResponse,
 )
-from .miniapp_auth_helpers import authorize_miniapp_user, ensure_paid_subscription
+from .miniapp_auth_helpers import (
+    authorize_miniapp_user as _authorize_miniapp_user_impl,
+    ensure_paid_subscription as _ensure_paid_subscription_impl,
+)
 from .miniapp_autopay_helpers import (
     _autopay_response_extras,
     _build_autopay_payload,
     _get_autopay_day_options,
     _normalize_autopay_days,
 )
-from .miniapp_cryptobot_helpers import compute_cryptobot_limits, get_usd_to_rub_rate
+from .miniapp_cryptobot_helpers import (
+    compute_cryptobot_limits as _compute_cryptobot_limits_impl,
+    get_usd_to_rub_rate as _get_usd_to_rub_rate_impl,
+)
 from .miniapp_format_helpers import (
     bytes_to_gb,
     format_gb,
@@ -148,7 +154,7 @@ from .miniapp_format_helpers import (
     format_limit_label,
     status_label,
 )
-from .miniapp_helpers.auth_runtime import resolve_user_from_init_data
+from .miniapp_helpers.auth_runtime import resolve_user_from_init_data as _resolve_user_from_init_data_impl
 from .miniapp_helpers.payment.amount import (
     build_balance_invoice_payload,
     compute_stars_min_amount,
@@ -166,10 +172,20 @@ from .miniapp_helpers.payment.create_yookassa import (
     create_yookassa_balance_payment_response,
     create_yookassa_sbp_balance_payment_response,
 )
+from .miniapp_helpers.payment.lookup import find_recent_deposit as _find_recent_deposit_impl
 from .miniapp_helpers.payment.request import (
     build_mulenpay_iframe_config,
 )
-from .miniapp_helpers.payment_status.dispatcher import resolve_payment_status_entry
+from .miniapp_helpers.payment_status.base import (
+    resolve_yookassa_payment_status as _resolve_yookassa_payment_status_impl,
+)
+from .miniapp_helpers.payment_status.dispatcher import (
+    resolve_payment_status_entry as _resolve_payment_status_entry_impl,
+)
+from .miniapp_helpers.payment_status.gateway import (
+    resolve_pal24_payment_status as _resolve_pal24_payment_status_impl,
+    resolve_wata_payment_status as _resolve_wata_payment_status_impl,
+)
 from .miniapp_helpers.promo.discount import extract_promo_discounts
 from .miniapp_helpers.promo.offer import (
     extract_offer_extra,
@@ -187,7 +203,7 @@ from .miniapp_helpers.runtime import (
     resolve_connected_servers,
 )
 from .miniapp_helpers.subscription.common import (
-    validate_subscription_id,
+    validate_subscription_id as _validate_subscription_id_impl,
 )
 from .miniapp_helpers.subscription.devices_update import (
     calculate_devices_upgrade_cost,
@@ -287,6 +303,86 @@ promo_code_service = PromoCodeService()
 renewal_service = SubscriptionRenewalService()
 
 
+# Backward-compatible aliases used by existing tests and monkeypatches.
+async def _resolve_user_from_init_data(db: AsyncSession, init_data: str):
+    return await _resolve_user_from_init_data_impl(db, init_data)
+
+
+async def _authorize_miniapp_user(init_data: str, db: AsyncSession):
+    return await _authorize_miniapp_user_impl(init_data, db)
+
+
+def _ensure_paid_subscription(user, allowed_statuses: set[str] | None = None):
+    return _ensure_paid_subscription_impl(user, allowed_statuses=allowed_statuses)
+
+
+def _validate_subscription_id(subscription_id: int | None, subscription) -> None:
+    _validate_subscription_id_impl(subscription_id, subscription)
+
+
+async def _calculate_subscription_renewal_pricing(
+    db: AsyncSession,
+    user,
+    subscription,
+    period_days: int,
+):
+    return await renewal_service.calculate_pricing(db, user, subscription, period_days)
+
+
+async def _get_usd_to_rub_rate() -> float:
+    return await _get_usd_to_rub_rate_impl()
+
+
+def _compute_cryptobot_limits(rate: float) -> tuple[int, int]:
+    return _compute_cryptobot_limits_impl(rate)
+
+
+async def _resolve_payment_status_entry(*, payment_service: PaymentService, db: AsyncSession, user, query):
+    return await _resolve_payment_status_entry_impl(
+        payment_service=payment_service,
+        db=db,
+        user=user,
+        query=query,
+    )
+
+
+async def _resolve_yookassa_payment_status(db: AsyncSession, user, query):
+    return await _resolve_yookassa_payment_status_impl(db, user, query, method='yookassa')
+
+
+async def _resolve_pal24_payment_status(payment_service: PaymentService, db: AsyncSession, user, query):
+    return await _resolve_pal24_payment_status_impl(payment_service, db, user, query)
+
+
+async def _resolve_wata_payment_status(payment_service: PaymentService, db: AsyncSession, user, query):
+    local_payment_id = query.local_payment_id
+    payment_link_id = query.payment_link_id or query.payment_id or query.invoice_id
+
+    if not local_payment_id and payment_link_id:
+        fallback_payment = await get_wata_payment_by_link_id(db, payment_link_id)
+        if fallback_payment:
+            query = query.model_copy(update={'local_payment_id': fallback_payment.id})
+
+    return await _resolve_wata_payment_status_impl(payment_service, db, user, query)
+
+
+async def _find_recent_deposit(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    payment_method,
+    amount_kopeks: int | None,
+    started_at: datetime | None,
+):
+    return await _find_recent_deposit_impl(
+        db,
+        user_id=user_id,
+        payment_method=payment_method,
+        amount_kopeks=amount_kopeks,
+        started_at=started_at,
+    )
+
+
 @router.post(
     '/maintenance/status',
     response_model=MiniAppMaintenanceStatusResponse,
@@ -295,7 +391,7 @@ async def get_maintenance_status(
     payload: MiniAppSubscriptionRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppMaintenanceStatusResponse:
-    _, _ = await resolve_user_from_init_data(db, payload.init_data)
+    _, _ = await _resolve_user_from_init_data(db, payload.init_data)
     status_info = maintenance_service.get_status_info()
     return MiniAppMaintenanceStatusResponse(
         is_active=bool(status_info.get('is_active')),
@@ -312,7 +408,7 @@ async def get_payment_methods(
     payload: MiniAppPaymentMethodsRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppPaymentMethodsResponse:
-    _, _ = await resolve_user_from_init_data(db, payload.init_data)
+    _, _ = await _resolve_user_from_init_data(db, payload.init_data)
 
     methods: list[MiniAppPaymentMethod] = []
 
@@ -451,8 +547,8 @@ async def get_payment_methods(
         )
 
     if settings.is_cryptobot_enabled():
-        rate = await get_usd_to_rub_rate()
-        min_amount_kopeks, max_amount_kopeks = compute_cryptobot_limits(rate)
+        rate = await _get_usd_to_rub_rate()
+        min_amount_kopeks, max_amount_kopeks = _compute_cryptobot_limits(rate)
         methods.append(
             MiniAppPaymentMethod(
                 id='cryptobot',
@@ -542,7 +638,7 @@ async def create_payment_link(
     payload: MiniAppPaymentCreateRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppPaymentCreateResponse:
-    user, _ = await resolve_user_from_init_data(db, payload.init_data)
+    user, _ = await _resolve_user_from_init_data(db, payload.init_data)
 
     method = resolve_create_payment_method(payload.method)
     amount_kopeks = resolve_create_payment_amount(
@@ -965,7 +1061,7 @@ async def get_payment_statuses(
     payload: MiniAppPaymentStatusRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppPaymentStatusResponse:
-    user, _ = await resolve_user_from_init_data(db, payload.init_data)
+    user, _ = await _resolve_user_from_init_data(db, payload.init_data)
 
     entries = payload.payments or []
     if not entries:
@@ -975,7 +1071,7 @@ async def get_payment_statuses(
     results: list[MiniAppPaymentStatusResult] = []
 
     for entry in entries:
-        result = await resolve_payment_status_entry(
+        result = await _resolve_payment_status_entry(
             payment_service=payment_service,
             db=db,
             user=user,
@@ -1501,9 +1597,9 @@ async def update_subscription_autopay_endpoint(
     payload: MiniAppSubscriptionAutopayRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionAutopayResponse:
-    user = await authorize_miniapp_user(payload.init_data, db)
-    subscription = ensure_paid_subscription(user)
-    validate_subscription_id(payload.subscription_id, subscription)
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    subscription = _ensure_paid_subscription(user)
+    _validate_subscription_id(payload.subscription_id, subscription)
 
     # Суточные подписки имеют свой механизм продления (DailySubscriptionService),
     # глобальный autopay для них запрещён
@@ -1609,7 +1705,7 @@ async def activate_subscription_trial_endpoint(
     payload: MiniAppSubscriptionTrialRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionTrialResponse:
-    user = await authorize_miniapp_user(payload.init_data, db)
+    user = await _authorize_miniapp_user(payload.init_data, db)
 
     existing_subscription = getattr(user, 'subscription', None)
     if existing_subscription is not None:
@@ -2225,12 +2321,12 @@ async def get_subscription_renewal_options_endpoint(
     payload: MiniAppSubscriptionRenewalOptionsRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionRenewalOptionsResponse:
-    user = await authorize_miniapp_user(payload.init_data, db)
-    subscription = ensure_paid_subscription(
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    subscription = _ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial', 'expired'},
     )
-    validate_subscription_id(payload.subscription_id, subscription)
+    _validate_subscription_id(payload.subscription_id, subscription)
 
     periods, pricing_map, default_period_id = await prepare_subscription_renewal_options(
         db,
@@ -2307,12 +2403,12 @@ async def submit_subscription_renewal_endpoint(
     payload: MiniAppSubscriptionRenewalRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionRenewalResponse:
-    user = await authorize_miniapp_user(payload.init_data, db)
-    subscription = ensure_paid_subscription(
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    subscription = _ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial', 'expired'},
     )
-    validate_subscription_id(payload.subscription_id, subscription)
+    _validate_subscription_id(payload.subscription_id, subscription)
 
     period_days = resolve_renewal_period(payload.period_days, payload.period_id)
     tariff_pricing = await build_tariff_renewal_pricing(
@@ -2332,7 +2428,7 @@ async def submit_subscription_renewal_endpoint(
         pricing = tariff_pricing
     else:
         try:
-            pricing_model = await renewal_service.calculate_pricing(
+            pricing_model = await _calculate_subscription_renewal_pricing(
                 db,
                 user,
                 subscription,
@@ -2427,6 +2523,9 @@ async def submit_subscription_renewal_endpoint(
             missing_amount=missing_amount,
             description=description,
             pricing_snapshot=pricing,
+            rate_resolver=_get_usd_to_rub_rate,
+            limits_calculator=_compute_cryptobot_limits,
+            payment_service_factory=PaymentService,
         )
 
         message = build_renewal_pending_message(user, missing_amount, method)
@@ -2461,7 +2560,7 @@ async def get_subscription_purchase_options_endpoint(
     payload: MiniAppSubscriptionPurchaseOptionsRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionPurchaseOptionsResponse:
-    user = await authorize_miniapp_user(payload.init_data, db)
+    user = await _authorize_miniapp_user(payload.init_data, db)
     context = await purchase_service.build_options(db, user)
 
     data_payload = dict(context.payload)
@@ -2488,7 +2587,7 @@ async def subscription_purchase_preview_endpoint(
     payload: MiniAppSubscriptionPurchasePreviewRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionPurchasePreviewResponse:
-    user = await authorize_miniapp_user(payload.init_data, db)
+    user = await _authorize_miniapp_user(payload.init_data, db)
     context = await purchase_service.build_options(db, user)
 
     selection_payload = merge_purchase_selection_from_request(payload)
@@ -2520,7 +2619,7 @@ async def subscription_purchase_endpoint(
     payload: MiniAppSubscriptionPurchaseRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionPurchaseResponse:
-    user = await authorize_miniapp_user(payload.init_data, db)
+    user = await _authorize_miniapp_user(payload.init_data, db)
     context = await purchase_service.build_options(db, user)
 
     selection_payload = merge_purchase_selection_from_request(payload)
@@ -2591,12 +2690,12 @@ async def get_subscription_settings_endpoint(
     payload: MiniAppSubscriptionSettingsRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionSettingsResponse:
-    user = await authorize_miniapp_user(payload.init_data, db)
-    subscription = ensure_paid_subscription(
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    subscription = _ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial'},
     )
-    validate_subscription_id(payload.subscription_id, subscription)
+    _validate_subscription_id(payload.subscription_id, subscription)
 
     settings_payload = await build_subscription_settings(db, user, subscription)
 
@@ -2611,12 +2710,12 @@ async def update_subscription_servers_endpoint(
     payload: MiniAppSubscriptionServersUpdateRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionUpdateResponse:
-    user = await authorize_miniapp_user(payload.init_data, db)
-    subscription = ensure_paid_subscription(
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    subscription = _ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial'},
     )
-    validate_subscription_id(payload.subscription_id, subscription)
+    _validate_subscription_id(payload.subscription_id, subscription)
     old_servers = list(getattr(subscription, 'connected_squads', []) or [])
 
     selected_order = resolve_selected_server_order(payload)
@@ -2673,12 +2772,12 @@ async def update_subscription_traffic_endpoint(
     payload: MiniAppSubscriptionTrafficUpdateRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionUpdateResponse:
-    user = await authorize_miniapp_user(payload.init_data, db)
-    subscription = ensure_paid_subscription(
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    subscription = _ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial'},
     )
-    validate_subscription_id(payload.subscription_id, subscription)
+    _validate_subscription_id(payload.subscription_id, subscription)
     old_traffic = subscription.traffic_limit_gb
 
     new_traffic = resolve_new_traffic_value(payload)
@@ -2724,12 +2823,12 @@ async def update_subscription_devices_endpoint(
     payload: MiniAppSubscriptionDevicesUpdateRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionUpdateResponse:
-    user = await authorize_miniapp_user(payload.init_data, db)
-    subscription = ensure_paid_subscription(
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    subscription = _ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial'},
     )
-    validate_subscription_id(payload.subscription_id, subscription)
+    _validate_subscription_id(payload.subscription_id, subscription)
 
     current_devices, new_devices = resolve_device_limits(payload, subscription)
     old_devices = current_devices
@@ -2779,7 +2878,7 @@ async def get_tariffs_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppTariffsResponse:
     """Возвращает список доступных тарифов для пользователя."""
-    user = await authorize_miniapp_user(payload.init_data, db)
+    user = await _authorize_miniapp_user(payload.init_data, db)
 
     ensure_tariffs_mode_enabled(message='Tariffs mode is not enabled')
     tariff_models, current_tariff_model, promo_group_model = await build_tariffs_payload(db, user)
@@ -2801,7 +2900,7 @@ async def purchase_tariff_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppTariffPurchaseResponse:
     """Покупка или смена тарифа."""
-    user = await authorize_miniapp_user(payload.init_data, db)
+    user = await _authorize_miniapp_user(payload.init_data, db)
     purchase_context = await build_tariff_purchase_context(
         db,
         user,
@@ -2925,7 +3024,7 @@ async def preview_tariff_switch_endpoint(
 ):
     """Предпросмотр переключения тарифа - показывает стоимость."""
 
-    user = await authorize_miniapp_user(payload.init_data, db)
+    user = await _authorize_miniapp_user(payload.init_data, db)
 
     ensure_tariffs_mode_enabled(message='Tariffs mode is not enabled')
 
@@ -2979,7 +3078,7 @@ async def switch_tariff_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ):
     """Переключение тарифа без изменения даты окончания."""
-    user = await authorize_miniapp_user(payload.init_data, db)
+    user = await _authorize_miniapp_user(payload.init_data, db)
 
     ensure_tariffs_mode_enabled(message='Tariffs mode is not enabled')
 
@@ -3062,9 +3161,9 @@ async def purchase_traffic_topup_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ):
     """Докупка трафика для подписки."""
-    user = await authorize_miniapp_user(payload.init_data, db)
-    subscription = ensure_paid_subscription(user)
-    validate_subscription_id(payload.subscription_id, subscription)
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    subscription = _ensure_paid_subscription(user)
+    _validate_subscription_id(payload.subscription_id, subscription)
 
     ensure_tariffs_mode_enabled(message='Traffic top-up is only available in tariffs mode')
 
@@ -3106,7 +3205,7 @@ async def toggle_daily_subscription_pause_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ):
     """Переключает паузу/активацию суточной подписки."""
-    user = await authorize_miniapp_user(payload.init_data, db)
+    user = await _authorize_miniapp_user(payload.init_data, db)
     subscription = user.subscription
 
     if not subscription:
