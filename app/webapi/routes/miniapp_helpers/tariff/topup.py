@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.models import Subscription, User
+from app.services.subscription_service import SubscriptionService
 from app.utils.pricing_utils import calculate_prorated_price
 
 
@@ -116,3 +117,60 @@ def build_topup_description(package_gb: int, discount_percent: int) -> str:
     if discount_percent > 0:
         return f'Докупка {package_gb} ГБ трафика (скидка {discount_percent}%)'
     return f'Докупка {package_gb} ГБ трафика'
+
+
+def ensure_topup_balance(user: User, final_price: int) -> None:
+    if user.balance_kopeks >= final_price:
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+        detail={
+            'code': 'insufficient_balance',
+            'message': 'Insufficient balance',
+            'required': final_price,
+            'balance': user.balance_kopeks,
+        },
+    )
+
+
+async def execute_topup_purchase(
+    db: AsyncSession,
+    user: User,
+    subscription: Subscription,
+    *,
+    package_gb: int,
+    final_price: int,
+    description: str,
+    logger,
+) -> None:
+    from app.database.crud.subscription import add_subscription_traffic
+    from app.database.crud.transaction import create_transaction
+    from app.database.crud.user import subtract_user_balance
+    from app.database.models import TransactionType
+
+    success = await subtract_user_balance(db, user, final_price, description)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                'code': 'balance_error',
+                'message': 'Failed to subtract balance',
+            },
+        )
+
+    await add_subscription_traffic(db, subscription, package_gb)
+
+    try:
+        service = SubscriptionService()
+        await service.update_remnawave_user(db, subscription)
+    except Exception as error:
+        logger.error('Ошибка синхронизации с RemnaWave при докупке трафика', error=error)
+
+    await create_transaction(
+        db,
+        user_id=user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=-final_price,
+        description=description,
+    )

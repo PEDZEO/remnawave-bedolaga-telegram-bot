@@ -229,6 +229,8 @@ from .miniapp_helpers.tariff.switch_flow import (
 from .miniapp_helpers.tariff.topup import (
     build_topup_description,
     calculate_topup_price,
+    ensure_topup_balance,
+    execute_topup_purchase,
     get_tariff_for_topup,
     validate_topup_package,
 )
@@ -3777,11 +3779,6 @@ async def purchase_traffic_topup_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ):
     """Докупка трафика для подписки."""
-    from app.database.crud.subscription import add_subscription_traffic
-    from app.database.crud.transaction import create_transaction
-    from app.database.crud.user import subtract_user_balance
-    from app.database.models import TransactionType
-
     user = await authorize_miniapp_user(payload.init_data, db)
     subscription = ensure_paid_subscription(user)
     validate_subscription_id(payload.subscription_id, subscription)
@@ -3804,47 +3801,16 @@ async def purchase_traffic_topup_endpoint(
         base_price_kopeks,
     )
 
-    # Проверяем баланс
-    if user.balance_kopeks < final_price:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={
-                'code': 'insufficient_balance',
-                'message': 'Insufficient balance',
-                'required': final_price,
-                'balance': user.balance_kopeks,
-            },
-        )
-
-    # Списываем баланс
+    ensure_topup_balance(user, final_price)
     traffic_description = build_topup_description(payload.gb, traffic_discount_percent)
-    success = await subtract_user_balance(db, user, final_price, traffic_description)
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                'code': 'balance_error',
-                'message': 'Failed to subtract balance',
-            },
-        )
-
-    # Добавляем трафик (add_subscription_traffic уже создаёт TrafficPurchase и обновляет все необходимые поля)
-    await add_subscription_traffic(db, subscription, payload.gb)
-
-    # Синхронизируем с RemnaWave
-    try:
-        service = SubscriptionService()
-        await service.update_remnawave_user(db, subscription)
-    except Exception as e:
-        logger.error('Ошибка синхронизации с RemnaWave при докупке трафика', error=e)
-
-    # Создаем транзакцию
-    await create_transaction(
+    await execute_topup_purchase(
         db,
-        user_id=user.id,
-        type=TransactionType.SUBSCRIPTION_PAYMENT,
-        amount_kopeks=-final_price,
+        user,
+        subscription,
+        package_gb=payload.gb,
+        final_price=final_price,
         description=traffic_description,
+        logger=logger,
     )
 
     await db.refresh(user)
