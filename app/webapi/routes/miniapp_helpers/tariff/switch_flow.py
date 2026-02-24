@@ -146,3 +146,30 @@ async def resolve_tariff_squads(db: AsyncSession, tariff) -> list[str]:
 
     all_servers, _ = await get_all_server_squads(db, available_only=True)
     return [server.squad_uuid for server in all_servers if server.squad_uuid]
+
+
+async def execute_switch_charge(
+    db: AsyncSession,
+    user,
+    *,
+    upgrade_cost: int,
+    description: str,
+) -> None:
+    from app.database.crud.transaction import create_transaction
+    from app.database.crud.user import subtract_user_balance
+    from app.database.models import TransactionType
+
+    success = await subtract_user_balance(db, user, upgrade_cost, description)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={'code': 'balance_error', 'message': 'Failed to charge balance'},
+        )
+
+    await create_transaction(
+        db=db,
+        user_id=user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=upgrade_cost,
+        description=description,
+    )

@@ -226,6 +226,7 @@ from .miniapp_helpers.tariff.switch_flow import (
     build_switch_result_message,
     calculate_switch_pricing,
     ensure_switch_balance,
+    execute_switch_charge,
     resolve_tariff_squads,
 )
 from .miniapp_helpers.tariff.topup import (
@@ -3709,19 +3710,10 @@ async def switch_tariff_endpoint(
             new_period_days=new_period_days,
             remaining_days=remaining_days,
         )
-        success = await subtract_user_balance(db, user, upgrade_cost, description)
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={'code': 'balance_error', 'message': 'Failed to charge balance'},
-            )
-
-        # Записываем транзакцию
-        await create_transaction(
+        await execute_switch_charge(
             db=db,
-            user_id=user.id,
-            type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=upgrade_cost,
+            user=user,
+            upgrade_cost=upgrade_cost,
             description=description,
         )
 
