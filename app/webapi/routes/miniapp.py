@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime, timedelta
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 import structlog
@@ -156,9 +155,15 @@ from .miniapp_helpers.payment.amount import (
     current_request_timestamp,
     normalize_stars_amount,
 )
+from .miniapp_helpers.payment.create_cryptobot import (
+    create_cryptobot_balance_payment_response,
+)
+from .miniapp_helpers.payment.create_input import (
+    resolve_create_payment_amount,
+    resolve_create_payment_method,
+)
 from .miniapp_helpers.payment.request import (
     build_mulenpay_iframe_config,
-    normalize_amount_kopeks,
 )
 from .miniapp_helpers.payment_status.dispatcher import resolve_payment_status_entry
 from .miniapp_helpers.promo.discount import extract_promo_discounts
@@ -535,16 +540,10 @@ async def create_payment_link(
 ) -> MiniAppPaymentCreateResponse:
     user, _ = await resolve_user_from_init_data(db, payload.init_data)
 
-    method = (payload.method or '').strip().lower()
-    if not method:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail='Payment method is required',
-        )
-
-    amount_kopeks = normalize_amount_kopeks(
-        payload.amount_rubles,
-        payload.amount_kopeks,
+    method = resolve_create_payment_method(payload.method)
+    amount_kopeks = resolve_create_payment_amount(
+        amount_rubles=payload.amount_rubles,
+        amount_kopeks=payload.amount_kopeks,
     )
 
     if method == 'stars':
@@ -843,65 +842,10 @@ async def create_payment_link(
         )
 
     if method == 'cryptobot':
-        if not settings.is_cryptobot_enabled():
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
-        if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
-        rate = await get_usd_to_rub_rate()
-        min_amount_kopeks, max_amount_kopeks = compute_cryptobot_limits(rate)
-        if amount_kopeks < min_amount_kopeks:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=f'Amount is below minimum ({min_amount_kopeks / 100:.2f} RUB)',
-            )
-        if amount_kopeks > max_amount_kopeks:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=f'Amount exceeds maximum ({max_amount_kopeks / 100:.2f} RUB)',
-            )
-
-        try:
-            amount_usd = float(
-                (Decimal(amount_kopeks) / Decimal(100) / Decimal(str(rate))).quantize(
-                    Decimal('0.01'), rounding=ROUND_HALF_UP
-                )
-            )
-        except (InvalidOperation, ValueError):
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail='Unable to convert amount to USD',
-            )
-
-        payment_service = PaymentService()
-        result = await payment_service.create_cryptobot_payment(
+        return await create_cryptobot_balance_payment_response(
             db=db,
-            user_id=user.id,
-            amount_usd=amount_usd,
-            asset=settings.CRYPTOBOT_DEFAULT_ASSET,
-            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
-            payload=f'balance_{user.id}_{amount_kopeks}',
-        )
-        if not result:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
-
-        # Priority: web_app for desktop/browser, mini_app for mobile, bot as fallback
-        payment_url = (
-            result.get('web_app_invoice_url') or result.get('mini_app_invoice_url') or result.get('bot_invoice_url')
-        )
-        if not payment_url:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to obtain payment url')
-
-        return MiniAppPaymentCreateResponse(
-            method=method,
-            payment_url=payment_url,
+            user=user,
             amount_kopeks=amount_kopeks,
-            extra={
-                'local_payment_id': result.get('local_payment_id'),
-                'invoice_id': result.get('invoice_id'),
-                'amount_usd': amount_usd,
-                'rate': rate,
-                'requested_at': current_request_timestamp(),
-            },
         )
 
     if method == 'heleket':
