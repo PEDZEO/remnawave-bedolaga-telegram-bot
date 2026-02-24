@@ -217,6 +217,12 @@ from .miniapp_helpers.subscription.settings import (
     build_subscription_settings,
     prepare_server_catalog,
 )
+from .miniapp_helpers.subscription.traffic_update import (
+    calculate_traffic_upgrade_cost,
+    charge_traffic_upgrade,
+    ensure_traffic_update_allowed,
+    resolve_new_traffic_value,
+)
 from .miniapp_helpers.tariff.base import ensure_tariffs_mode_enabled
 from .miniapp_helpers.tariff.daily import (
     build_daily_toggle_message,
@@ -2932,121 +2938,25 @@ async def update_subscription_traffic_endpoint(
     validate_subscription_id(payload.subscription_id, subscription)
     old_traffic = subscription.traffic_limit_gb
 
-    raw_value = payload.traffic if payload.traffic is not None else payload.traffic_gb
-    if raw_value is None:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'validation_error', 'message': 'Traffic amount is required'},
-        )
-
-    try:
-        new_traffic = int(raw_value)
-    except (TypeError, ValueError):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'validation_error', 'message': 'Invalid traffic amount'},
-        ) from None
-
-    if new_traffic < 0:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'validation_error', 'message': 'Traffic amount must be non-negative'},
-        )
+    new_traffic = resolve_new_traffic_value(payload)
 
     if new_traffic == subscription.traffic_limit_gb:
         return MiniAppSubscriptionUpdateResponse(success=True, message='No changes')
 
-    # В режиме fixed полностью блокируем изменение трафика
-    # В режиме fixed_with_topup разрешаем докупку (is_traffic_topup_blocked = False)
-    if settings.is_traffic_topup_blocked():
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            detail={
-                'code': 'traffic_fixed',
-                'message': 'Traffic cannot be changed for this subscription',
-            },
-        )
-
-    available_packages: list[int] = []
-    for package in settings.get_traffic_packages():
-        try:
-            gb_value = int(package.get('gb'))
-        except (TypeError, ValueError):
-            continue
-        is_enabled = bool(package.get('enabled', True))
-        if package.get('is_active') is False:
-            is_enabled = False
-        if is_enabled:
-            available_packages.append(gb_value)
-
-    if available_packages and new_traffic not in available_packages:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'traffic_unavailable',
-                'message': 'Selected traffic package is not available',
-            },
-        )
-
-    months_remaining = get_remaining_months(subscription.end_date)
-    period_hint_days = months_remaining * 30 if months_remaining > 0 else None
-    traffic_discount = get_addon_discount_percent_for_user(
+    ensure_traffic_update_allowed(new_traffic)
+    total_price_difference, months_remaining = calculate_traffic_upgrade_cost(
         user,
-        'traffic',
-        period_hint_days,
+        subscription,
+        new_traffic,
     )
-
-    old_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
-    new_price_per_month = settings.get_traffic_price(new_traffic)
-
-    discounted_old_per_month, _ = apply_percentage_discount(
-        old_price_per_month,
-        traffic_discount,
+    await charge_traffic_upgrade(
+        db,
+        user,
+        subscription,
+        new_traffic=new_traffic,
+        total_price_difference=total_price_difference,
+        months_remaining=months_remaining,
     )
-    discounted_new_per_month, _ = apply_percentage_discount(
-        new_price_per_month,
-        traffic_discount,
-    )
-
-    price_difference_per_month = discounted_new_per_month - discounted_old_per_month
-    total_price_difference = 0
-
-    if price_difference_per_month > 0:
-        total_price_difference = price_difference_per_month * months_remaining
-        if getattr(user, 'balance_kopeks', 0) < total_price_difference:
-            missing = total_price_difference - getattr(user, 'balance_kopeks', 0)
-            raise HTTPException(
-                status.HTTP_402_PAYMENT_REQUIRED,
-                detail={
-                    'code': 'insufficient_funds',
-                    'message': (f'Недостаточно средств на балансе. Не хватает {settings.format_price(missing)}'),
-                },
-            )
-
-        description = f'Переключение трафика с {subscription.traffic_limit_gb}GB на {new_traffic}GB'
-
-        success = await subtract_user_balance(
-            db,
-            user,
-            total_price_difference,
-            description,
-        )
-        if not success:
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail={
-                    'code': 'balance_charge_failed',
-                    'message': 'Failed to charge user balance',
-                },
-            )
-
-        await create_transaction(
-            db=db,
-            user_id=user.id,
-            type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=total_price_difference,
-            description=f'{description} на {months_remaining} мес',
-        )
 
     subscription.traffic_limit_gb = new_traffic
     subscription.updated_at = datetime.now(UTC)
