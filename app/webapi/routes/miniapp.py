@@ -91,7 +91,6 @@ from app.utils.pricing_utils import (
     format_period_description,
     get_remaining_months,
 )
-from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
 from app.utils.telegram_webapp import (
     TelegramWebAppAuthError,
@@ -245,6 +244,7 @@ from .miniapp_subscription_helpers import (
     validate_subscription_id,
 )
 from .miniapp_tariff_helpers import get_tariff_monthly_price
+from .miniapp_tariff_switch_helpers import calculate_tariff_switch_cost
 
 
 logger = structlog.get_logger(__name__)
@@ -5410,7 +5410,7 @@ async def _build_tariff_model(
                 is_switch_free = False
         elif remaining_days > 0:
             # Обычный расчёт для периодных тарифов
-            cost, upgrade = _calculate_tariff_switch_cost(current_tariff, tariff, remaining_days, promo_group, user)
+            cost, upgrade = calculate_tariff_switch_cost(current_tariff, tariff, remaining_days, promo_group, user)
             switch_cost_kopeks = cost
             switch_cost_label = settings.format_price(cost) if cost > 0 else None
             is_upgrade = upgrade
@@ -5782,73 +5782,6 @@ async def purchase_tariff_endpoint(
     )
 
 
-def _get_user_period_discount(user, period_days: int) -> int:
-    """Получает скидку пользователя на период (унифицировано с ботом)."""
-    promo_group = getattr(user, 'promo_group', None) if user else None
-
-    if promo_group:
-        discount = promo_group.get_discount_percent('period', period_days)
-        if discount > 0:
-            return discount
-
-    personal_discount = get_user_active_promo_discount_percent(user) if user else 0
-    return personal_discount
-
-
-def _apply_promo_discount(price: int, discount_percent: int) -> int:
-    """Применяет скидку к цене."""
-    if discount_percent <= 0:
-        return price
-    discount = int(price * discount_percent / 100)
-    return max(0, price - discount)
-
-
-def _calculate_tariff_switch_cost(
-    current_tariff,
-    new_tariff,
-    remaining_days: int,
-    promo_group=None,
-    user=None,
-) -> tuple[int, bool]:
-    """
-    Рассчитывает стоимость переключения тарифа.
-    Логика унифицирована с ботом (tariff_purchase.py).
-
-    Формула: (new_monthly - current_monthly) * remaining_days / 30
-    Скидка применяется к обоим тарифам одинаково.
-
-    Returns:
-        (cost_kopeks, is_upgrade) - стоимость доплаты и флаг апгрейда
-    """
-    current_monthly = get_tariff_monthly_price(current_tariff)
-    new_monthly = get_tariff_monthly_price(new_tariff)
-
-    discount_percent = _get_user_period_discount(user, 30) if user else 0
-
-    # Fallback на promo_group.period_discounts если user не передан
-    if discount_percent == 0 and promo_group:
-        raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
-        for k, v in raw_discounts.items():
-            try:
-                if int(k) == 30:
-                    discount_percent = max(0, min(100, int(v)))
-                    break
-            except (TypeError, ValueError):
-                pass
-
-    if discount_percent > 0:
-        current_monthly = _apply_promo_discount(current_monthly, discount_percent)
-        new_monthly = _apply_promo_discount(new_monthly, discount_percent)
-
-    price_diff = new_monthly - current_monthly
-
-    if price_diff <= 0:
-        return 0, False
-
-    upgrade_cost = int(price_diff * remaining_days / 30)
-    return upgrade_cost, True
-
-
 @router.post('/subscription/tariff/switch/preview')
 async def preview_tariff_switch_endpoint(
     payload: MiniAppTariffSwitchRequest,
@@ -5924,7 +5857,7 @@ async def preview_tariff_switch_endpoint(
         upgrade_cost = min_period_price
         is_upgrade = min_period_price > 0
     else:
-        upgrade_cost, is_upgrade = _calculate_tariff_switch_cost(
+        upgrade_cost, is_upgrade = calculate_tariff_switch_cost(
             current_tariff, new_tariff, remaining_days, promo_group, user
         )
 
@@ -6030,7 +5963,7 @@ async def switch_tariff_endpoint(
         # remaining_days для нового тарифа будет равен min_period_days после покупки
         new_period_days = min_period_days
     else:
-        upgrade_cost, is_upgrade = _calculate_tariff_switch_cost(
+        upgrade_cost, is_upgrade = calculate_tariff_switch_cost(
             current_tariff, new_tariff, remaining_days, promo_group, user
         )
         new_period_days = 0  # Не меняем дату окончания
