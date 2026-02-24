@@ -1,3 +1,10 @@
+from __future__ import annotations
+
+from typing import Any
+
+from ..schemas.miniapp import MiniAppPaymentStatusQuery, MiniAppPaymentStatusResult
+
+
 _PAYMENT_SUCCESS_STATUSES = {
     'success',
     'paid',
@@ -51,3 +58,27 @@ def normalize_payment_method(method: str | None) -> str:
 
 def is_supported_payment_method(method: str) -> bool:
     return method in _SUPPORTED_PAYMENT_METHODS
+
+
+def build_pending_payment_status(
+    *,
+    method: str,
+    query: MiniAppPaymentStatusQuery,
+    message: str,
+    extra: dict[str, Any] | None = None,
+) -> MiniAppPaymentStatusResult:
+    payload = {
+        'payload': query.payload,
+        'started_at': query.started_at,
+    }
+    if extra:
+        payload.update(extra)
+
+    return MiniAppPaymentStatusResult(
+        method=method,
+        status='pending',
+        is_paid=False,
+        amount_kopeks=query.amount_kopeks,
+        message=message,
+        extra=payload,
+    )

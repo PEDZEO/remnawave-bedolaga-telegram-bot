@@ -220,6 +220,7 @@ from .miniapp_payment_request_helpers import (
     normalize_amount_kopeks,
 )
 from .miniapp_payment_status_helpers import (
+    build_pending_payment_status,
     classify_payment_status,
     is_supported_payment_method,
     normalize_payment_method,
@@ -1193,18 +1194,14 @@ async def _resolve_yookassa_payment_status(
         payment = await get_yookassa_payment_by_id(db, query.payment_id)
 
     if not payment or payment.user_id != user.id:
-        return MiniAppPaymentStatusResult(
+        return build_pending_payment_status(
             method=method,
-            status='pending',
-            is_paid=False,
-            amount_kopeks=query.amount_kopeks,
+            query=query,
             message='Payment not found',
             extra={
                 'local_payment_id': query.local_payment_id,
                 'payment_id': query.payment_id,
                 'invoice_id': query.payment_id,
-                'payload': query.payload,
-                'started_at': query.started_at,
             },
         )
 
@@ -1240,18 +1237,14 @@ async def _resolve_mulenpay_payment_status(
     query: MiniAppPaymentStatusQuery,
 ) -> MiniAppPaymentStatusResult:
     if not query.local_payment_id:
-        return MiniAppPaymentStatusResult(
+        return build_pending_payment_status(
             method='mulenpay',
-            status='pending',
-            is_paid=False,
-            amount_kopeks=query.amount_kopeks,
+            query=query,
             message='Missing payment identifier',
             extra={
                 'local_payment_id': query.local_payment_id,
                 'invoice_id': query.invoice_id,
                 'payment_id': query.payment_id,
-                'payload': query.payload,
-                'started_at': query.started_at,
             },
         )
 
@@ -1259,18 +1252,14 @@ async def _resolve_mulenpay_payment_status(
     payment = status_info.get('payment') if status_info else None
 
     if not payment or payment.user_id != user.id:
-        return MiniAppPaymentStatusResult(
+        return build_pending_payment_status(
             method='mulenpay',
-            status='pending',
-            is_paid=False,
-            amount_kopeks=query.amount_kopeks,
+            query=query,
             message='Payment not found',
             extra={
                 'local_payment_id': query.local_payment_id,
                 'invoice_id': query.invoice_id,
                 'payment_id': query.payment_id,
-                'payload': query.payload,
-                'started_at': query.started_at,
             },
         )
 
