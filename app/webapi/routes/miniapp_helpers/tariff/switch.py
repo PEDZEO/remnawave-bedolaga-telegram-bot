@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 
-from .miniapp_tariff_helpers import get_tariff_monthly_price
+from .base import get_tariff_monthly_price
 
 
 def get_user_period_discount(user, period_days: int) -> int:

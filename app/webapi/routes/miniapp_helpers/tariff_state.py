@@ -7,7 +7,7 @@ from app.database.crud.tariff import get_tariff_by_id
 from app.webapi.schemas.miniapp import MiniAppCurrentTariff, MiniAppTrafficTopupPackage
 
 from ..miniapp_format_helpers import format_traffic_limit_label
-from ..miniapp_tariff_helpers import get_tariff_monthly_price
+from .tariff.base import get_tariff_monthly_price
 
 
 def is_trial_available_for_user(user) -> bool:

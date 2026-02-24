@@ -207,6 +207,13 @@ from .miniapp_helpers.runtime import (
     load_subscription_links,
     resolve_connected_servers,
 )
+from .miniapp_helpers.subscription.common import (
+    get_addon_discount_percent_for_user,
+    get_period_hint_from_subscription,
+    parse_period_identifier,
+    validate_subscription_id,
+)
+from .miniapp_helpers.tariff.switch import calculate_tariff_switch_cost
 from .miniapp_helpers.tariff_state import (
     build_current_tariff_model,
     get_current_tariff_model,
@@ -224,13 +231,6 @@ from .miniapp_renewal_message_helpers import (
     build_renewal_status_message,
     build_renewal_success_message,
 )
-from .miniapp_subscription_helpers import (
-    get_addon_discount_percent_for_user,
-    get_period_hint_from_subscription,
-    parse_period_identifier,
-    validate_subscription_id,
-)
-from .miniapp_tariff_switch_helpers import calculate_tariff_switch_cost
 
 
 logger = structlog.get_logger(__name__)
