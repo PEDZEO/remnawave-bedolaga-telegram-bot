@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import re
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_UP, ROUND_UP, Decimal, InvalidOperation
@@ -86,7 +85,6 @@ from app.services.trial_activation_service import (
     rollback_trial_subscription_activation,
 )
 from app.services.tribute_service import TributeService
-from app.utils.currency_converter import currency_converter
 from app.utils.pricing_utils import (
     apply_percentage_discount,
     calculate_prorated_price,
@@ -195,6 +193,7 @@ from .miniapp_autopay_helpers import (
     _get_autopay_day_options,
     _normalize_autopay_days,
 )
+from .miniapp_cryptobot_helpers import compute_cryptobot_limits, get_usd_to_rub_rate
 from .miniapp_format_helpers import (
     bytes_to_gb,
     format_gb,
@@ -254,11 +253,6 @@ promo_code_service = PromoCodeService()
 renewal_service = SubscriptionRenewalService()
 
 
-_CRYPTOBOT_MIN_USD = 1.0
-_CRYPTOBOT_MAX_USD = 1000.0
-_CRYPTOBOT_FALLBACK_RATE = 95.0
-
-
 def _get_tariff_monthly_price(tariff) -> int:
     """Получает месячную цену тарифа (30 дней) с fallback на пропорциональный расчёт."""
     price = tariff.get_price_for_period(30)
@@ -274,23 +268,6 @@ def _get_tariff_monthly_price(tariff) -> int:
             return int(first_price * 30 / first_period)
 
     return 0
-
-
-async def _get_usd_to_rub_rate() -> float:
-    try:
-        rate = await currency_converter.get_usd_to_rub_rate()
-    except Exception:
-        rate = 0.0
-    if not rate or rate <= 0:
-        rate = _CRYPTOBOT_FALLBACK_RATE
-    return float(rate)
-
-
-def _compute_cryptobot_limits(rate: float) -> tuple[int, int]:
-    min_kopeks = max(1, int(math.ceil(rate * _CRYPTOBOT_MIN_USD * 100)))
-    max_kopeks = int(math.floor(rate * _CRYPTOBOT_MAX_USD * 100))
-    max_kopeks = max(max_kopeks, min_kopeks)
-    return min_kopeks, max_kopeks
 
 
 def _merge_purchase_selection_from_request(
@@ -571,8 +548,8 @@ async def get_payment_methods(
         )
 
     if settings.is_cryptobot_enabled():
-        rate = await _get_usd_to_rub_rate()
-        min_amount_kopeks, max_amount_kopeks = _compute_cryptobot_limits(rate)
+        rate = await get_usd_to_rub_rate()
+        min_amount_kopeks, max_amount_kopeks = compute_cryptobot_limits(rate)
         methods.append(
             MiniAppPaymentMethod(
                 id='cryptobot',
@@ -976,8 +953,8 @@ async def create_payment_link(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
         if amount_kopeks is None or amount_kopeks <= 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
-        rate = await _get_usd_to_rub_rate()
-        min_amount_kopeks, max_amount_kopeks = _compute_cryptobot_limits(rate)
+        rate = await get_usd_to_rub_rate()
+        min_amount_kopeks, max_amount_kopeks = compute_cryptobot_limits(rate)
         if amount_kopeks < min_amount_kopeks:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
@@ -4633,8 +4610,8 @@ async def submit_subscription_renewal_endpoint(
         if not settings.is_cryptobot_enabled():
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
 
-        rate = await _get_usd_to_rub_rate()
-        min_amount_kopeks, max_amount_kopeks = _compute_cryptobot_limits(rate)
+        rate = await get_usd_to_rub_rate()
+        min_amount_kopeks, max_amount_kopeks = compute_cryptobot_limits(rate)
         if missing_amount < min_amount_kopeks:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
