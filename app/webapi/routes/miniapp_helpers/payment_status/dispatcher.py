@@ -5,12 +5,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import User
 from app.services.payment_service import PaymentService
 
-from ..schemas.miniapp import MiniAppPaymentStatusQuery, MiniAppPaymentStatusResult
-from .miniapp_payment_status_base_resolvers import (
+from ...schemas.miniapp import MiniAppPaymentStatusQuery, MiniAppPaymentStatusResult
+from .base import (
     resolve_mulenpay_payment_status,
     resolve_yookassa_payment_status,
 )
-from .miniapp_payment_status_direct_resolvers import (
+from .common import (
+    build_unknown_payment_status,
+    is_supported_payment_method,
+    normalize_payment_method,
+)
+from .direct import (
     resolve_cloudpayments_payment_status,
     resolve_cryptobot_payment_status,
     resolve_freekassa_payment_status,
@@ -18,15 +23,10 @@ from .miniapp_payment_status_direct_resolvers import (
     resolve_stars_payment_status,
     resolve_tribute_payment_status,
 )
-from .miniapp_payment_status_gateway_resolvers import (
+from .gateway import (
     resolve_pal24_payment_status,
     resolve_platega_payment_status,
     resolve_wata_payment_status,
-)
-from .miniapp_payment_status_helpers import (
-    build_unknown_payment_status,
-    is_supported_payment_method,
-    normalize_payment_method,
 )
 
 

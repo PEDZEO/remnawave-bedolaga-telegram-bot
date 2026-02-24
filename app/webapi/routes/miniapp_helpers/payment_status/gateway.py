@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import User
 from app.services.payment_service import PaymentService, get_wata_payment_by_link_id
 
-from ..schemas.miniapp import MiniAppPaymentStatusQuery, MiniAppPaymentStatusResult
-from .miniapp_payment_status_helpers import (
+from ...schemas.miniapp import MiniAppPaymentStatusQuery, MiniAppPaymentStatusResult
+from .common import (
     build_pending_payment_status,
     classify_payment_status,
 )

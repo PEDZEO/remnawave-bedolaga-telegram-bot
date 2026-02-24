@@ -7,12 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import PaymentMethod, User
 from app.services.subscription_renewal_service import decode_payment_payload
 
-from ..schemas.miniapp import MiniAppPaymentStatusQuery, MiniAppPaymentStatusResult
-from .miniapp_payment_lookup_helpers import (
+from ...miniapp_payment_lookup_helpers import (
     find_recent_deposit,
     parse_client_timestamp,
 )
-from .miniapp_payment_status_helpers import (
+from ...schemas.miniapp import MiniAppPaymentStatusQuery, MiniAppPaymentStatusResult
+from .common import (
     build_pending_payment_status,
     classify_payment_status,
 )

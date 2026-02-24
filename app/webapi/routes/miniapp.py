@@ -180,6 +180,18 @@ from .miniapp_format_helpers import (
     format_traffic_limit_label,
     status_label,
 )
+from .miniapp_helpers.payment_status.dispatcher import resolve_payment_status_entry
+from .miniapp_helpers.promo_models import (
+    ActiveOfferContext,
+    build_promo_offer_models,
+    find_active_test_access_offers,
+)
+from .miniapp_helpers.referral import build_referral_info
+from .miniapp_helpers.runtime import (
+    load_devices_info,
+    load_subscription_links,
+    resolve_connected_servers,
+)
 from .miniapp_misc_helpers import (
     is_remnawave_configured,
     resolve_display_name,
@@ -195,19 +207,12 @@ from .miniapp_payment_request_helpers import (
     build_mulenpay_iframe_config,
     normalize_amount_kopeks,
 )
-from .miniapp_payment_status_dispatcher import resolve_payment_status_entry
 from .miniapp_promo_discount_helpers import extract_promo_discounts
-from .miniapp_promo_models_helpers import (
-    ActiveOfferContext,
-    build_promo_offer_models,
-    find_active_test_access_offers,
-)
 from .miniapp_promo_offer_helpers import (
     extract_offer_extra,
     normalize_effect_type,
 )
 from .miniapp_purchase_selection_helpers import merge_purchase_selection_from_request
-from .miniapp_referral_helpers import build_referral_info
 from .miniapp_renewal_message_helpers import (
     build_promo_offer_payload,
     build_renewal_pending_message,
@@ -219,11 +224,6 @@ from .miniapp_subscription_helpers import (
     get_period_hint_from_subscription,
     parse_period_identifier,
     validate_subscription_id,
-)
-from .miniapp_subscription_runtime_helpers import (
-    load_devices_info,
-    load_subscription_links,
-    resolve_connected_servers,
 )
 from .miniapp_tariff_helpers import get_tariff_monthly_price
 from .miniapp_tariff_switch_helpers import calculate_tariff_switch_cost
