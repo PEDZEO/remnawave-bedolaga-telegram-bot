@@ -21,14 +21,9 @@ from app.database.crud.discount_offer import (
 from app.database.crud.promo_group import get_auto_assign_promo_groups
 from app.database.crud.promo_offer_template import get_promo_offer_template_by_id
 from app.database.crud.rules import get_rules_by_language
-from app.database.crud.server_squad import (
-    update_server_user_counts,
-)
 from app.database.crud.subscription import (
-    add_subscription_servers,
     create_trial_subscription,
     extend_subscription,
-    remove_subscription_servers,
     update_subscription_autopay,
 )
 from app.database.crud.tariff import get_tariffs_for_user
@@ -72,10 +67,6 @@ from app.services.trial_activation_service import (
     rollback_trial_subscription_activation,
 )
 from app.services.tribute_service import TributeService
-from app.utils.pricing_utils import (
-    calculate_prorated_price,
-    get_remaining_months,
-)
 from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
 from app.utils.telegram_webapp import (
     TelegramWebAppAuthError,
@@ -190,8 +181,6 @@ from .miniapp_helpers.runtime import (
     resolve_connected_servers,
 )
 from .miniapp_helpers.subscription.common import (
-    get_addon_discount_percent_for_user,
-    get_period_hint_from_subscription,
     validate_subscription_id,
 )
 from .miniapp_helpers.subscription.devices_update import (
@@ -217,9 +206,14 @@ from .miniapp_helpers.subscription.renewal_submit import (
     resolve_renewal_method,
     resolve_renewal_period,
 )
+from .miniapp_helpers.subscription.servers_update import (
+    apply_servers_update_plan,
+    build_servers_update_plan,
+    resolve_selected_server_order,
+    resolve_server_changes,
+)
 from .miniapp_helpers.subscription.settings import (
     build_subscription_settings,
-    prepare_server_catalog,
 )
 from .miniapp_helpers.subscription.traffic_update import (
     calculate_traffic_upgrade_cost,
@@ -2737,42 +2731,8 @@ async def update_subscription_servers_endpoint(
     validate_subscription_id(payload.subscription_id, subscription)
     old_servers = list(getattr(subscription, 'connected_squads', []) or [])
 
-    raw_selection: list[str] = []
-    for collection in (
-        payload.servers,
-        payload.squads,
-        payload.server_uuids,
-        payload.squad_uuids,
-    ):
-        if collection:
-            raw_selection.extend(collection)
-
-    selected_order: list[str] = []
-    seen: set[str] = set()
-    for item in raw_selection:
-        if not item:
-            continue
-        uuid = str(item).strip()
-        if not uuid or uuid in seen:
-            continue
-        seen.add(uuid)
-        selected_order.append(uuid)
-
-    if not selected_order:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'validation_error',
-                'message': 'At least one server must be selected',
-            },
-        )
-
-    current_squads = list(subscription.connected_squads or [])
-    current_set = set(current_squads)
-    selected_set = set(selected_order)
-
-    added = [uuid for uuid in selected_order if uuid not in current_set]
-    removed = [uuid for uuid in current_squads if uuid not in selected_set]
+    selected_order = resolve_selected_server_order(payload)
+    _, added, removed = resolve_server_changes(subscription, selected_order)
 
     if not added and not removed:
         return MiniAppSubscriptionUpdateResponse(
@@ -2780,129 +2740,29 @@ async def update_subscription_servers_endpoint(
             message='No changes',
         )
 
-    period_hint_days = get_period_hint_from_subscription(subscription)
-    servers_discount = get_addon_discount_percent_for_user(
-        user,
-        'servers',
-        period_hint_days,
-    )
-
-    _, _, catalog = await prepare_server_catalog(
+    plan = await build_servers_update_plan(
         db,
         user,
         subscription,
-        servers_discount,
+        selected_order=selected_order,
+        added=added,
+        removed=removed,
     )
-
-    invalid_servers = [uuid for uuid in selected_order if uuid not in catalog]
-    if invalid_servers:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'invalid_servers',
-                'message': 'Some of the selected servers are not available',
-            },
-        )
-
-    for uuid in added:
-        entry = catalog.get(uuid)
-        if not entry or not entry.get('available_for_new', False):
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail={
-                    'code': 'server_unavailable',
-                    'message': 'Selected server is not available',
-                },
-            )
-
-    cost_per_month = sum(int(catalog[uuid].get('discounted_per_month', 0)) for uuid in added)
-    total_cost = 0
-    charged_months = 0
-    if cost_per_month > 0:
-        total_cost, charged_months = calculate_prorated_price(
-            cost_per_month,
-            subscription.end_date,
-        )
-    else:
-        charged_months = get_remaining_months(subscription.end_date)
-
-    added_server_ids = [catalog[uuid].get('server_id') for uuid in added if catalog[uuid].get('server_id') is not None]
-    added_server_prices = [
-        int(catalog[uuid].get('discounted_per_month', 0)) * charged_months
-        for uuid in added
-        if catalog[uuid].get('server_id') is not None
-    ]
-
-    if total_cost > 0 and getattr(user, 'balance_kopeks', 0) < total_cost:
-        missing = total_cost - getattr(user, 'balance_kopeks', 0)
-        raise HTTPException(
-            status.HTTP_402_PAYMENT_REQUIRED,
-            detail={
-                'code': 'insufficient_funds',
-                'message': (f'Недостаточно средств на балансе. Не хватает {settings.format_price(missing)}'),
-            },
-        )
-
-    if total_cost > 0:
-        added_names = [catalog[uuid].get('name', uuid) for uuid in added]
-        description = (
-            f'Добавление серверов: {", ".join(added_names)} на {charged_months} мес'
-            if added_names
-            else 'Изменение списка серверов'
-        )
-
-        success = await subtract_user_balance(
-            db,
-            user,
-            total_cost,
-            description,
-        )
-        if not success:
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail={
-                    'code': 'balance_charge_failed',
-                    'message': 'Failed to charge user balance',
-                },
-            )
-
-        await create_transaction(
-            db=db,
-            user_id=user.id,
-            type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=total_cost,
-            description=description,
-        )
-
-    if added_server_ids:
-        await add_subscription_servers(db, subscription, added_server_ids, added_server_prices)
-
-    removed_server_ids = [
-        catalog[uuid].get('server_id') for uuid in removed if catalog[uuid].get('server_id') is not None
-    ]
-
-    if removed_server_ids:
-        await remove_subscription_servers(db, subscription.id, removed_server_ids)
-
-    if added_server_ids or removed_server_ids:
-        try:
-            await update_server_user_counts(
-                db,
-                add_ids=added_server_ids or None,
-                remove_ids=removed_server_ids or None,
-            )
-        except Exception as e:
-            logger.error('Ошибка обновления счётчика серверов', e=e)
-
-    ordered_selection = []
-    seen_selection = set()
-    for uuid in selected_order:
-        if uuid in seen_selection:
-            continue
-        seen_selection.add(uuid)
-        ordered_selection.append(uuid)
-
-    subscription.connected_squads = ordered_selection
+    total_cost = int(plan['total_cost'])
+    await apply_servers_update_plan(
+        db,
+        user,
+        subscription,
+        selected_order=selected_order,
+        added=added,
+        total_cost=total_cost,
+        charged_months=int(plan['charged_months']),
+        catalog=plan['catalog'],
+        added_server_ids=plan['added_server_ids'],
+        added_server_prices=plan['added_server_prices'],
+        removed_server_ids=plan['removed_server_ids'],
+        logger=logger,
+    )
     await finalize_subscription_update(
         db,
         user,
