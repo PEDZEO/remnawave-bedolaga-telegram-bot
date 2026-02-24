@@ -58,7 +58,6 @@ from app.services.subscription_purchase_service import (
     purchase_service,
 )
 from app.services.subscription_renewal_service import (
-    SubscriptionRenewalChargeError,
     SubscriptionRenewalService,
     build_payment_descriptor,
     calculate_missing_amount,
@@ -200,6 +199,10 @@ from .miniapp_helpers.subscription.common import (
 )
 from .miniapp_helpers.subscription.renewal import (
     prepare_subscription_renewal_options,
+)
+from .miniapp_helpers.subscription.renewal_execute import (
+    execute_classic_renewal,
+    execute_tariff_renewal,
 )
 from .miniapp_helpers.subscription.renewal_submit import (
     build_tariff_renewal_pricing,
@@ -2464,103 +2467,54 @@ async def submit_subscription_renewal_endpoint(
 
     if missing_amount <= 0:
         if tariff_pricing:
-            # Тарифный режим: простое продление
-            from app.database.crud.subscription import extend_subscription
-            from app.database.crud.transaction import create_transaction
-            from app.database.crud.user import subtract_user_balance
-
-            try:
-                # Списываем баланс (subtract_user_balance делает commit и обновляет user.balance_kopeks)
-                success = await subtract_user_balance(db, user, final_total, description)
-                if not success:
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail={'code': 'balance_error', 'message': 'Failed to subtract balance'},
-                    )
-
-                # Продлеваем подписку
-                subscription = await extend_subscription(db, subscription, period_days)
-                new_end_date = subscription.end_date
-
-                # Записываем транзакцию
-                from app.database.models import TransactionType
-
-                await create_transaction(
-                    db,
-                    user_id=user.id,
-                    type=TransactionType.SUBSCRIPTION_PAYMENT,
-                    amount_kopeks=-final_total,
-                    description=description,
-                )
-
-                # Синхронизируем с RemnaWave (сброс трафика по настройке)
-                try:
-                    from app.services.subscription_service import SubscriptionService
-
-                    service = SubscriptionService()
-                    await service.update_remnawave_user(
-                        db,
-                        subscription,
-                        reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
-                        reset_reason='subscription renewal (miniapp)',
-                    )
-                except Exception as e:
-                    logger.error('Ошибка синхронизации с RemnaWave при продлении (miniapp)', error=e)
-
-                lang = getattr(user, 'language', settings.DEFAULT_LANGUAGE)
-                if lang == 'ru':
-                    message = f'Подписка продлена до {new_end_date.strftime("%d.%m.%Y")}'
-                else:
-                    message = f'Subscription extended until {new_end_date.strftime("%Y-%m-%d")}'
-
-                return MiniAppSubscriptionRenewalResponse(
-                    message=message,
-                    balance_kopeks=user.balance_kopeks,
-                    balance_label=settings.format_price(user.balance_kopeks),
-                    subscription_id=subscription.id,
-                    renewed_until=new_end_date,
-                )
-            except Exception as error:
-                await db.rollback()
-                logger.error('Failed to renew tariff subscription', subscription_id=subscription.id, error=error)
-                raise HTTPException(
-                    status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail={'code': 'renewal_failed', 'message': 'Failed to renew subscription'},
-                ) from error
-        else:
-            # Классический режим
-            try:
-                result = await renewal_service.finalize(
-                    db,
-                    user,
-                    subscription,
-                    pricing_model,
-                    description=description,
-                )
-            except SubscriptionRenewalChargeError as error:
-                logger.error(
-                    'Failed to charge balance for subscription renewal', subscription_id=subscription.id, error=error
-                )
-                raise HTTPException(
-                    status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail={'code': 'charge_failed', 'message': 'Failed to charge balance'},
-                ) from error
-
-            updated_subscription = result.subscription
-            message = build_renewal_success_message(
+            updated_subscription = await execute_tariff_renewal(
+                db,
                 user,
-                updated_subscription,
-                result.total_amount_kopeks,
-                pricing_model.promo_discount_value,
+                subscription,
+                period_days=period_days,
+                final_total=final_total,
+                description=description,
+                logger=logger,
             )
+            new_end_date = updated_subscription.end_date
+            lang = getattr(user, 'language', settings.DEFAULT_LANGUAGE)
+            if lang == 'ru':
+                message = f'Подписка продлена до {new_end_date.strftime("%d.%m.%Y")}'
+            else:
+                message = f'Subscription extended until {new_end_date.strftime("%Y-%m-%d")}'
 
             return MiniAppSubscriptionRenewalResponse(
                 message=message,
                 balance_kopeks=user.balance_kopeks,
                 balance_label=settings.format_price(user.balance_kopeks),
                 subscription_id=updated_subscription.id,
-                renewed_until=updated_subscription.end_date,
+                renewed_until=new_end_date,
             )
+        result = await execute_classic_renewal(
+            db,
+            renewal_service,
+            user,
+            subscription,
+            pricing_model,
+            description=description,
+            logger=logger,
+        )
+
+        updated_subscription = result.subscription
+        message = build_renewal_success_message(
+            user,
+            updated_subscription,
+            result.total_amount_kopeks,
+            pricing_model.promo_discount_value,
+        )
+
+        return MiniAppSubscriptionRenewalResponse(
+            message=message,
+            balance_kopeks=user.balance_kopeks,
+            balance_label=settings.format_price(user.balance_kopeks),
+            subscription_id=updated_subscription.id,
+            renewed_until=updated_subscription.end_date,
+        )
 
     supported_methods = {'cryptobot'}
     ensure_renewal_method_or_balance(
