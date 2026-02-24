@@ -1313,17 +1313,13 @@ async def _resolve_platega_payment_status(
         payment = await get_platega_payment_by_correlation_id(db, correlation)
 
     if not payment or payment.user_id != user.id:
-        return MiniAppPaymentStatusResult(
+        return build_pending_payment_status(
             method='platega',
-            status='pending',
-            is_paid=False,
-            amount_kopeks=query.amount_kopeks,
+            query=query,
             message='Payment not found',
             extra={
                 'local_payment_id': query.local_payment_id,
                 'payment_id': query.payment_id,
-                'payload': query.payload,
-                'started_at': query.started_at,
             },
         )
 
@@ -1383,19 +1379,15 @@ async def _resolve_wata_payment_status(
             local_id = fallback_payment.id
 
     if not local_id:
-        return MiniAppPaymentStatusResult(
+        return build_pending_payment_status(
             method='wata',
-            status='pending',
-            is_paid=False,
-            amount_kopeks=query.amount_kopeks,
+            query=query,
             message='Missing payment identifier',
             extra={
                 'local_payment_id': query.local_payment_id,
                 'payment_link_id': payment_link_id,
                 'payment_id': query.payment_id,
                 'invoice_id': query.invoice_id,
-                'payload': query.payload,
-                'started_at': query.started_at,
             },
         )
 
@@ -1403,19 +1395,15 @@ async def _resolve_wata_payment_status(
     payment = (status_info or {}).get('payment') or fallback_payment
 
     if not payment or payment.user_id != user.id:
-        return MiniAppPaymentStatusResult(
+        return build_pending_payment_status(
             method='wata',
-            status='pending',
-            is_paid=False,
-            amount_kopeks=query.amount_kopeks,
+            query=query,
             message='Payment not found',
             extra={
                 'local_payment_id': local_id,
                 'payment_link_id': (payment_link_id or getattr(payment, 'payment_link_id', None)),
                 'payment_id': query.payment_id,
                 'invoice_id': query.invoice_id,
-                'payload': query.payload,
-                'started_at': query.started_at,
             },
         )
 
