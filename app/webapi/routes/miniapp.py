@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime, timedelta
-from decimal import ROUND_HALF_UP, ROUND_UP, Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 import structlog
@@ -196,11 +196,21 @@ from .miniapp_helpers.runtime import (
 from .miniapp_helpers.subscription.common import (
     get_addon_discount_percent_for_user,
     get_period_hint_from_subscription,
-    parse_period_identifier,
     validate_subscription_id,
 )
 from .miniapp_helpers.subscription.renewal import (
     prepare_subscription_renewal_options,
+)
+from .miniapp_helpers.subscription.renewal_submit import (
+    build_tariff_renewal_pricing,
+    compute_amount_usd_from_kopeks,
+    ensure_classic_renewal_period_available,
+    ensure_cryptobot_amount_limits,
+    ensure_renewal_method_or_balance,
+    ensure_renewal_method_supported,
+    extract_cryptobot_payment_urls,
+    resolve_renewal_method,
+    resolve_renewal_period,
 )
 from .miniapp_helpers.subscription.settings import (
     build_subscription_settings,
@@ -2408,89 +2418,17 @@ async def submit_subscription_renewal_endpoint(
     )
     validate_subscription_id(payload.subscription_id, subscription)
 
-    period_days: int | None = None
-    if payload.period_days is not None:
-        try:
-            period_days = int(payload.period_days)
-        except (TypeError, ValueError) as error:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail={'code': 'invalid_period', 'message': 'Invalid renewal period'},
-            ) from error
+    period_days = resolve_renewal_period(payload.period_days, payload.period_id)
+    tariff_pricing = await build_tariff_renewal_pricing(
+        db,
+        user,
+        subscription,
+        period_days,
+    )
+    if not tariff_pricing:
+        ensure_classic_renewal_period_available(period_days)
 
-    if period_days is None:
-        period_days = parse_period_identifier(payload.period_id)
-
-    if period_days is None or period_days <= 0:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'invalid_period', 'message': 'Invalid renewal period'},
-        )
-
-    # Проверяем, есть ли у подписки тариф (режим тарифов)
-    tariff_id = getattr(subscription, 'tariff_id', None)
-    tariff = None
-    tariff_pricing = None
-
-    if tariff_id:
-        from app.database.crud.tariff import get_tariff_by_id
-
-        tariff = await get_tariff_by_id(db, tariff_id)
-
-    if tariff and tariff.period_prices:
-        # Режим тарифов: проверяем периоды из тарифа
-        available_periods = [int(p) for p in tariff.period_prices.keys()]
-        if period_days not in available_periods:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail={
-                    'code': 'period_unavailable',
-                    'message': 'Selected renewal period is not available for this tariff',
-                },
-            )
-
-        # Рассчитываем цену из тарифа
-        original_price_kopeks = tariff.period_prices.get(str(period_days), tariff.period_prices.get(period_days, 0))
-
-        # Применяем скидку промогруппы
-        promo_group = (
-            user.get_primary_promo_group()
-            if hasattr(user, 'get_primary_promo_group')
-            else getattr(user, 'promo_group', None)
-        )
-        discount_percent = 0
-        if promo_group:
-            raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
-            for k, v in raw_discounts.items():
-                try:
-                    if int(k) == period_days:
-                        discount_percent = max(0, min(100, int(v)))
-                        break
-                except (TypeError, ValueError):
-                    pass
-
-        if discount_percent > 0:
-            final_total = int(original_price_kopeks * (100 - discount_percent) / 100)
-        else:
-            final_total = original_price_kopeks
-
-        tariff_pricing = {
-            'period_days': period_days,
-            'original_price_kopeks': original_price_kopeks,
-            'discount_percent': discount_percent,
-            'final_total': final_total,
-            'tariff_id': tariff.id,
-        }
-    else:
-        # Классический режим
-        available_periods = [period for period in settings.get_available_renewal_periods() if period > 0]
-        if period_days not in available_periods:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail={'code': 'period_unavailable', 'message': 'Selected renewal period is not available'},
-            )
-
-    method = (payload.method or '').strip().lower()
+    method = resolve_renewal_method(payload.method)
 
     # Для тарифного режима используем упрощённый расчёт
     if tariff_pricing:
@@ -2498,7 +2436,7 @@ async def submit_subscription_renewal_endpoint(
         pricing = tariff_pricing
     else:
         try:
-            pricing_model = await _calculate_subscription_renewal_pricing(
+            pricing_model = await renewal_service.calculate_pricing(
                 db,
                 user,
                 subscription,
@@ -2624,32 +2562,13 @@ async def submit_subscription_renewal_endpoint(
                 renewed_until=updated_subscription.end_date,
             )
 
-    if not method:
-        if final_total > 0 and balance_kopeks < final_total:
-            missing = final_total - balance_kopeks
-            raise HTTPException(
-                status.HTTP_402_PAYMENT_REQUIRED,
-                detail={
-                    'code': 'insufficient_funds',
-                    'message': 'Not enough funds to renew the subscription',
-                    'missing_amount_kopeks': missing,
-                },
-            )
-
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'payment_method_required',
-                'message': 'Payment method is required when balance is insufficient',
-            },
-        )
-
     supported_methods = {'cryptobot'}
-    if method not in supported_methods:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'unsupported_method', 'message': 'Payment method is not supported for renewal'},
-        )
+    ensure_renewal_method_or_balance(
+        method=method,
+        final_total=final_total,
+        balance_kopeks=balance_kopeks,
+    )
+    ensure_renewal_method_supported(method, supported_methods)
 
     if method == 'cryptobot':
         if not settings.is_cryptobot_enabled():
@@ -2657,34 +2576,12 @@ async def submit_subscription_renewal_endpoint(
 
         rate = await get_usd_to_rub_rate()
         min_amount_kopeks, max_amount_kopeks = compute_cryptobot_limits(rate)
-        if missing_amount < min_amount_kopeks:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail={
-                    'code': 'amount_below_minimum',
-                    'message': f'Amount is below minimum ({min_amount_kopeks / 100:.2f} RUB)',
-                },
-            )
-        if missing_amount > max_amount_kopeks:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail={
-                    'code': 'amount_above_maximum',
-                    'message': f'Amount exceeds maximum ({max_amount_kopeks / 100:.2f} RUB)',
-                },
-            )
-
-        try:
-            decimal_amount = Decimal(missing_amount) / Decimal(100) / Decimal(str(rate))
-            amount_usd = float(decimal_amount.quantize(Decimal('0.01'), rounding=ROUND_UP))
-        except (InvalidOperation, ValueError) as error:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail={'code': 'conversion_failed', 'message': 'Unable to convert amount to USD'},
-            ) from error
-
-        if amount_usd <= 0:
-            amount_usd = float(decimal_amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+        ensure_cryptobot_amount_limits(
+            missing_amount=missing_amount,
+            min_amount_kopeks=min_amount_kopeks,
+            max_amount_kopeks=max_amount_kopeks,
+        )
+        amount_usd = compute_amount_usd_from_kopeks(missing_amount, rate)
 
         descriptor = build_payment_descriptor(
             user.id,
@@ -2711,21 +2608,7 @@ async def submit_subscription_renewal_endpoint(
                 detail={'code': 'payment_creation_failed', 'message': 'Failed to create payment'},
             )
 
-        # Priority: web_app for desktop/browser, mini_app for mobile, bot as fallback
-        payment_url = (
-            result.get('web_app_invoice_url') or result.get('mini_app_invoice_url') or result.get('bot_invoice_url')
-        )
-        if not payment_url:
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail={'code': 'payment_url_missing', 'message': 'Failed to obtain payment url'},
-            )
-
-        extra_payload = {
-            'bot_invoice_url': result.get('bot_invoice_url'),
-            'mini_app_invoice_url': result.get('mini_app_invoice_url'),
-            'web_app_invoice_url': result.get('web_app_invoice_url'),
-        }
+        payment_url, payment_extra = extract_cryptobot_payment_urls(result)
 
         message = build_renewal_pending_message(user, missing_amount, method)
 
@@ -2742,7 +2625,7 @@ async def submit_subscription_renewal_endpoint(
             payment_id=result.get('local_payment_id'),
             invoice_id=result.get('invoice_id'),
             payment_payload=payload_value,
-            payment_extra={key: value for key, value in extra_payload.items() if value},
+            payment_extra=payment_extra,
         )
 
     raise HTTPException(
