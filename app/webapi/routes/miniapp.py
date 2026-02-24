@@ -3,9 +3,8 @@ from __future__ import annotations
 import math
 import re
 from datetime import UTC, datetime, timedelta
-from decimal import ROUND_FLOOR, ROUND_HALF_UP, ROUND_UP, Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, ROUND_UP, Decimal, InvalidOperation
 from typing import Any
-from uuid import uuid4
 
 import structlog
 from aiogram import Bot
@@ -210,6 +209,12 @@ from .miniapp_misc_helpers import (
     resolve_display_name,
     serialize_transaction,
 )
+from .miniapp_payment_amount_helpers import (
+    build_balance_invoice_payload,
+    compute_stars_min_amount,
+    current_request_timestamp,
+    normalize_stars_amount,
+)
 from .miniapp_payment_lookup_helpers import (
     find_recent_deposit,
     parse_client_timestamp,
@@ -271,10 +276,6 @@ def _get_tariff_monthly_price(tariff) -> int:
     return 0
 
 
-_DECIMAL_ONE_HUNDRED = Decimal(100)
-_DECIMAL_CENT = Decimal('0.01')
-
-
 async def _get_usd_to_rub_rate() -> float:
     try:
         rate = await currency_converter.get_usd_to_rub_rate()
@@ -290,50 +291,6 @@ def _compute_cryptobot_limits(rate: float) -> tuple[int, int]:
     max_kopeks = int(math.floor(rate * _CRYPTOBOT_MAX_USD * 100))
     max_kopeks = max(max_kopeks, min_kopeks)
     return min_kopeks, max_kopeks
-
-
-def _current_request_timestamp() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat()
-
-
-def _compute_stars_min_amount() -> int | None:
-    try:
-        rate = Decimal(str(settings.get_stars_rate()))
-    except (InvalidOperation, TypeError):
-        return None
-
-    if rate <= 0:
-        return None
-
-    return int((rate * _DECIMAL_ONE_HUNDRED).to_integral_value(rounding=ROUND_HALF_UP))
-
-
-def _normalize_stars_amount(amount_kopeks: int) -> tuple[int, int]:
-    try:
-        rate = Decimal(str(settings.get_stars_rate()))
-    except (InvalidOperation, TypeError):
-        raise ValueError('Stars rate is not configured')
-
-    if rate <= 0:
-        raise ValueError('Stars rate must be positive')
-
-    amount_rubles = Decimal(amount_kopeks) / _DECIMAL_ONE_HUNDRED
-    stars_amount = int((amount_rubles / rate).to_integral_value(rounding=ROUND_FLOOR))
-    if stars_amount <= 0:
-        stars_amount = 1
-
-    normalized_rubles = (Decimal(stars_amount) * rate).quantize(
-        _DECIMAL_CENT,
-        rounding=ROUND_HALF_UP,
-    )
-    normalized_amount_kopeks = int((normalized_rubles * _DECIMAL_ONE_HUNDRED).to_integral_value(rounding=ROUND_HALF_UP))
-
-    return stars_amount, normalized_amount_kopeks
-
-
-def _build_balance_invoice_payload(user_id: int, amount_kopeks: int) -> str:
-    suffix = uuid4().hex[:8]
-    return f'balance_{user_id}_{amount_kopeks}_{suffix}'
 
 
 def _merge_purchase_selection_from_request(
@@ -480,7 +437,7 @@ async def get_payment_methods(
     methods: list[MiniAppPaymentMethod] = []
 
     if settings.TELEGRAM_STARS_ENABLED:
-        stars_min_amount = _compute_stars_min_amount()
+        stars_min_amount = compute_stars_min_amount()
         methods.append(
             MiniAppPaymentMethod(
                 id='stars',
@@ -729,7 +686,7 @@ async def create_payment_link(
 
         requested_amount_kopeks = amount_kopeks
         try:
-            stars_amount, amount_kopeks = _normalize_stars_amount(amount_kopeks)
+            stars_amount, amount_kopeks = normalize_stars_amount(amount_kopeks)
         except ValueError as exc:
             logger.error('Failed to normalize Stars amount', exc=exc)
             raise HTTPException(
@@ -738,7 +695,7 @@ async def create_payment_link(
             ) from exc
 
         bot = Bot(token=settings.BOT_TOKEN)
-        invoice_payload = _build_balance_invoice_payload(user.id, amount_kopeks)
+        invoice_payload = build_balance_invoice_payload(user.id, amount_kopeks)
         try:
             payment_service = PaymentService(bot)
             invoice_link = await payment_service.create_stars_invoice(
@@ -759,7 +716,7 @@ async def create_payment_link(
             amount_kopeks=amount_kopeks,
             extra={
                 'invoice_payload': invoice_payload,
-                'requested_at': _current_request_timestamp(),
+                'requested_at': current_request_timestamp(),
                 'stars_amount': stars_amount,
                 'requested_amount_kopeks': requested_amount_kopeks,
             },
@@ -790,7 +747,7 @@ async def create_payment_link(
             'local_payment_id': result.get('local_payment_id'),
             'payment_id': result.get('yookassa_payment_id'),
             'status': result.get('status'),
-            'requested_at': _current_request_timestamp(),
+            'requested_at': current_request_timestamp(),
         }
         confirmation_token = result.get('confirmation_token')
         if confirmation_token:
@@ -831,7 +788,7 @@ async def create_payment_link(
                 'local_payment_id': result.get('local_payment_id'),
                 'payment_id': result.get('yookassa_payment_id'),
                 'status': result.get('status'),
-                'requested_at': _current_request_timestamp(),
+                'requested_at': current_request_timestamp(),
             },
         )
 
@@ -863,7 +820,7 @@ async def create_payment_link(
             extra={
                 'local_payment_id': result.get('local_payment_id'),
                 'payment_id': result.get('mulen_payment_id'),
-                'requested_at': _current_request_timestamp(),
+                'requested_at': current_request_timestamp(),
             },
         )
 
@@ -911,7 +868,7 @@ async def create_payment_link(
                 'correlation_id': result.get('correlation_id'),
                 'selected_option': str(method_code),
                 'payload': result.get('payload'),
-                'requested_at': _current_request_timestamp(),
+                'requested_at': current_request_timestamp(),
             },
         )
 
@@ -947,7 +904,7 @@ async def create_payment_link(
                 'payment_id': result.get('payment_link_id'),
                 'status': result.get('status'),
                 'order_id': result.get('order_id'),
-                'requested_at': _current_request_timestamp(),
+                'requested_at': current_request_timestamp(),
             },
         )
 
@@ -1010,7 +967,7 @@ async def create_payment_link(
                 'link_page_url': result.get('link_page_url'),
                 'transfer_url': result.get('transfer_url'),
                 'selected_option': option,
-                'requested_at': _current_request_timestamp(),
+                'requested_at': current_request_timestamp(),
             },
         )
 
@@ -1072,7 +1029,7 @@ async def create_payment_link(
                 'invoice_id': result.get('invoice_id'),
                 'amount_usd': amount_usd,
                 'rate': rate,
-                'requested_at': _current_request_timestamp(),
+                'requested_at': current_request_timestamp(),
             },
         )
 
@@ -1119,7 +1076,7 @@ async def create_payment_link(
                 'payer_currency': result.get('payer_currency'),
                 'discount_percent': result.get('discount_percent'),
                 'exchange_rate': result.get('exchange_rate'),
-                'requested_at': _current_request_timestamp(),
+                'requested_at': current_request_timestamp(),
             },
         )
 
@@ -1160,7 +1117,7 @@ async def create_payment_link(
             extra={
                 'local_payment_id': result.get('payment_id'),
                 'invoice_id': result.get('invoice_id'),
-                'requested_at': _current_request_timestamp(),
+                'requested_at': current_request_timestamp(),
             },
         )
 
@@ -1201,7 +1158,7 @@ async def create_payment_link(
             extra={
                 'local_payment_id': result.get('local_payment_id'),
                 'order_id': result.get('order_id'),
-                'requested_at': _current_request_timestamp(),
+                'requested_at': current_request_timestamp(),
             },
         )
 
@@ -1230,7 +1187,7 @@ async def create_payment_link(
             payment_url=payment_url,
             amount_kopeks=amount_kopeks,
             extra={
-                'requested_at': _current_request_timestamp(),
+                'requested_at': current_request_timestamp(),
             },
         )
 
