@@ -210,6 +210,7 @@ from .miniapp_helpers.tariff.daily import (
     build_daily_toggle_message,
     ensure_daily_resume_allowed,
     get_daily_tariff_for_subscription,
+    sync_daily_resume_if_needed,
     toggle_pause_state,
 )
 from .miniapp_helpers.tariff.model import build_tariff_model
@@ -3831,8 +3832,6 @@ async def toggle_daily_subscription_pause_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ):
     """Переключает паузу/активацию суточной подписки."""
-    from app.services.subscription_service import SubscriptionService
-
     user = await authorize_miniapp_user(payload.init_data, db)
     subscription = user.subscription
 
@@ -3855,17 +3854,7 @@ async def toggle_daily_subscription_pause_endpoint(
     await db.refresh(subscription)
     await db.refresh(user)
 
-    # Синхронизация с RemnaWave
-    # При паузе VPN продолжает работать до конца оплаченного времени,
-    # поэтому НЕ отключаем пользователя в RemnaWave
-    # При возобновлении включаем если был отключен (например, из-за истечения срока)
-    if not new_paused_state:
-        try:
-            service = SubscriptionService()
-            if user.remnawave_uuid:
-                await service.enable_remnawave_user(user.remnawave_uuid)
-        except Exception as e:
-            logger.error('Ошибка синхронизации с RemnaWave при возобновлении', error=e)
+    await sync_daily_resume_if_needed(user, is_paused=new_paused_state, logger=logger)
 
     lang = getattr(user, 'language', settings.DEFAULT_LANGUAGE)
     message = build_daily_toggle_message(lang, new_paused_state)

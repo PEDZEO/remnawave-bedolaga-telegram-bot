@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.models import SubscriptionStatus, User
+from app.services.subscription_service import SubscriptionService
 
 
 async def get_daily_tariff_for_subscription(
@@ -67,3 +68,15 @@ def build_daily_toggle_message(language: str, is_paused: bool) -> str:
     if is_paused:
         return 'Суточная подписка приостановлена' if language == 'ru' else 'Daily subscription paused'
     return 'Суточная подписка возобновлена' if language == 'ru' else 'Daily subscription resumed'
+
+
+async def sync_daily_resume_if_needed(user: User, *, is_paused: bool, logger) -> None:
+    if is_paused:
+        return
+
+    try:
+        if user.remnawave_uuid:
+            service = SubscriptionService()
+            await service.enable_remnawave_user(user.remnawave_uuid)
+    except Exception as error:
+        logger.error('Ошибка синхронизации с RemnaWave при возобновлении', error=error)
