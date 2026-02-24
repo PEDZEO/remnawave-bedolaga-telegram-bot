@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from app.config import settings
 
-from ...schemas.miniapp import MiniAppPaymentIframeConfig
+from ....schemas.miniapp import MiniAppPaymentIframeConfig
 
 
 logger = structlog.get_logger(__name__)
