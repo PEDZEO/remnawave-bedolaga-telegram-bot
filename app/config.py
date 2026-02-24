@@ -108,6 +108,11 @@ class Settings(BaseSettings):
     REMNAWAVE_WEBHOOK_PATH: str = '/remnawave-webhook'
     REMNAWAVE_WEBHOOK_SECRET: str | None = None  # HMAC-SHA256 shared secret (min 32 chars)
 
+    # Xray balancer admin integration for cabinet
+    BALANCER_API_URL: str | None = None
+    BALANCER_ADMIN_TOKEN: str | None = None
+    BALANCER_REQUEST_TIMEOUT: int = 10
+
     # Webhook user notification toggles (what Telegram messages users receive from webhook events)
     WEBHOOK_NOTIFY_USER_ENABLED: bool = True
     WEBHOOK_NOTIFY_SUB_STATUS: bool = True

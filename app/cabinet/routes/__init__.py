@@ -7,6 +7,7 @@ from .admin_account_linking import router as admin_account_linking_router
 from .admin_apps import router as admin_apps_router
 from .admin_ban_system import router as admin_ban_system_router
 from .admin_broadcasts import router as admin_broadcasts_router
+from .admin_balancer import router as admin_balancer_router
 from .admin_button_styles import router as admin_button_styles_router
 from .admin_campaigns import router as admin_campaigns_router
 from .admin_channels import router as admin_channels_router
@@ -92,6 +93,7 @@ router.include_router(admin_servers_router)
 router.include_router(admin_stats_router)
 router.include_router(admin_ban_system_router)
 router.include_router(admin_broadcasts_router)
+router.include_router(admin_balancer_router)
 router.include_router(admin_promocodes_router)
 router.include_router(admin_promo_groups_router)
 router.include_router(admin_campaigns_router)
