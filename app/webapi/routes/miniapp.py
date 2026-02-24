@@ -32,17 +32,15 @@ from app.database.crud.subscription import (
     remove_subscription_servers,
     update_subscription_autopay,
 )
-from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
+from app.database.crud.tariff import get_tariffs_for_user
 from app.database.crud.transaction import (
     create_transaction,
     get_user_total_spent_kopeks,
 )
 from app.database.crud.user import get_user_by_telegram_id, subtract_user_balance
 from app.database.models import (
-    Subscription,
     Transaction,
     TransactionType,
-    User,
 )
 from app.services.faq_service import FaqService
 from app.services.maintenance_service import maintenance_service
@@ -81,7 +79,6 @@ from app.services.tribute_service import TributeService
 from app.utils.pricing_utils import (
     apply_percentage_discount,
     calculate_prorated_price,
-    format_period_description,
     get_remaining_months,
 )
 from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
@@ -130,7 +127,6 @@ from ..schemas.miniapp import (
     MiniAppSubscriptionPurchaseResponse,
     MiniAppSubscriptionRenewalOptionsRequest,
     MiniAppSubscriptionRenewalOptionsResponse,
-    MiniAppSubscriptionRenewalPeriod,
     MiniAppSubscriptionRenewalRequest,
     MiniAppSubscriptionRenewalResponse,
     MiniAppSubscriptionRequest,
@@ -203,6 +199,9 @@ from .miniapp_helpers.subscription.common import (
     get_period_hint_from_subscription,
     parse_period_identifier,
     validate_subscription_id,
+)
+from .miniapp_helpers.subscription.renewal import (
+    prepare_subscription_renewal_options,
 )
 from .miniapp_helpers.subscription.settings import (
     build_subscription_settings,
@@ -2283,177 +2282,6 @@ async def remove_connected_device(
     return MiniAppDeviceRemovalResponse(success=True)
 
 
-async def _calculate_subscription_renewal_pricing(
-    db: AsyncSession,
-    user: User,
-    subscription: Subscription,
-    period_days: int,
-):
-    return await renewal_service.calculate_pricing(
-        db,
-        user,
-        subscription,
-        period_days,
-    )
-
-
-async def _prepare_subscription_renewal_options(
-    db: AsyncSession,
-    user: User,
-    subscription: Subscription,
-) -> tuple[list[MiniAppSubscriptionRenewalPeriod], dict[str | int, dict[str, Any]], str | None]:
-    option_payloads: list[tuple[MiniAppSubscriptionRenewalPeriod, dict[str, Any]]] = []
-
-    # Проверяем, есть ли у подписки тариф (режим тарифов)
-    tariff_id = getattr(subscription, 'tariff_id', None)
-    tariff = None
-    if tariff_id:
-        from app.database.crud.tariff import get_tariff_by_id
-
-        tariff = await get_tariff_by_id(db, tariff_id)
-
-    if tariff and tariff.period_prices:
-        # Режим тарифов: используем периоды и цены из тарифа
-        promo_group = (
-            user.get_primary_promo_group()
-            if hasattr(user, 'get_primary_promo_group')
-            else getattr(user, 'promo_group', None)
-        )
-
-        # Получаем скидки промогруппы по периодам
-        period_discounts = {}
-        if promo_group:
-            raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
-            for k, v in raw_discounts.items():
-                try:
-                    period_discounts[int(k)] = max(0, min(100, int(v)))
-                except (TypeError, ValueError):
-                    pass
-
-        for period_str, original_price_kopeks in sorted(tariff.period_prices.items(), key=lambda x: int(x[0])):
-            period_days = int(period_str)
-
-            # Применяем скидку промогруппы
-            discount_percent = period_discounts.get(period_days, 0)
-            if discount_percent > 0:
-                price_kopeks = int(original_price_kopeks * (100 - discount_percent) / 100)
-            else:
-                price_kopeks = original_price_kopeks
-
-            months = max(1, period_days // 30)
-            per_month = price_kopeks // months if months > 0 else price_kopeks
-
-            label = format_period_description(
-                period_days,
-                getattr(user, 'language', settings.DEFAULT_LANGUAGE),
-            )
-
-            price_label = settings.format_price(price_kopeks)
-            original_label = settings.format_price(original_price_kopeks) if discount_percent > 0 else None
-            per_month_label = settings.format_price(per_month)
-
-            option_model = MiniAppSubscriptionRenewalPeriod(
-                id=f'tariff_{tariff.id}_{period_days}',
-                days=period_days,
-                months=months,
-                price_kopeks=price_kopeks,
-                price_label=price_label,
-                original_price_kopeks=original_price_kopeks if discount_percent > 0 else None,
-                original_price_label=original_label,
-                discount_percent=discount_percent,
-                price_per_month_kopeks=per_month,
-                price_per_month_label=per_month_label,
-                title=label,
-            )
-
-            pricing = {
-                'period_id': option_model.id,
-                'period_days': period_days,
-                'months': months,
-                'final_total': price_kopeks,
-                'base_original_total': original_price_kopeks if discount_percent > 0 else price_kopeks,
-                'overall_discount_percent': discount_percent,
-                'per_month': per_month,
-                'tariff_id': tariff.id,
-            }
-
-            option_payloads.append((option_model, pricing))
-    else:
-        # Классический режим: используем периоды из настроек
-        available_periods = [period for period in settings.get_available_renewal_periods() if period > 0]
-
-        for period_days in available_periods:
-            try:
-                pricing_model = await _calculate_subscription_renewal_pricing(
-                    db,
-                    user,
-                    subscription,
-                    period_days,
-                )
-                pricing = pricing_model.to_payload()
-            except Exception as error:  # pragma: no cover - defensive logging
-                logger.warning(
-                    'Failed to calculate renewal pricing for subscription (period)',
-                    subscription_id=subscription.id,
-                    period_days=period_days,
-                    error=error,
-                )
-                continue
-
-            label = format_period_description(
-                period_days,
-                getattr(user, 'language', settings.DEFAULT_LANGUAGE),
-            )
-
-            price_label = settings.format_price(pricing['final_total'])
-            original_label = None
-            if pricing['base_original_total'] and pricing['base_original_total'] != pricing['final_total']:
-                original_label = settings.format_price(pricing['base_original_total'])
-
-            per_month_label = settings.format_price(pricing['per_month'])
-
-            option_model = MiniAppSubscriptionRenewalPeriod(
-                id=pricing['period_id'],
-                days=period_days,
-                months=pricing['months'],
-                price_kopeks=pricing['final_total'],
-                price_label=price_label,
-                original_price_kopeks=pricing['base_original_total'],
-                original_price_label=original_label,
-                discount_percent=pricing['overall_discount_percent'],
-                price_per_month_kopeks=pricing['per_month'],
-                price_per_month_label=per_month_label,
-                title=label,
-            )
-
-            option_payloads.append((option_model, pricing))
-
-    if not option_payloads:
-        return [], {}, None
-
-    option_payloads.sort(key=lambda item: item[0].days or 0)
-
-    recommended_option = max(
-        option_payloads,
-        key=lambda item: (
-            item[1]['overall_discount_percent'],
-            item[0].months or 0,
-            -(item[1]['final_total'] or 0),
-        ),
-    )
-    recommended_option[0].is_recommended = True
-
-    pricing_map: dict[str | int, dict[str, Any]] = {}
-    for option_model, pricing in option_payloads:
-        pricing_map[option_model.id] = pricing
-        pricing_map[pricing['period_days']] = pricing
-        pricing_map[str(pricing['period_days'])] = pricing
-
-    periods = [item[0] for item in option_payloads]
-
-    return periods, pricing_map, recommended_option[0].id
-
-
 @router.post(
     '/subscription/renewal/options',
     response_model=MiniAppSubscriptionRenewalOptionsResponse,
@@ -2469,10 +2297,12 @@ async def get_subscription_renewal_options_endpoint(
     )
     validate_subscription_id(payload.subscription_id, subscription)
 
-    periods, pricing_map, default_period_id = await _prepare_subscription_renewal_options(
+    periods, pricing_map, default_period_id = await prepare_subscription_renewal_options(
         db,
         user,
         subscription,
+        renewal_service=renewal_service,
+        logger=logger,
     )
 
     balance_kopeks = getattr(user, 'balance_kopeks', 0)
