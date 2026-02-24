@@ -199,6 +199,15 @@ from .miniapp_autopay_helpers import (
     _get_autopay_day_options,
     _normalize_autopay_days,
 )
+from .miniapp_format_helpers import (
+    bytes_to_gb,
+    format_gb,
+    format_gb_label,
+    format_limit_label,
+    format_payment_method_title,
+    format_traffic_limit_label,
+    status_label,
+)
 
 
 logger = structlog.get_logger(__name__)
@@ -452,30 +461,6 @@ def _classify_status(status: str | None, is_paid: bool) -> str:
     if normalized in _PAYMENT_FAILURE_STATUSES:
         return 'failed'
     return 'pending'
-
-
-def _format_gb(value: float | None) -> float:
-    if value is None:
-        return 0.0
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def _format_gb_label(value: float) -> str:
-    absolute = abs(value)
-    if absolute >= 100:
-        return f'{value:.0f} GB'
-    if absolute >= 10:
-        return f'{value:.1f} GB'
-    return f'{value:.2f} GB'
-
-
-def _format_limit_label(limit: int | None) -> str:
-    if not limit:
-        return 'Unlimited'
-    return f'{limit} GB'
 
 
 async def _resolve_user_from_init_data(
@@ -2585,22 +2570,6 @@ async def _build_promo_offer_models(
     return promo_offers
 
 
-def _bytes_to_gb(bytes_value: int | None) -> float:
-    if not bytes_value:
-        return 0.0
-    return round(bytes_value / (1024**3), 2)
-
-
-def _status_label(status: str) -> str:
-    mapping = {
-        'active': 'Active',
-        'trial': 'Trial',
-        'expired': 'Expired',
-        'disabled': 'Disabled',
-    }
-    return mapping.get(status, status.title())
-
-
 def _parse_datetime_string(value: str | None) -> str | None:
     if not value:
         return None
@@ -3008,7 +2977,7 @@ async def get_subscription_details(
             user = await get_user_by_telegram_id(db, telegram_id)
 
         subscription = getattr(user, 'subscription', subscription)
-    lifetime_used = _bytes_to_gb(getattr(user, 'lifetime_used_traffic_bytes', 0))
+    lifetime_used = bytes_to_gb(getattr(user, 'lifetime_used_traffic_bytes', 0))
 
     transactions_query = (
         select(Transaction).where(Transaction.user_id == user.id).order_by(Transaction.created_at.desc()).limit(10)
@@ -3215,7 +3184,7 @@ async def get_subscription_details(
     autopay_enabled = False
 
     if subscription:
-        traffic_used_value = _format_gb(subscription.traffic_used_gb)
+        traffic_used_value = format_gb(subscription.traffic_used_gb)
         traffic_limit_value = subscription.traffic_limit_gb or 0
         status_actual = subscription.actual_status
         subscription_status_value = subscription.status
@@ -3282,13 +3251,13 @@ async def get_subscription_details(
         status=user.status,
         subscription_status=subscription_status_value,
         subscription_actual_status=status_actual,
-        status_label=_status_label(status_actual),
+        status_label=status_label(status_actual),
         expires_at=getattr(subscription, 'end_date', None),
         device_limit=device_limit_value,
         traffic_used_gb=round(traffic_used_value, 2),
-        traffic_used_label=_format_gb_label(traffic_used_value),
+        traffic_used_label=format_gb_label(traffic_used_value),
         traffic_limit_gb=traffic_limit_value,
-        traffic_limit_label=_format_limit_label(traffic_limit_value),
+        traffic_limit_label=format_limit_label(traffic_limit_value),
         lifetime_used_traffic_gb=lifetime_used,
         has_active_subscription=status_actual in {'active', 'trial'},
         promo_offer_discount_percent=active_discount_percent,
@@ -3512,7 +3481,7 @@ async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -
         description=tariff.description,
         tier_level=tariff.tier_level,
         traffic_limit_gb=tariff.traffic_limit_gb,
-        traffic_limit_label=_format_traffic_limit_label(tariff.traffic_limit_gb)
+        traffic_limit_label=format_traffic_limit_label(tariff.traffic_limit_gb)
         if settings.is_tariffs_mode()
         else f'{tariff.traffic_limit_gb} ГБ',
         is_unlimited_traffic=tariff.traffic_limit_gb == 0,
@@ -4323,22 +4292,6 @@ def _build_promo_offer_payload(user: User | None) -> dict[str, Any] | None:
     return payload
 
 
-def _format_payment_method_title(method: str) -> str:
-    mapping = {
-        'cryptobot': 'CryptoBot',
-        'yookassa': 'YooKassa',
-        'yookassa_sbp': 'YooKassa СБП',
-        'mulenpay': 'MulenPay',
-        'pal24': 'Pal24',
-        'wata': 'WataPay',
-        'heleket': 'Heleket',
-        'tribute': 'Tribute',
-        'stars': 'Telegram Stars',
-    }
-    key = (method or '').lower()
-    return mapping.get(key, method.title() if method else '')
-
-
 def _build_renewal_success_message(
     user: User,
     subscription: Subscription,
@@ -4380,7 +4333,7 @@ def _build_renewal_pending_message(
 ) -> str:
     language_code = _normalize_language_code(user)
     amount_label = settings.format_price(max(0, missing_amount))
-    method_title = _format_payment_method_title(method)
+    method_title = format_payment_method_title(method)
 
     if language_code in {'ru', 'fa'}:
         if method_title:
@@ -6104,13 +6057,6 @@ async def update_subscription_devices_endpoint(
 # =============================================================================
 
 
-def _format_traffic_limit_label(traffic_gb: int) -> str:
-    """Форматирует лимит трафика для отображения."""
-    if traffic_gb == 0:
-        return '♾️ Безлимит'
-    return f'{traffic_gb} ГБ'
-
-
 async def _build_tariff_model(
     db: AsyncSession,
     tariff,
@@ -6218,7 +6164,7 @@ async def _build_tariff_model(
         description=tariff.description,
         tier_level=tariff.tier_level,
         traffic_limit_gb=tariff.traffic_limit_gb,
-        traffic_limit_label=_format_traffic_limit_label(tariff.traffic_limit_gb),
+        traffic_limit_label=format_traffic_limit_label(tariff.traffic_limit_gb),
         is_unlimited_traffic=tariff.traffic_limit_gb == 0,
         device_limit=tariff.device_limit,
         servers_count=servers_count,
@@ -6266,7 +6212,7 @@ async def _build_current_tariff_model(db: AsyncSession, tariff, promo_group=None
         description=tariff.description,
         tier_level=tariff.tier_level,
         traffic_limit_gb=tariff.traffic_limit_gb,
-        traffic_limit_label=_format_traffic_limit_label(tariff.traffic_limit_gb),
+        traffic_limit_label=format_traffic_limit_label(tariff.traffic_limit_gb),
         is_unlimited_traffic=tariff.traffic_limit_gb == 0,
         device_limit=tariff.device_limit,
         servers_count=servers_count,
