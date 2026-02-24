@@ -26,7 +26,6 @@ from app.database.crud.subscription import (
     extend_subscription,
     update_subscription_autopay,
 )
-from app.database.crud.tariff import get_tariffs_for_user
 from app.database.crud.transaction import (
     create_transaction,
     get_user_total_spent_kopeks,
@@ -77,7 +76,6 @@ from ..dependencies import get_db_session
 from ..schemas.miniapp import (
     MiniAppAutoPromoGroupLevel,
     MiniAppConnectedServer,
-    MiniAppCurrentTariff,
     MiniAppDailySubscriptionToggleRequest,
     MiniAppDailySubscriptionToggleResponse,
     MiniAppDeviceRemovalRequest,
@@ -126,7 +124,6 @@ from ..schemas.miniapp import (
     MiniAppSubscriptionTrialResponse,
     MiniAppSubscriptionUpdateResponse,
     MiniAppSubscriptionUser,
-    MiniAppTariff,
     MiniAppTariffPurchaseRequest,
     MiniAppTariffPurchaseResponse,
     MiniAppTariffsRequest,
@@ -232,7 +229,7 @@ from .miniapp_helpers.tariff.daily import (
     sync_daily_resume_if_needed,
     toggle_pause_state,
 )
-from .miniapp_helpers.tariff.model import build_tariff_model
+from .miniapp_helpers.tariff.listing import build_tariffs_payload
 from .miniapp_helpers.tariff.purchase import (
     build_tariff_purchase_context,
     ensure_tariff_purchase_balance,
@@ -256,7 +253,6 @@ from .miniapp_helpers.tariff.topup import (
     validate_topup_package,
 )
 from .miniapp_helpers.tariff_state import (
-    build_current_tariff_model,
     get_current_tariff_model,
     is_trial_available_for_user,
 )
@@ -2894,57 +2890,7 @@ async def get_tariffs_endpoint(
     user = await authorize_miniapp_user(payload.init_data, db)
 
     ensure_tariffs_mode_enabled(message='Tariffs mode is not enabled')
-
-    # Получаем промогруппу пользователя (с приоритетом)
-    promo_group = (
-        user.get_primary_promo_group()
-        if hasattr(user, 'get_primary_promo_group')
-        else getattr(user, 'promo_group', None)
-    )
-    promo_group_id = promo_group.id if promo_group else None
-
-    # Получаем тарифы, доступные пользователю
-    tariffs = await get_tariffs_for_user(db, promo_group_id)
-
-    # Текущий тариф пользователя
-    subscription = getattr(user, 'subscription', None)
-    current_tariff_id = subscription.tariff_id if subscription else None
-    current_tariff_model: MiniAppCurrentTariff | None = None
-    current_tariff = None
-
-    # Вычисляем оставшиеся дни подписки
-    remaining_days = 0
-    if subscription and subscription.end_date:
-        delta = subscription.end_date - datetime.now(UTC)
-        remaining_days = max(0, delta.days)
-
-    if current_tariff_id:
-        current_tariff = await get_tariff_by_id(db, current_tariff_id)
-        if current_tariff:
-            current_tariff_model = await build_current_tariff_model(db, current_tariff, promo_group)
-
-    # Формируем список тарифов
-    tariff_models: list[MiniAppTariff] = []
-    for tariff in tariffs:
-        model = await build_tariff_model(
-            db,
-            tariff,
-            current_tariff_id,
-            promo_group,
-            current_tariff=current_tariff,
-            remaining_days=remaining_days,
-            user=user,
-        )
-        tariff_models.append(model)
-
-    # Формируем модель промогруппы для ответа
-    promo_group_model = None
-    if promo_group:
-        promo_group_model = MiniAppPromoGroup(
-            id=promo_group.id,
-            name=promo_group.name,
-            **extract_promo_discounts(promo_group),
-        )
+    tariff_models, current_tariff_model, promo_group_model = await build_tariffs_payload(db, user)
 
     return MiniAppTariffsResponse(
         success=True,
