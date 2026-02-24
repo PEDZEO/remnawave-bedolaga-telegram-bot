@@ -16,6 +16,21 @@ _PAYMENT_FAILURE_STATUSES = {
     'rejected',
 }
 
+_SUPPORTED_PAYMENT_METHODS = {
+    'yookassa',
+    'yookassa_sbp',
+    'mulenpay',
+    'platega',
+    'wata',
+    'pal24',
+    'cryptobot',
+    'heleket',
+    'cloudpayments',
+    'freekassa',
+    'stars',
+    'tribute',
+}
+
 
 def classify_payment_status(status: str | None, is_paid: bool) -> str:
     if is_paid:
@@ -28,3 +43,11 @@ def classify_payment_status(status: str | None, is_paid: bool) -> str:
     if normalized in _PAYMENT_FAILURE_STATUSES:
         return 'failed'
     return 'pending'
+
+
+def normalize_payment_method(method: str | None) -> str:
+    return (method or '').strip().lower()
+
+
+def is_supported_payment_method(method: str) -> bool:
+    return method in _SUPPORTED_PAYMENT_METHODS

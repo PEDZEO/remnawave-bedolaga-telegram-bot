@@ -219,7 +219,11 @@ from .miniapp_payment_request_helpers import (
     build_mulenpay_iframe_config,
     normalize_amount_kopeks,
 )
-from .miniapp_payment_status_helpers import classify_payment_status
+from .miniapp_payment_status_helpers import (
+    classify_payment_status,
+    is_supported_payment_method,
+    normalize_payment_method,
+)
 from .miniapp_promo_discount_helpers import extract_promo_discounts
 from .miniapp_promo_offer_helpers import (
     determine_offer_icon,
@@ -1124,12 +1128,19 @@ async def _resolve_payment_status_entry(
     user: User,
     query: MiniAppPaymentStatusQuery,
 ) -> MiniAppPaymentStatusResult:
-    method = (query.method or '').strip().lower()
+    method = normalize_payment_method(query.method)
     if not method:
         return MiniAppPaymentStatusResult(
             method='',
             status='unknown',
             message='Payment method is required',
+        )
+
+    if not is_supported_payment_method(method):
+        return MiniAppPaymentStatusResult(
+            method=method,
+            status='unknown',
+            message='Unsupported payment method',
         )
 
     if method in {'yookassa', 'yookassa_sbp'}:
@@ -1160,11 +1171,7 @@ async def _resolve_payment_status_entry(
     if method == 'tribute':
         return await _resolve_tribute_payment_status(db, user, query)
 
-    return MiniAppPaymentStatusResult(
-        method=method,
-        status='unknown',
-        message='Unsupported payment method',
-    )
+    return MiniAppPaymentStatusResult(method=method, status='unknown', message='Unsupported payment method')
 
 
 async def _resolve_yookassa_payment_status(
