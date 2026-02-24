@@ -188,7 +188,6 @@ from ..schemas.miniapp import (
     MiniAppTariffSwitchRequest,
     MiniAppTariffSwitchResponse,
     MiniAppTrafficTopupRequest,
-    MiniAppTransaction,
 )
 from .miniapp_auth_helpers import authorize_miniapp_user, ensure_paid_subscription
 from .miniapp_autopay_helpers import (
@@ -205,6 +204,11 @@ from .miniapp_format_helpers import (
     format_traffic_limit_label,
     parse_datetime_string,
     status_label,
+)
+from .miniapp_misc_helpers import (
+    is_remnawave_configured,
+    resolve_display_name,
+    serialize_transaction,
 )
 from .miniapp_payment_lookup_helpers import (
     find_recent_deposit,
@@ -2407,45 +2411,10 @@ async def _load_devices_info(user: User) -> tuple[int, list[MiniAppDevice]]:
     return total_devices, devices
 
 
-def _resolve_display_name(user_data: dict[str, Any]) -> str:
-    username = user_data.get('username')
-    if username:
-        return username
-
-    first = user_data.get('first_name')
-    last = user_data.get('last_name')
-    parts = [part for part in [first, last] if part]
-    if parts:
-        return ' '.join(parts)
-
-    telegram_id = user_data.get('telegram_id')
-    return f'User {telegram_id}' if telegram_id else 'User'
-
-
-def _is_remnawave_configured() -> bool:
-    params = settings.get_remnawave_auth_params()
-    return bool(params.get('base_url') and params.get('api_key'))
-
-
-def _serialize_transaction(transaction: Transaction) -> MiniAppTransaction:
-    return MiniAppTransaction(
-        id=transaction.id,
-        type=transaction.type,
-        amount_kopeks=transaction.amount_kopeks,
-        amount_rubles=round(transaction.amount_kopeks / 100, 2),
-        description=transaction.description,
-        payment_method=transaction.payment_method,
-        external_id=transaction.external_id,
-        is_completed=transaction.is_completed,
-        created_at=transaction.created_at,
-        completed_at=transaction.completed_at,
-    )
-
-
 async def _load_subscription_links(
     subscription: Subscription,
 ) -> dict[str, Any]:
-    if not subscription.remnawave_short_uuid or not _is_remnawave_configured():
+    if not subscription.remnawave_short_uuid or not is_remnawave_configured():
         return {}
 
     try:
@@ -2677,7 +2646,7 @@ async def get_subscription_details(
     subscription = getattr(user, 'subscription', None)
     usage_synced = False
 
-    if subscription and _is_remnawave_configured():
+    if subscription and is_remnawave_configured():
         service = SubscriptionService()
         try:
             usage_synced = await service.sync_subscription_usage(db, subscription)
@@ -2961,7 +2930,7 @@ async def get_subscription_details(
         username=user.username,
         first_name=user.first_name,
         last_name=user.last_name,
-        display_name=_resolve_display_name(
+        display_name=resolve_display_name(
             {
                 'username': user.username,
                 'first_name': user.first_name,
@@ -3068,7 +3037,7 @@ async def get_subscription_details(
         balance_kopeks=user.balance_kopeks,
         balance_rubles=round(user.balance_rubles, 2),
         balance_currency=balance_currency,
-        transactions=[_serialize_transaction(tx) for tx in transactions],
+        transactions=[serialize_transaction(tx) for tx in transactions],
         promo_offers=promo_offers,
         promo_group=(
             MiniAppPromoGroup(
