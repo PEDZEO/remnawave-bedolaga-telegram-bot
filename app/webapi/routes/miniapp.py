@@ -206,6 +206,7 @@ from .miniapp_helpers.subscription.settings import (
 )
 from .miniapp_helpers.tariff.model import build_tariff_model
 from .miniapp_helpers.tariff.switch import calculate_tariff_switch_cost
+from .miniapp_helpers.tariff.switch_context import resolve_tariff_switch_context
 from .miniapp_helpers.tariff_state import (
     build_current_tariff_model,
     get_current_tariff_model,
@@ -3696,52 +3697,16 @@ async def preview_tariff_switch_endpoint(
             detail={'code': 'tariffs_mode_disabled', 'message': 'Tariffs mode is not enabled'},
         )
 
-    subscription = getattr(user, 'subscription', None)
-    if not subscription or not subscription.tariff_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'no_subscription', 'message': 'No active subscription with tariff'},
-        )
-
-    if subscription.status not in ('active', 'trial'):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'subscription_inactive', 'message': 'Subscription is not active'},
-        )
-
-    current_tariff = await get_tariff_by_id(db, subscription.tariff_id)
-    new_tariff = await get_tariff_by_id(db, payload.tariff_id)
-
-    if not new_tariff or not new_tariff.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={'code': 'tariff_not_found', 'message': 'Tariff not found or inactive'},
-        )
-
-    if subscription.tariff_id == payload.tariff_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'same_tariff', 'message': 'Already on this tariff'},
-        )
-
-    # Проверяем доступность тарифа для пользователя
-    promo_group = (
-        user.get_primary_promo_group()
-        if hasattr(user, 'get_primary_promo_group')
-        else getattr(user, 'promo_group', None)
+    context = await resolve_tariff_switch_context(
+        db,
+        user,
+        payload.tariff_id,
+        unavailable_message='Tariff not available for your promo group',
     )
-    promo_group_id = promo_group.id if promo_group else None
-    if not new_tariff.is_available_for_promo_group(promo_group_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={'code': 'tariff_not_available', 'message': 'Tariff not available for your promo group'},
-        )
-
-    # Рассчитываем оставшиеся дни
-    remaining_days = 0
-    if subscription.end_date and subscription.end_date > datetime.now(UTC):
-        delta = subscription.end_date - datetime.now(UTC)
-        remaining_days = max(0, delta.days)
+    current_tariff = context.current_tariff
+    new_tariff = context.new_tariff
+    promo_group = context.promo_group
+    remaining_days = context.remaining_days
 
     # Рассчитываем стоимость переключения
     current_is_daily = getattr(current_tariff, 'is_daily', False) if current_tariff else False
@@ -3797,52 +3762,17 @@ async def switch_tariff_endpoint(
             detail={'code': 'tariffs_mode_disabled', 'message': 'Tariffs mode is not enabled'},
         )
 
-    subscription = getattr(user, 'subscription', None)
-    if not subscription or not subscription.tariff_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'no_subscription', 'message': 'No active subscription with tariff'},
-        )
-
-    if subscription.status not in ('active', 'trial'):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'subscription_inactive', 'message': 'Subscription is not active'},
-        )
-
-    current_tariff = await get_tariff_by_id(db, subscription.tariff_id)
-    new_tariff = await get_tariff_by_id(db, payload.tariff_id)
-
-    if not new_tariff or not new_tariff.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={'code': 'tariff_not_found', 'message': 'Tariff not found or inactive'},
-        )
-
-    if subscription.tariff_id == payload.tariff_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'same_tariff', 'message': 'Already on this tariff'},
-        )
-
-    # Проверяем доступность тарифа
-    promo_group = (
-        user.get_primary_promo_group()
-        if hasattr(user, 'get_primary_promo_group')
-        else getattr(user, 'promo_group', None)
+    context = await resolve_tariff_switch_context(
+        db,
+        user,
+        payload.tariff_id,
+        unavailable_message='Tariff not available',
     )
-    promo_group_id = promo_group.id if promo_group else None
-    if not new_tariff.is_available_for_promo_group(promo_group_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={'code': 'tariff_not_available', 'message': 'Tariff not available'},
-        )
-
-    # Рассчитываем оставшиеся дни
-    remaining_days = 0
-    if subscription.end_date and subscription.end_date > datetime.now(UTC):
-        delta = subscription.end_date - datetime.now(UTC)
-        remaining_days = max(0, delta.days)
+    subscription = context.subscription
+    current_tariff = context.current_tariff
+    new_tariff = context.new_tariff
+    promo_group = context.promo_group
+    remaining_days = context.remaining_days
 
     # Рассчитываем стоимость
     current_is_daily = getattr(current_tariff, 'is_daily', False) if current_tariff else False
