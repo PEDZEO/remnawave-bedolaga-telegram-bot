@@ -8,7 +8,6 @@ from typing import Any
 import structlog
 from aiogram import Bot
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -117,7 +116,6 @@ from ..schemas.miniapp import (
     MiniAppMaintenanceStatusResponse,
     MiniAppPaymentCreateRequest,
     MiniAppPaymentCreateResponse,
-    MiniAppPaymentIframeConfig,
     MiniAppPaymentIntegrationType,
     MiniAppPaymentMethod,
     MiniAppPaymentMethodsRequest,
@@ -217,6 +215,10 @@ from .miniapp_payment_lookup_helpers import (
     find_recent_deposit,
     parse_client_timestamp,
 )
+from .miniapp_payment_request_helpers import (
+    build_mulenpay_iframe_config,
+    normalize_amount_kopeks,
+)
 from .miniapp_payment_status_helpers import classify_payment_status
 from .miniapp_promo_discount_helpers import extract_promo_discounts
 from .miniapp_promo_offer_helpers import (
@@ -298,41 +300,6 @@ async def _resolve_user_from_init_data(
     return user, webapp_data
 
 
-def _normalize_amount_kopeks(
-    amount_rubles: float | None,
-    amount_kopeks: int | None,
-) -> int | None:
-    if amount_kopeks is not None:
-        try:
-            normalized = int(amount_kopeks)
-        except (TypeError, ValueError):
-            return None
-        return normalized if normalized >= 0 else None
-
-    if amount_rubles is None:
-        return None
-
-    try:
-        decimal_amount = Decimal(str(amount_rubles)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-    except (InvalidOperation, ValueError):
-        return None
-
-    normalized = int((decimal_amount * 100).to_integral_value(rounding=ROUND_HALF_UP))
-    return normalized if normalized >= 0 else None
-
-
-def _build_mulenpay_iframe_config() -> MiniAppPaymentIframeConfig | None:
-    expected_origin = settings.get_mulenpay_expected_origin()
-    if not expected_origin:
-        return None
-
-    try:
-        return MiniAppPaymentIframeConfig(expected_origin=expected_origin)
-    except ValidationError as error:  # pragma: no cover - defensive logging
-        logger.error("Invalid MulenPay expected origin ''", expected_origin=expected_origin, error=error)
-        return None
-
-
 @router.post(
     '/maintenance/status',
     response_model=MiniAppMaintenanceStatusResponse,
@@ -403,7 +370,7 @@ async def get_payment_methods(
         )
 
     if settings.is_mulenpay_enabled():
-        mulenpay_iframe_config = _build_mulenpay_iframe_config()
+        mulenpay_iframe_config = build_mulenpay_iframe_config()
         mulenpay_integration = (
             MiniAppPaymentIntegrationType.IFRAME if mulenpay_iframe_config else MiniAppPaymentIntegrationType.REDIRECT
         )
@@ -597,7 +564,7 @@ async def create_payment_link(
             detail='Payment method is required',
         )
 
-    amount_kopeks = _normalize_amount_kopeks(
+    amount_kopeks = normalize_amount_kopeks(
         payload.amount_rubles,
         payload.amount_kopeks,
     )
