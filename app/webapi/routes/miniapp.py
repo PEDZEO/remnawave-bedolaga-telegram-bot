@@ -203,6 +203,7 @@ from .miniapp_format_helpers import (
     format_gb_label,
     format_limit_label,
     format_traffic_limit_label,
+    parse_datetime_string,
     status_label,
 )
 from .miniapp_payment_lookup_helpers import (
@@ -2309,24 +2310,6 @@ async def _build_promo_offer_models(
     return promo_offers
 
 
-def _parse_datetime_string(value: str | None) -> str | None:
-    if not value:
-        return None
-
-    try:
-        cleaned = value.strip()
-        if cleaned.endswith('Z'):
-            cleaned = f'{cleaned[:-1]}+00:00'
-        # Normalize duplicated timezone suffixes like +00:00+00:00
-        if '+00:00+00:00' in cleaned:
-            cleaned = cleaned.replace('+00:00+00:00', '+00:00')
-
-        datetime.fromisoformat(cleaned)
-        return cleaned
-    except Exception:  # pragma: no cover - defensive
-        return value
-
-
 async def _resolve_connected_servers(
     db: AsyncSession,
     squad_uuids: list[str],
@@ -2413,7 +2396,7 @@ async def _load_devices_info(user: User) -> tuple[int, list[MiniAppDevice]]:
                 platform=platform,
                 device_model=model,
                 app_version=app_version,
-                last_seen=_parse_datetime_string(last_seen_raw),
+                last_seen=parse_datetime_string(last_seen_raw),
                 last_ip=last_ip,
             )
         )

@@ -1,3 +1,6 @@
+from datetime import datetime
+
+
 def format_gb(value: float | None) -> float:
     if value is None:
         return 0.0
@@ -58,3 +61,20 @@ def format_traffic_limit_label(traffic_gb: int) -> str:
     if traffic_gb == 0:
         return '♾️ Безлимит'
     return f'{traffic_gb} ГБ'
+
+
+def parse_datetime_string(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    try:
+        cleaned = value.strip()
+        if cleaned.endswith('Z'):
+            cleaned = f'{cleaned[:-1]}+00:00'
+        if '+00:00+00:00' in cleaned:
+            cleaned = cleaned.replace('+00:00+00:00', '+00:00')
+
+        datetime.fromisoformat(cleaned)
+        return cleaned
+    except Exception:  # pragma: no cover - defensive
+        return value
