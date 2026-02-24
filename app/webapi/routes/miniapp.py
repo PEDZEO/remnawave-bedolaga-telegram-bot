@@ -162,6 +162,10 @@ from .miniapp_helpers.payment.create_input import (
     resolve_create_payment_amount,
     resolve_create_payment_method,
 )
+from .miniapp_helpers.payment.create_yookassa import (
+    create_yookassa_balance_payment_response,
+    create_yookassa_sbp_balance_payment_response,
+)
 from .miniapp_helpers.payment.request import (
     build_mulenpay_iframe_config,
 )
@@ -593,73 +597,17 @@ async def create_payment_link(
         )
 
     if method == 'yookassa_sbp':
-        if not settings.is_yookassa_enabled() or not getattr(settings, 'YOOKASSA_SBP_ENABLED', False):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
-        if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
-        if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount is below minimum')
-        if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount exceeds maximum')
-
-        payment_service = PaymentService()
-        result = await payment_service.create_yookassa_sbp_payment(
+        return await create_yookassa_sbp_balance_payment_response(
             db=db,
-            user_id=user.id,
+            user=user,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
-        )
-        confirmation_url = result.get('confirmation_url') if result else None
-        if not result or not confirmation_url:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
-
-        extra: dict[str, Any] = {
-            'local_payment_id': result.get('local_payment_id'),
-            'payment_id': result.get('yookassa_payment_id'),
-            'status': result.get('status'),
-            'requested_at': current_request_timestamp(),
-        }
-        confirmation_token = result.get('confirmation_token')
-        if confirmation_token:
-            extra['confirmation_token'] = confirmation_token
-
-        return MiniAppPaymentCreateResponse(
-            method=method,
-            payment_url=confirmation_url,
-            amount_kopeks=amount_kopeks,
-            extra=extra,
         )
 
     if method == 'yookassa':
-        if not settings.is_yookassa_enabled():
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
-        if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
-        if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount is below minimum')
-        if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount exceeds maximum')
-
-        payment_service = PaymentService()
-        result = await payment_service.create_yookassa_payment(
+        return await create_yookassa_balance_payment_response(
             db=db,
-            user_id=user.id,
+            user=user,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
-        )
-        if not result or not result.get('confirmation_url'):
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
-
-        return MiniAppPaymentCreateResponse(
-            method=method,
-            payment_url=result['confirmation_url'],
-            amount_kopeks=amount_kopeks,
-            extra={
-                'local_payment_id': result.get('local_payment_id'),
-                'payment_id': result.get('yookassa_payment_id'),
-                'status': result.get('status'),
-                'requested_at': current_request_timestamp(),
-            },
         )
 
     if method == 'mulenpay':
