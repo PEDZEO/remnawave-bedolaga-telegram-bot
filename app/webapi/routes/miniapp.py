@@ -22,7 +22,6 @@ from app.database.crud.promo_group import get_auto_assign_promo_groups
 from app.database.crud.promo_offer_template import get_promo_offer_template_by_id
 from app.database.crud.rules import get_rules_by_language
 from app.database.crud.server_squad import (
-    get_server_squad_by_uuid,
     update_server_user_counts,
 )
 from app.database.crud.subscription import (
@@ -140,7 +139,6 @@ from ..schemas.miniapp import (
     MiniAppSubscriptionUpdateResponse,
     MiniAppSubscriptionUser,
     MiniAppTariff,
-    MiniAppTariffPeriod,
     MiniAppTariffPurchaseRequest,
     MiniAppTariffPurchaseResponse,
     MiniAppTariffsRequest,
@@ -163,7 +161,6 @@ from .miniapp_format_helpers import (
     format_gb,
     format_gb_label,
     format_limit_label,
-    format_traffic_limit_label,
     status_label,
 )
 from .miniapp_helpers.auth_runtime import resolve_user_from_init_data
@@ -207,6 +204,7 @@ from .miniapp_helpers.subscription.settings import (
     build_subscription_settings,
     prepare_server_catalog,
 )
+from .miniapp_helpers.tariff.model import build_tariff_model
 from .miniapp_helpers.tariff.switch import calculate_tariff_switch_cost
 from .miniapp_helpers.tariff_state import (
     build_current_tariff_model,
@@ -3389,131 +3387,6 @@ async def update_subscription_devices_endpoint(
 # =============================================================================
 
 
-async def _build_tariff_model(
-    db: AsyncSession,
-    tariff,
-    current_tariff_id: int | None = None,
-    promo_group=None,
-    current_tariff=None,
-    remaining_days: int = 0,
-    user=None,
-) -> MiniAppTariff:
-    """Преобразует объект тарифа в модель для API."""
-    servers: list[MiniAppConnectedServer] = []
-    servers_count = 0
-
-    if tariff.allowed_squads:
-        servers_count = len(tariff.allowed_squads)
-        for squad_uuid in tariff.allowed_squads[:5]:  # Ограничиваем для превью
-            server = await get_server_squad_by_uuid(db, squad_uuid)
-            if server:
-                servers.append(
-                    MiniAppConnectedServer(
-                        uuid=squad_uuid,
-                        name=server.display_name or squad_uuid[:8],
-                    )
-                )
-
-    # Получаем скидки промогруппы по периодам
-    period_discounts = {}
-    if promo_group:
-        raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
-        for k, v in raw_discounts.items():
-            try:
-                period_discounts[int(k)] = max(0, min(100, int(v)))
-            except (TypeError, ValueError):
-                pass
-
-    periods: list[MiniAppTariffPeriod] = []
-    if tariff.period_prices:
-        for period_str, original_price_kopeks in sorted(tariff.period_prices.items(), key=lambda x: int(x[0])):
-            period_days = int(period_str)
-
-            # Применяем скидку промогруппы
-            discount_percent = period_discounts.get(period_days, 0)
-            if discount_percent > 0:
-                price_kopeks = int(original_price_kopeks * (100 - discount_percent) / 100)
-            else:
-                price_kopeks = original_price_kopeks
-
-            months = max(1, period_days // 30)
-            per_month = price_kopeks // months if months > 0 else price_kopeks
-
-            periods.append(
-                MiniAppTariffPeriod(
-                    days=period_days,
-                    months=months,
-                    label=format_period_description(period_days),
-                    price_kopeks=price_kopeks,
-                    price_label=settings.format_price(price_kopeks),
-                    price_per_month_kopeks=per_month,
-                    price_per_month_label=settings.format_price(per_month),
-                    original_price_kopeks=original_price_kopeks if discount_percent > 0 else None,
-                    original_price_label=settings.format_price(original_price_kopeks) if discount_percent > 0 else None,
-                    discount_percent=discount_percent,
-                )
-            )
-
-    # Расчёт стоимости переключения тарифа (если есть текущий тариф и это не он же)
-    switch_cost_kopeks = None
-    switch_cost_label = None
-    is_upgrade = None
-    is_switch_free = None
-
-    if current_tariff and current_tariff.id != tariff.id:
-        current_is_daily = getattr(current_tariff, 'is_daily', False)
-        new_is_daily = getattr(tariff, 'is_daily', False)
-
-        if current_is_daily and not new_is_daily:
-            # Переключение С суточного НА периодный - полная оплата нового тарифа
-            # Берём минимальную цену из периодов нового тарифа
-            min_period_price = None
-            if periods:
-                min_period_price = min(p.price_kopeks for p in periods)
-            if min_period_price and min_period_price > 0:
-                switch_cost_kopeks = min_period_price
-                switch_cost_label = settings.format_price(min_period_price)
-                is_upgrade = True  # Показываем как платный переход
-                is_switch_free = False
-        elif remaining_days > 0:
-            # Обычный расчёт для периодных тарифов
-            cost, upgrade = calculate_tariff_switch_cost(current_tariff, tariff, remaining_days, promo_group, user)
-            switch_cost_kopeks = cost
-            switch_cost_label = settings.format_price(cost) if cost > 0 else None
-            is_upgrade = upgrade
-            is_switch_free = cost == 0
-
-    # Суточный тариф
-    is_daily = getattr(tariff, 'is_daily', False)
-    daily_price_kopeks = getattr(tariff, 'daily_price_kopeks', 0) if is_daily else 0
-    daily_price_label = (
-        settings.format_price(daily_price_kopeks) + '/день' if is_daily and daily_price_kopeks > 0 else None
-    )
-
-    return MiniAppTariff(
-        id=tariff.id,
-        name=tariff.name,
-        description=tariff.description,
-        tier_level=tariff.tier_level,
-        traffic_limit_gb=tariff.traffic_limit_gb,
-        traffic_limit_label=format_traffic_limit_label(tariff.traffic_limit_gb),
-        is_unlimited_traffic=tariff.traffic_limit_gb == 0,
-        device_limit=tariff.device_limit,
-        servers_count=servers_count,
-        servers=servers,
-        periods=periods,
-        is_current=current_tariff_id == tariff.id if current_tariff_id else False,
-        is_available=tariff.is_active,
-        switch_cost_kopeks=switch_cost_kopeks,
-        switch_cost_label=switch_cost_label,
-        is_upgrade=is_upgrade,
-        is_switch_free=is_switch_free,
-        is_daily=is_daily,
-        daily_price_kopeks=daily_price_kopeks,
-        daily_price_label=daily_price_label,
-    )
-
-
 @router.post('/subscription/tariffs', response_model=MiniAppTariffsResponse)
 async def get_tariffs_endpoint(
     payload: MiniAppTariffsRequest,
@@ -3563,7 +3436,7 @@ async def get_tariffs_endpoint(
     # Формируем список тарифов
     tariff_models: list[MiniAppTariff] = []
     for tariff in tariffs:
-        model = await _build_tariff_model(
+        model = await build_tariff_model(
             db,
             tariff,
             current_tariff_id,
