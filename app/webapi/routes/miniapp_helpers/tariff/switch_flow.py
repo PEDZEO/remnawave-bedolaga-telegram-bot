@@ -106,10 +106,7 @@ async def apply_tariff_switch_to_subscription(
     new_period_days: int,
     logger,
 ) -> None:
-    squads = new_tariff.allowed_squads or []
-    if not squads:
-        all_servers, _ = await get_all_server_squads(db, available_only=True)
-        squads = [server.squad_uuid for server in all_servers if server.squad_uuid]
+    squads = await resolve_tariff_squads(db, new_tariff)
 
     subscription.tariff_id = new_tariff.id
     subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
@@ -140,3 +137,12 @@ async def apply_tariff_switch_to_subscription(
             )
             return
         logger.info('🔄 Смена с суточного на обычный тариф: очищены daily поля')
+
+
+async def resolve_tariff_squads(db: AsyncSession, tariff) -> list[str]:
+    squads = list(tariff.allowed_squads or [])
+    if squads:
+        return squads
+
+    all_servers, _ = await get_all_server_squads(db, available_only=True)
+    return [server.squad_uuid for server in all_servers if server.squad_uuid]

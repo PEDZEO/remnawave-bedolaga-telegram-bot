@@ -224,6 +224,7 @@ from .miniapp_helpers.tariff.switch_flow import (
     build_switch_result_message,
     calculate_switch_pricing,
     ensure_switch_balance,
+    resolve_tariff_squads,
 )
 from .miniapp_helpers.tariff.topup import (
     build_topup_description,
@@ -3534,15 +3535,7 @@ async def purchase_tariff_endpoint(
         description=description,
     )
 
-    # Получаем список серверов из тарифа
-    squads = tariff.allowed_squads or []
-
-    # Если allowed_squads пустой - значит "все серверы", получаем их
-    if not squads:
-        from app.database.crud.server_squad import get_all_server_squads
-
-        all_servers, _ = await get_all_server_squads(db, available_only=True)
-        squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+    squads = await resolve_tariff_squads(db, tariff)
 
     if subscription:
         # Смена/продление тарифа
