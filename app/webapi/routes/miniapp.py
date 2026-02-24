@@ -180,6 +180,16 @@ from .miniapp_format_helpers import (
     format_traffic_limit_label,
     status_label,
 )
+from .miniapp_helpers.payment.amount import (
+    build_balance_invoice_payload,
+    compute_stars_min_amount,
+    current_request_timestamp,
+    normalize_stars_amount,
+)
+from .miniapp_helpers.payment.request import (
+    build_mulenpay_iframe_config,
+    normalize_amount_kopeks,
+)
 from .miniapp_helpers.payment_status.dispatcher import resolve_payment_status_entry
 from .miniapp_helpers.promo_models import (
     ActiveOfferContext,
@@ -201,16 +211,6 @@ from .miniapp_misc_helpers import (
     is_remnawave_configured,
     resolve_display_name,
     serialize_transaction,
-)
-from .miniapp_payment_amount_helpers import (
-    build_balance_invoice_payload,
-    compute_stars_min_amount,
-    current_request_timestamp,
-    normalize_stars_amount,
-)
-from .miniapp_payment_request_helpers import (
-    build_mulenpay_iframe_config,
-    normalize_amount_kopeks,
 )
 from .miniapp_promo_discount_helpers import extract_promo_discounts
 from .miniapp_promo_offer_helpers import (
