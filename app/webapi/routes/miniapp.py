@@ -105,7 +105,6 @@ from ..schemas.miniapp import (
     MiniAppConnectedServer,
     MiniAppCurrentTariff,
     MiniAppDailySubscriptionToggleRequest,
-    MiniAppDevice,
     MiniAppDeviceRemovalRequest,
     MiniAppDeviceRemovalResponse,
     MiniAppFaq,
@@ -194,7 +193,6 @@ from .miniapp_format_helpers import (
     format_gb_label,
     format_limit_label,
     format_traffic_limit_label,
-    parse_datetime_string,
     status_label,
 )
 from .miniapp_misc_helpers import (
@@ -237,6 +235,11 @@ from .miniapp_subscription_helpers import (
     get_period_hint_from_subscription,
     parse_period_identifier,
     validate_subscription_id,
+)
+from .miniapp_subscription_runtime_helpers import (
+    load_devices_info,
+    load_subscription_links,
+    resolve_connected_servers,
 )
 from .miniapp_tariff_helpers import get_tariff_monthly_price
 from .miniapp_tariff_switch_helpers import calculate_tariff_switch_cost
@@ -1196,7 +1199,7 @@ async def _build_promo_offer_models(
             all_uuids.extend(extract_offer_test_squad_uuids(offer))
         if all_uuids:
             unique = list(dict.fromkeys(all_uuids))
-            resolved = await _resolve_connected_servers(db, unique)
+            resolved = await resolve_connected_servers(db, unique)
             squad_map = {server.uuid: server for server in resolved}
 
     async def get_template(template_id: int | None) -> PromoOfferTemplate | None:
@@ -1359,131 +1362,6 @@ async def _build_promo_offer_models(
             )
 
     return promo_offers
-
-
-async def _resolve_connected_servers(
-    db: AsyncSession,
-    squad_uuids: list[str],
-) -> list[MiniAppConnectedServer]:
-    if not squad_uuids:
-        return []
-
-    resolved: dict[str, str] = {}
-    missing: list[str] = []
-
-    for squad_uuid in squad_uuids:
-        if squad_uuid in resolved:
-            continue
-        server = await get_server_squad_by_uuid(db, squad_uuid)
-        if server and server.display_name:
-            resolved[squad_uuid] = server.display_name
-        else:
-            missing.append(squad_uuid)
-
-    if missing:
-        try:
-            service = RemnaWaveService()
-            if service.is_configured:
-                squads = await service.get_all_squads()
-                for squad in squads:
-                    uuid = squad.get('uuid')
-                    name = squad.get('name')
-                    if uuid in missing and name:
-                        resolved[uuid] = name
-        except RemnaWaveConfigurationError:
-            logger.debug('RemnaWave is not configured; skipping server name enrichment')
-        except Exception as error:  # pragma: no cover - defensive logging
-            logger.warning('Failed to resolve server names from RemnaWave', error=error)
-
-    connected_servers: list[MiniAppConnectedServer] = []
-    for squad_uuid in squad_uuids:
-        name = resolved.get(squad_uuid, squad_uuid)
-        connected_servers.append(MiniAppConnectedServer(uuid=squad_uuid, name=name))
-
-    return connected_servers
-
-
-async def _load_devices_info(user: User) -> tuple[int, list[MiniAppDevice]]:
-    remnawave_uuid = getattr(user, 'remnawave_uuid', None)
-    if not remnawave_uuid:
-        return 0, []
-
-    try:
-        service = RemnaWaveService()
-    except Exception as error:  # pragma: no cover - defensive logging
-        logger.warning('Failed to initialise RemnaWave service', error=error)
-        return 0, []
-
-    if not service.is_configured:
-        return 0, []
-
-    try:
-        async with service.get_api_client() as api:
-            response = await api.get_user_devices(remnawave_uuid)
-    except RemnaWaveConfigurationError:
-        logger.debug('RemnaWave configuration missing while loading devices')
-        return 0, []
-    except Exception as error:  # pragma: no cover - defensive logging
-        logger.warning('Failed to load devices from RemnaWave', error=error)
-        return 0, []
-
-    total_devices = int(response.get('total') or 0)
-    devices_payload = response.get('devices') or []
-
-    devices: list[MiniAppDevice] = []
-    for device in devices_payload:
-        hwid = device.get('hwid') or device.get('deviceId') or device.get('id')
-        platform = device.get('platform') or device.get('platformType')
-        model = device.get('deviceModel') or device.get('model') or device.get('name')
-        app_version = device.get('appVersion') or device.get('version')
-        last_seen_raw = (
-            device.get('updatedAt') or device.get('lastSeen') or device.get('lastActiveAt') or device.get('createdAt')
-        )
-        last_ip = device.get('ip') or device.get('ipAddress')
-
-        devices.append(
-            MiniAppDevice(
-                hwid=hwid,
-                platform=platform,
-                device_model=model,
-                app_version=app_version,
-                last_seen=parse_datetime_string(last_seen_raw),
-                last_ip=last_ip,
-            )
-        )
-
-    if total_devices == 0:
-        total_devices = len(devices)
-
-    return total_devices, devices
-
-
-async def _load_subscription_links(
-    subscription: Subscription,
-) -> dict[str, Any]:
-    if not subscription.remnawave_short_uuid or not is_remnawave_configured():
-        return {}
-
-    try:
-        service = SubscriptionService()
-        info = await service.get_subscription_info(subscription.remnawave_short_uuid)
-    except Exception as error:  # pragma: no cover - defensive logging
-        logger.warning('Failed to load subscription info from RemnaWave', error=error)
-        return {}
-
-    if not info:
-        return {}
-
-    payload: dict[str, Any] = {
-        'links': list(info.links or []),
-        'ss_conf_links': dict(info.ss_conf_links or {}),
-        'subscription_url': info.subscription_url,
-        'happ': info.happ,
-        'happ_link': getattr(info, 'happ_link', None),
-        'happ_crypto_link': getattr(info, 'happ_crypto_link', None),
-    }
-
-    return payload
 
 
 async def _build_referral_info(
@@ -1926,14 +1804,14 @@ async def get_subscription_details(
         traffic_limit_value = subscription.traffic_limit_gb or 0
         status_actual = subscription.actual_status
         subscription_status_value = subscription.status
-        links_payload = await _load_subscription_links(subscription)
+        links_payload = await load_subscription_links(subscription)
         # Флаг скрытия ссылки (скрывается только текст, кнопки работают)
         hide_subscription_link = settings.should_hide_subscription_link()
         subscription_url = links_payload.get('subscription_url') or subscription.subscription_url
         subscription_crypto_link = links_payload.get('happ_crypto_link') or subscription.subscription_crypto_link
         happ_redirect_link = get_happ_cryptolink_redirect_link(subscription_crypto_link)
         connected_squads = list(subscription.connected_squads or [])
-        connected_servers = await _resolve_connected_servers(db, connected_squads)
+        connected_servers = await resolve_connected_servers(db, connected_squads)
         links = links_payload.get('links') or connected_squads
         ss_conf_links = links_payload.get('ss_conf_links') or {}
         remnawave_short_uuid = subscription.remnawave_short_uuid
@@ -1950,7 +1828,7 @@ async def get_subscription_details(
         autopay_payload,
     )
 
-    devices_count, devices = await _load_devices_info(user)
+    devices_count, devices = await load_devices_info(user)
 
     # Загружаем данные суточного тарифа
     is_daily_tariff = False
