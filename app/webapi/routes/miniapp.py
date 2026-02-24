@@ -180,6 +180,7 @@ from .miniapp_format_helpers import (
     format_traffic_limit_label,
     status_label,
 )
+from .miniapp_helpers.auth_runtime import resolve_user_from_init_data
 from .miniapp_helpers.payment.amount import (
     build_balance_invoice_payload,
     compute_stars_min_amount,
@@ -241,49 +242,6 @@ promo_code_service = PromoCodeService()
 renewal_service = SubscriptionRenewalService()
 
 
-async def _resolve_user_from_init_data(
-    db: AsyncSession,
-    init_data: str,
-) -> tuple[User, dict[str, Any]]:
-    if not init_data:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            detail='Missing initData',
-        )
-
-    try:
-        webapp_data = parse_webapp_init_data(init_data, settings.BOT_TOKEN)
-    except TelegramWebAppAuthError as error:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            detail=str(error),
-        ) from error
-
-    telegram_user = webapp_data.get('user')
-    if not isinstance(telegram_user, dict) or 'id' not in telegram_user:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail='Invalid Telegram user payload',
-        )
-
-    try:
-        telegram_id = int(telegram_user['id'])
-    except (TypeError, ValueError):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail='Invalid Telegram user identifier',
-        ) from None
-
-    user = await get_user_by_telegram_id(db, telegram_id)
-    if not user:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            detail='User not found',
-        )
-
-    return user, webapp_data
-
-
 @router.post(
     '/maintenance/status',
     response_model=MiniAppMaintenanceStatusResponse,
@@ -292,7 +250,7 @@ async def get_maintenance_status(
     payload: MiniAppSubscriptionRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppMaintenanceStatusResponse:
-    _, _ = await _resolve_user_from_init_data(db, payload.init_data)
+    _, _ = await resolve_user_from_init_data(db, payload.init_data)
     status_info = maintenance_service.get_status_info()
     return MiniAppMaintenanceStatusResponse(
         is_active=bool(status_info.get('is_active')),
@@ -309,7 +267,7 @@ async def get_payment_methods(
     payload: MiniAppPaymentMethodsRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppPaymentMethodsResponse:
-    _, _ = await _resolve_user_from_init_data(db, payload.init_data)
+    _, _ = await resolve_user_from_init_data(db, payload.init_data)
 
     methods: list[MiniAppPaymentMethod] = []
 
@@ -539,7 +497,7 @@ async def create_payment_link(
     payload: MiniAppPaymentCreateRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppPaymentCreateResponse:
-    user, _ = await _resolve_user_from_init_data(db, payload.init_data)
+    user, _ = await resolve_user_from_init_data(db, payload.init_data)
 
     method = (payload.method or '').strip().lower()
     if not method:
@@ -1079,7 +1037,7 @@ async def get_payment_statuses(
     payload: MiniAppPaymentStatusRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppPaymentStatusResponse:
-    user, _ = await _resolve_user_from_init_data(db, payload.init_data)
+    user, _ = await resolve_user_from_init_data(db, payload.init_data)
 
     entries = payload.payments or []
     if not entries:
