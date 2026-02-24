@@ -243,6 +243,7 @@ from .miniapp_subscription_helpers import (
     parse_period_identifier,
     validate_subscription_id,
 )
+from .miniapp_tariff_helpers import get_tariff_monthly_price
 
 
 logger = structlog.get_logger(__name__)
@@ -251,23 +252,6 @@ router = APIRouter()
 
 promo_code_service = PromoCodeService()
 renewal_service = SubscriptionRenewalService()
-
-
-def _get_tariff_monthly_price(tariff) -> int:
-    """Получает месячную цену тарифа (30 дней) с fallback на пропорциональный расчёт."""
-    price = tariff.get_price_for_period(30)
-    if price is not None:
-        return price
-
-    # Fallback: пропорционально пересчитываем из первого доступного периода
-    periods = tariff.get_available_periods()
-    if periods:
-        first_period = periods[0]
-        first_price = tariff.get_price_for_period(first_period)
-        if first_price:
-            return int(first_price * 30 / first_period)
-
-    return 0
 
 
 def _merge_purchase_selection_from_request(
@@ -3086,7 +3070,7 @@ async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -
     if traffic_topup_enabled and not traffic_topup_packages and available_topup_gb == 0:
         traffic_topup_enabled = False
 
-    monthly_price = _get_tariff_monthly_price(tariff)
+    monthly_price = get_tariff_monthly_price(tariff)
 
     # Применяем скидку промогруппы для 30-дневного периода
     if promo_group:
@@ -5501,7 +5485,7 @@ async def _build_tariff_model(
 async def _build_current_tariff_model(db: AsyncSession, tariff, promo_group=None) -> MiniAppCurrentTariff:
     """Создаёт модель текущего тарифа."""
     servers_count = len(tariff.allowed_squads) if tariff.allowed_squads else 0
-    monthly_price = _get_tariff_monthly_price(tariff)
+    monthly_price = get_tariff_monthly_price(tariff)
 
     # Применяем скидку промогруппы для 30-дневного периода
     if promo_group:
@@ -5871,8 +5855,8 @@ def _calculate_tariff_switch_cost(
     Returns:
         (cost_kopeks, is_upgrade) - стоимость доплаты и флаг апгрейда
     """
-    current_monthly = _get_tariff_monthly_price(current_tariff)
-    new_monthly = _get_tariff_monthly_price(new_tariff)
+    current_monthly = get_tariff_monthly_price(current_tariff)
+    new_monthly = get_tariff_monthly_price(new_tariff)
 
     discount_percent = _get_user_period_discount(user, 30) if user else 0
 
