@@ -1470,18 +1470,14 @@ async def _resolve_pal24_payment_status(
             local_id = payment_by_bill.id
 
     if not local_id:
-        return MiniAppPaymentStatusResult(
+        return build_pending_payment_status(
             method='pal24',
-            status='pending',
-            is_paid=False,
-            amount_kopeks=query.amount_kopeks,
+            query=query,
             message='Missing payment identifier',
             extra={
                 'local_payment_id': query.local_payment_id,
                 'bill_id': query.invoice_id,
                 'order_id': None,
-                'payload': query.payload,
-                'started_at': query.started_at,
             },
         )
 
@@ -1489,18 +1485,14 @@ async def _resolve_pal24_payment_status(
     payment = status_info.get('payment') if status_info else None
 
     if not payment or payment.user_id != user.id:
-        return MiniAppPaymentStatusResult(
+        return build_pending_payment_status(
             method='pal24',
-            status='pending',
-            is_paid=False,
-            amount_kopeks=query.amount_kopeks,
+            query=query,
             message='Payment not found',
             extra={
                 'local_payment_id': local_id,
                 'bill_id': query.invoice_id,
                 'order_id': None,
-                'payload': query.payload,
-                'started_at': query.started_at,
             },
         )
 
