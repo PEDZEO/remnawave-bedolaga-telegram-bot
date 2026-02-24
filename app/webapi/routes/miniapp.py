@@ -221,6 +221,7 @@ from .miniapp_payment_request_helpers import (
 )
 from .miniapp_payment_status_helpers import (
     build_pending_payment_status,
+    build_unknown_payment_status,
     classify_payment_status,
     is_supported_payment_method,
     normalize_payment_method,
@@ -1131,18 +1132,10 @@ async def _resolve_payment_status_entry(
 ) -> MiniAppPaymentStatusResult:
     method = normalize_payment_method(query.method)
     if not method:
-        return MiniAppPaymentStatusResult(
-            method='',
-            status='unknown',
-            message='Payment method is required',
-        )
+        return build_unknown_payment_status(method='', message='Payment method is required')
 
     if not is_supported_payment_method(method):
-        return MiniAppPaymentStatusResult(
-            method=method,
-            status='unknown',
-            message='Unsupported payment method',
-        )
+        return build_unknown_payment_status(method=method, message='Unsupported payment method')
 
     if method in {'yookassa', 'yookassa_sbp'}:
         return await _resolve_yookassa_payment_status(
@@ -1172,7 +1165,7 @@ async def _resolve_payment_status_entry(
     if method == 'tribute':
         return await _resolve_tribute_payment_status(db, user, query)
 
-    return MiniAppPaymentStatusResult(method=method, status='unknown', message='Unsupported payment method')
+    return build_unknown_payment_status(method=method, message='Unsupported payment method')
 
 
 async def _resolve_yookassa_payment_status(

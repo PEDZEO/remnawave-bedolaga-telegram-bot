@@ -82,3 +82,11 @@ def build_pending_payment_status(
         message=message,
         extra=payload,
     )
+
+
+def build_unknown_payment_status(*, method: str, message: str) -> MiniAppPaymentStatusResult:
+    return MiniAppPaymentStatusResult(
+        method=method,
+        status='unknown',
+        message=message,
+    )
