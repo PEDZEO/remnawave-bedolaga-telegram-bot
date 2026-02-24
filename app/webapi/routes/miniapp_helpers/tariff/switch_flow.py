@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database.crud.server_squad import get_all_server_squads
 
 from .switch import calculate_tariff_switch_cost
 
@@ -92,3 +95,48 @@ def build_switch_result_message(language: str, tariff_name: str, upgrade_cost: i
     if language == 'ru':
         return f"Тариф изменён на '{tariff_name}'"
     return f"Switched to '{tariff_name}'"
+
+
+async def apply_tariff_switch_to_subscription(
+    db: AsyncSession,
+    subscription,
+    current_tariff,
+    new_tariff,
+    *,
+    new_period_days: int,
+    logger,
+) -> None:
+    squads = new_tariff.allowed_squads or []
+    if not squads:
+        all_servers, _ = await get_all_server_squads(db, available_only=True)
+        squads = [server.squad_uuid for server in all_servers if server.squad_uuid]
+
+    subscription.tariff_id = new_tariff.id
+    subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
+    subscription.device_limit = new_tariff.device_limit
+    subscription.connected_squads = squads
+    subscription.purchased_traffic_gb = 0
+    subscription.traffic_reset_at = None
+
+    new_is_daily = getattr(new_tariff, 'is_daily', False)
+    old_is_daily = getattr(current_tariff, 'is_daily', False)
+
+    if new_is_daily:
+        subscription.is_daily_paused = False
+        subscription.last_daily_charge_at = datetime.now(UTC)
+        subscription.end_date = datetime.now(UTC) + timedelta(days=1)
+        logger.info('🔄 Смена на суточный тариф: установлены daily поля, end_date', end_date=subscription.end_date)
+        return
+
+    if old_is_daily and not new_is_daily:
+        subscription.is_daily_paused = False
+        subscription.last_daily_charge_at = None
+        if new_period_days > 0:
+            subscription.end_date = datetime.now(UTC) + timedelta(days=new_period_days)
+            logger.info(
+                '🔄 Смена с суточного на периодный тариф: end_date= ( дней)',
+                end_date=subscription.end_date,
+                new_period_days=new_period_days,
+            )
+            return
+        logger.info('🔄 Смена с суточного на обычный тариф: очищены daily поля')

@@ -219,6 +219,7 @@ from .miniapp_helpers.tariff.purchase import (
 )
 from .miniapp_helpers.tariff.switch_context import resolve_tariff_switch_context
 from .miniapp_helpers.tariff.switch_flow import (
+    apply_tariff_switch_to_subscription,
     build_switch_charge_description,
     build_switch_result_message,
     calculate_switch_pricing,
@@ -3743,50 +3744,14 @@ async def switch_tariff_endpoint(
             description=description,
         )
 
-    # Получаем список серверов из тарифа
-    squads = new_tariff.allowed_squads or []
-
-    # Если allowed_squads пустой - значит "все серверы", получаем их
-    if not squads:
-        from app.database.crud.server_squad import get_all_server_squads
-
-        all_servers, _ = await get_all_server_squads(db, available_only=True)
-        squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
-
-    # Обновляем подписку - меняем тариф без изменения даты
-    subscription.tariff_id = new_tariff.id
-    subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
-    subscription.device_limit = new_tariff.device_limit
-    subscription.connected_squads = squads
-    # Сбрасываем докупленный трафик при смене тарифа
-    subscription.purchased_traffic_gb = 0
-    subscription.traffic_reset_at = None  # Сбрасываем дату сброса трафика
-
-    # Обработка daily полей при смене тарифа
-    new_is_daily = getattr(new_tariff, 'is_daily', False)
-    old_is_daily = getattr(current_tariff, 'is_daily', False)
-
-    if new_is_daily:
-        # Переход на суточный тариф
-        subscription.is_daily_paused = False
-        subscription.last_daily_charge_at = datetime.now(UTC)
-        # Для суточного тарифа end_date = сейчас + 1 день
-        subscription.end_date = datetime.now(UTC) + timedelta(days=1)
-        logger.info('🔄 Смена на суточный тариф: установлены daily поля, end_date', end_date=subscription.end_date)
-    elif old_is_daily and not new_is_daily:
-        # Переход с суточного на обычный тариф - очищаем daily поля
-        subscription.is_daily_paused = False
-        subscription.last_daily_charge_at = None
-        # Устанавливаем дату окончания для периодного тарифа
-        if new_period_days > 0:
-            subscription.end_date = datetime.now(UTC) + timedelta(days=new_period_days)
-            logger.info(
-                '🔄 Смена с суточного на периодный тариф: end_date= ( дней)',
-                end_date=subscription.end_date,
-                new_period_days=new_period_days,
-            )
-        else:
-            logger.info('🔄 Смена с суточного на обычный тариф: очищены daily поля')
+    await apply_tariff_switch_to_subscription(
+        db,
+        subscription,
+        current_tariff,
+        new_tariff,
+        new_period_days=new_period_days,
+        logger=logger,
+    )
 
     await db.commit()
     await db.refresh(subscription)
