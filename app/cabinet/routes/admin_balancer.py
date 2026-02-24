@@ -43,6 +43,7 @@ async def _proxy_balancer_json(
     *,
     requires_admin: bool = False,
     params: dict[str, Any] | None = None,
+    json_body: dict[str, Any] | None = None,
 ) -> Any:
     base_url = _get_balancer_base_url()
     headers: dict[str, str] = {'Accept': 'application/json'}
@@ -55,7 +56,13 @@ async def _proxy_balancer_json(
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.request(method=method, url=target_url, headers=headers, params=params)
+            response = await client.request(
+                method=method,
+                url=target_url,
+                headers=headers,
+                params=params,
+                json=json_body,
+            )
     except httpx.TimeoutException as exc:
         logger.warning('Balancer request timed out', path=path, method=method)
         raise HTTPException(
@@ -152,3 +159,25 @@ async def refresh_balancer_stats(
 ) -> Any:
     """Proxy balancer /refresh-stats (admin token required)."""
     return await _proxy_balancer_json('GET', '/refresh-stats', requires_admin=True)
+
+
+@router.get('/groups')
+async def get_balancer_groups(
+    admin: User = Depends(get_current_admin_user),
+) -> Any:
+    """Proxy balancer /admin/groups (admin token required)."""
+    return await _proxy_balancer_json('GET', '/admin/groups', requires_admin=True)
+
+
+@router.put('/groups')
+async def update_balancer_groups(
+    payload: dict[str, Any],
+    admin: User = Depends(get_current_admin_user),
+) -> Any:
+    """Proxy balancer PUT /admin/groups (admin token required)."""
+    return await _proxy_balancer_json(
+        'PUT',
+        '/admin/groups',
+        requires_admin=True,
+        json_body=payload,
+    )
