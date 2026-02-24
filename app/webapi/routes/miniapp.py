@@ -228,6 +228,12 @@ from .miniapp_renewal_message_helpers import (
     build_renewal_status_message,
     build_renewal_success_message,
 )
+from .miniapp_subscription_helpers import (
+    get_addon_discount_percent_for_user,
+    get_period_hint_from_subscription,
+    parse_period_identifier,
+    validate_subscription_id,
+)
 
 
 logger = structlog.get_logger(__name__)
@@ -262,8 +268,6 @@ def _get_tariff_monthly_price(tariff) -> int:
 
 _DECIMAL_ONE_HUNDRED = Decimal(100)
 _DECIMAL_CENT = Decimal('0.01')
-
-_PERIOD_ID_PATTERN = re.compile(r'(\d+)')
 
 
 async def _get_usd_to_rub_rate() -> float:
@@ -3240,7 +3244,7 @@ async def update_subscription_autopay_endpoint(
 ) -> MiniAppSubscriptionAutopayResponse:
     user = await _authorize_miniapp_user(payload.init_data, db)
     subscription = _ensure_paid_subscription(user)
-    _validate_subscription_id(payload.subscription_id, subscription)
+    validate_subscription_id(payload.subscription_id, subscription)
 
     # Суточные подписки имеют свой механизм продления (DailySubscriptionService),
     # глобальный autopay для них запрещён
@@ -3954,20 +3958,6 @@ async def remove_connected_device(
     return MiniAppDeviceRemovalResponse(success=True)
 
 
-def _parse_period_identifier(identifier: str | None) -> int | None:
-    if not identifier:
-        return None
-
-    match = _PERIOD_ID_PATTERN.search(str(identifier))
-    if not match:
-        return None
-
-    try:
-        return int(match.group(1))
-    except (TypeError, ValueError):
-        return None
-
-
 async def _calculate_subscription_renewal_pricing(
     db: AsyncSession,
     user: User,
@@ -4137,73 +4127,6 @@ async def _prepare_subscription_renewal_options(
     periods = [item[0] for item in option_payloads]
 
     return periods, pricing_map, recommended_option[0].id
-
-
-def _get_addon_discount_percent_for_user(
-    user: User | None,
-    category: str,
-    period_days_hint: int | None = None,
-) -> int:
-    if user is None:
-        return 0
-
-    promo_group = getattr(user, 'promo_group', None)
-    if promo_group is None:
-        return 0
-
-    if not getattr(promo_group, 'apply_discounts_to_addons', True):
-        return 0
-
-    try:
-        percent = user.get_promo_discount(category, period_days_hint)
-    except AttributeError:
-        return 0
-
-    try:
-        return int(percent)
-    except (TypeError, ValueError):
-        return 0
-
-
-def _get_period_hint_from_subscription(
-    subscription: Subscription | None,
-) -> int | None:
-    if not subscription:
-        return None
-
-    months_remaining = get_remaining_months(subscription.end_date)
-    if months_remaining <= 0:
-        return None
-
-    return months_remaining * 30
-
-
-def _validate_subscription_id(
-    requested_id: int | None,
-    subscription: Subscription,
-) -> None:
-    if requested_id is None:
-        return
-
-    try:
-        requested = int(requested_id)
-    except (TypeError, ValueError):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'invalid_subscription_id',
-                'message': 'Invalid subscription identifier',
-            },
-        ) from None
-
-    if requested != subscription.id:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            detail={
-                'code': 'subscription_mismatch',
-                'message': 'Subscription does not belong to the authorized user',
-            },
-        )
 
 
 async def _authorize_miniapp_user(
@@ -4434,19 +4357,19 @@ async def _build_subscription_settings(
     user: User,
     subscription: Subscription,
 ) -> MiniAppSubscriptionSettings:
-    period_hint_days = _get_period_hint_from_subscription(subscription)
+    period_hint_days = get_period_hint_from_subscription(subscription)
     months_remaining = get_remaining_months(subscription.end_date)
-    servers_discount = _get_addon_discount_percent_for_user(
+    servers_discount = get_addon_discount_percent_for_user(
         user,
         'servers',
         period_hint_days,
     )
-    traffic_discount = _get_addon_discount_percent_for_user(
+    traffic_discount = get_addon_discount_percent_for_user(
         user,
         'traffic',
         period_hint_days,
     )
-    devices_discount = _get_addon_discount_percent_for_user(
+    devices_discount = get_addon_discount_percent_for_user(
         user,
         'devices',
         period_hint_days,
@@ -4571,7 +4494,7 @@ async def get_subscription_renewal_options_endpoint(
         user,
         allowed_statuses={'active', 'trial', 'expired'},
     )
-    _validate_subscription_id(payload.subscription_id, subscription)
+    validate_subscription_id(payload.subscription_id, subscription)
 
     periods, pricing_map, default_period_id = await _prepare_subscription_renewal_options(
         db,
@@ -4651,7 +4574,7 @@ async def submit_subscription_renewal_endpoint(
         user,
         allowed_statuses={'active', 'trial', 'expired'},
     )
-    _validate_subscription_id(payload.subscription_id, subscription)
+    validate_subscription_id(payload.subscription_id, subscription)
 
     period_days: int | None = None
     if payload.period_days is not None:
@@ -4664,7 +4587,7 @@ async def submit_subscription_renewal_endpoint(
             ) from error
 
     if period_days is None:
-        period_days = _parse_period_identifier(payload.period_id)
+        period_days = parse_period_identifier(payload.period_id)
 
     if period_days is None or period_days <= 0:
         raise HTTPException(
@@ -5139,7 +5062,7 @@ async def get_subscription_settings_endpoint(
         user,
         allowed_statuses={'active', 'trial'},
     )
-    _validate_subscription_id(payload.subscription_id, subscription)
+    validate_subscription_id(payload.subscription_id, subscription)
 
     settings_payload = await _build_subscription_settings(db, user, subscription)
 
@@ -5159,7 +5082,7 @@ async def update_subscription_servers_endpoint(
         user,
         allowed_statuses={'active', 'trial'},
     )
-    _validate_subscription_id(payload.subscription_id, subscription)
+    validate_subscription_id(payload.subscription_id, subscription)
     old_servers = list(getattr(subscription, 'connected_squads', []) or [])
 
     raw_selection: list[str] = []
@@ -5205,8 +5128,8 @@ async def update_subscription_servers_endpoint(
             message='No changes',
         )
 
-    period_hint_days = _get_period_hint_from_subscription(subscription)
-    servers_discount = _get_addon_discount_percent_for_user(
+    period_hint_days = get_period_hint_from_subscription(subscription)
+    servers_discount = get_addon_discount_percent_for_user(
         user,
         'servers',
         period_hint_days,
@@ -5367,7 +5290,7 @@ async def update_subscription_traffic_endpoint(
         user,
         allowed_statuses={'active', 'trial'},
     )
-    _validate_subscription_id(payload.subscription_id, subscription)
+    validate_subscription_id(payload.subscription_id, subscription)
     old_traffic = subscription.traffic_limit_gb
 
     raw_value = payload.traffic if payload.traffic is not None else payload.traffic_gb
@@ -5428,7 +5351,7 @@ async def update_subscription_traffic_endpoint(
 
     months_remaining = get_remaining_months(subscription.end_date)
     period_hint_days = months_remaining * 30 if months_remaining > 0 else None
-    traffic_discount = _get_addon_discount_percent_for_user(
+    traffic_discount = get_addon_discount_percent_for_user(
         user,
         'traffic',
         period_hint_days,
@@ -5526,7 +5449,7 @@ async def update_subscription_devices_endpoint(
         user,
         allowed_statuses={'active', 'trial'},
     )
-    _validate_subscription_id(payload.subscription_id, subscription)
+    validate_subscription_id(payload.subscription_id, subscription)
 
     raw_value = payload.devices if payload.devices is not None else payload.device_limit
     if raw_value is None:
@@ -5581,7 +5504,7 @@ async def update_subscription_devices_endpoint(
         price_per_month = chargeable_diff * settings.PRICE_PER_DEVICE
         months_remaining = get_remaining_months(subscription.end_date)
         period_hint_days = months_remaining * 30 if months_remaining > 0 else None
-        devices_discount = _get_addon_discount_percent_for_user(
+        devices_discount = get_addon_discount_percent_for_user(
             user,
             'devices',
             period_hint_days,
@@ -6502,7 +6425,7 @@ async def purchase_traffic_topup_endpoint(
 
     user = await _authorize_miniapp_user(payload.init_data, db)
     subscription = _ensure_paid_subscription(user)
-    _validate_subscription_id(payload.subscription_id, subscription)
+    validate_subscription_id(payload.subscription_id, subscription)
 
     # Проверяем режим тарифов
     if not settings.is_tariffs_mode():
