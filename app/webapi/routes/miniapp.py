@@ -231,6 +231,7 @@ from .miniapp_promo_offer_helpers import (
     format_offer_message,
     normalize_effect_type,
 )
+from .miniapp_purchase_selection_helpers import merge_purchase_selection_from_request
 from .miniapp_renewal_message_helpers import (
     build_promo_offer_payload,
     build_renewal_pending_message,
@@ -252,42 +253,6 @@ router = APIRouter()
 
 promo_code_service = PromoCodeService()
 renewal_service = SubscriptionRenewalService()
-
-
-def _merge_purchase_selection_from_request(
-    payload: MiniAppSubscriptionPurchasePreviewRequest | MiniAppSubscriptionPurchaseRequest,
-) -> dict[str, Any]:
-    base: dict[str, Any] = {}
-    if payload.selection:
-        base.update(payload.selection)
-
-    def _maybe_set(key: str, value: Any) -> None:
-        if value is None:
-            return
-        if key not in base:
-            base[key] = value
-
-    _maybe_set('period_id', getattr(payload, 'period_id', None))
-    _maybe_set('period_days', getattr(payload, 'period_days', None))
-
-    _maybe_set('traffic_value', getattr(payload, 'traffic_value', None))
-    _maybe_set('traffic', getattr(payload, 'traffic', None))
-    _maybe_set('traffic_gb', getattr(payload, 'traffic_gb', None))
-
-    servers = getattr(payload, 'servers', None)
-    if servers is not None and 'servers' not in base:
-        base['servers'] = servers
-    countries = getattr(payload, 'countries', None)
-    if countries is not None and 'countries' not in base:
-        base['countries'] = countries
-    server_uuids = getattr(payload, 'server_uuids', None)
-    if server_uuids is not None and 'server_uuids' not in base:
-        base['server_uuids'] = server_uuids
-
-    _maybe_set('devices', getattr(payload, 'devices', None))
-    _maybe_set('device_limit', getattr(payload, 'device_limit', None))
-
-    return base
 
 
 async def _resolve_user_from_init_data(
@@ -4728,7 +4693,7 @@ async def subscription_purchase_preview_endpoint(
     user = await authorize_miniapp_user(payload.init_data, db)
     context = await purchase_service.build_options(db, user)
 
-    selection_payload = _merge_purchase_selection_from_request(payload)
+    selection_payload = merge_purchase_selection_from_request(payload)
     try:
         selection = purchase_service.parse_selection(context, selection_payload)
     except PurchaseValidationError as error:
@@ -4760,7 +4725,7 @@ async def subscription_purchase_endpoint(
     user = await authorize_miniapp_user(payload.init_data, db)
     context = await purchase_service.build_options(db, user)
 
-    selection_payload = _merge_purchase_selection_from_request(payload)
+    selection_payload = merge_purchase_selection_from_request(payload)
     try:
         selection = purchase_service.parse_selection(context, selection_payload)
     except PurchaseValidationError as error:
