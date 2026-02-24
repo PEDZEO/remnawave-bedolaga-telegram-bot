@@ -46,7 +46,6 @@ from app.database.crud.transaction import (
 from app.database.crud.user import get_user_by_telegram_id, subtract_user_balance
 from app.database.models import (
     PaymentMethod,
-    PromoGroup,
     PromoOfferTemplate,
     Subscription,
     SubscriptionTemporaryAccess,
@@ -213,6 +212,7 @@ from .miniapp_payment_lookup_helpers import (
     parse_client_timestamp,
 )
 from .miniapp_payment_status_helpers import classify_payment_status
+from .miniapp_promo_discount_helpers import extract_promo_discounts
 
 
 logger = structlog.get_logger(__name__)
@@ -2893,7 +2893,7 @@ async def get_subscription_details(
                 threshold_label=settings.format_price(threshold),
                 is_reached=total_spent_kopeks >= threshold,
                 is_current=bool(promo_group and promo_group.id == group.id),
-                **_extract_promo_discounts(group),
+                **extract_promo_discounts(group),
             )
         )
 
@@ -3237,7 +3237,7 @@ async def get_subscription_details(
             MiniAppPromoGroup(
                 id=promo_group.id,
                 name=promo_group.name,
-                **_extract_promo_discounts(promo_group),
+                **extract_promo_discounts(promo_group),
             )
             if promo_group
             else None
@@ -4104,47 +4104,6 @@ async def remove_connected_device(
     return MiniAppDeviceRemovalResponse(success=True)
 
 
-def _safe_int(value: Any) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 0
-
-
-def _normalize_period_discounts(raw: dict[Any, Any] | None) -> dict[str, int]:
-    if not isinstance(raw, dict):
-        return {}
-
-    normalized: dict[str, int] = {}
-    for key, value in raw.items():
-        try:
-            period = int(key)
-            normalized[str(period)] = int(value)
-        except (TypeError, ValueError):
-            continue
-
-    return normalized
-
-
-def _extract_promo_discounts(group: PromoGroup | None) -> dict[str, Any]:
-    if not group:
-        return {
-            'server_discount_percent': 0,
-            'traffic_discount_percent': 0,
-            'device_discount_percent': 0,
-            'period_discounts': {},
-            'apply_discounts_to_addons': True,
-        }
-
-    return {
-        'server_discount_percent': max(0, _safe_int(getattr(group, 'server_discount_percent', 0))),
-        'traffic_discount_percent': max(0, _safe_int(getattr(group, 'traffic_discount_percent', 0))),
-        'device_discount_percent': max(0, _safe_int(getattr(group, 'device_discount_percent', 0))),
-        'period_discounts': _normalize_period_discounts(getattr(group, 'period_discounts', None)),
-        'apply_discounts_to_addons': bool(getattr(group, 'apply_discounts_to_addons', True)),
-    }
-
-
 def _normalize_language_code(user: User | None) -> str:
     language = getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE or 'ru'
     return language.split('-')[0].lower()
@@ -4866,7 +4825,7 @@ async def get_subscription_renewal_options_endpoint(
         MiniAppPromoGroup(
             id=promo_group.id,
             name=promo_group.name,
-            **_extract_promo_discounts(promo_group),
+            **extract_promo_discounts(promo_group),
         )
         if promo_group
         else None
@@ -6174,7 +6133,7 @@ async def get_tariffs_endpoint(
         promo_group_model = MiniAppPromoGroup(
             id=promo_group.id,
             name=promo_group.name,
-            **_extract_promo_discounts(promo_group),
+            **extract_promo_discounts(promo_group),
         )
 
     return MiniAppTariffsResponse(
