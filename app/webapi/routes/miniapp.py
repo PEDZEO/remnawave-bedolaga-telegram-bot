@@ -59,9 +59,7 @@ from app.services.subscription_purchase_service import (
 )
 from app.services.subscription_renewal_service import (
     SubscriptionRenewalService,
-    build_payment_descriptor,
     calculate_missing_amount,
-    encode_payment_payload,
     with_admin_notification_service,
 )
 from app.services.subscription_service import SubscriptionService
@@ -204,14 +202,14 @@ from .miniapp_helpers.subscription.renewal_execute import (
     execute_classic_renewal,
     execute_tariff_renewal,
 )
+from .miniapp_helpers.subscription.renewal_payment import (
+    create_renewal_cryptobot_payment,
+)
 from .miniapp_helpers.subscription.renewal_submit import (
     build_tariff_renewal_pricing,
-    compute_amount_usd_from_kopeks,
     ensure_classic_renewal_period_available,
-    ensure_cryptobot_amount_limits,
     ensure_renewal_method_or_balance,
     ensure_renewal_method_supported,
-    extract_cryptobot_payment_urls,
     resolve_renewal_method,
     resolve_renewal_period,
 )
@@ -2525,44 +2523,16 @@ async def submit_subscription_renewal_endpoint(
     ensure_renewal_method_supported(method, supported_methods)
 
     if method == 'cryptobot':
-        if not settings.is_cryptobot_enabled():
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
-
-        rate = await get_usd_to_rub_rate()
-        min_amount_kopeks, max_amount_kopeks = compute_cryptobot_limits(rate)
-        ensure_cryptobot_amount_limits(
+        payment_data = await create_renewal_cryptobot_payment(
+            db=db,
+            user=user,
+            subscription=subscription,
+            period_days=period_days,
+            final_total=final_total,
             missing_amount=missing_amount,
-            min_amount_kopeks=min_amount_kopeks,
-            max_amount_kopeks=max_amount_kopeks,
-        )
-        amount_usd = compute_amount_usd_from_kopeks(missing_amount, rate)
-
-        descriptor = build_payment_descriptor(
-            user.id,
-            subscription.id,
-            period_days,
-            final_total,
-            missing_amount,
+            description=description,
             pricing_snapshot=pricing,
         )
-        payload_value = encode_payment_payload(descriptor)
-
-        payment_service = PaymentService()
-        result = await payment_service.create_cryptobot_payment(
-            db=db,
-            user_id=user.id,
-            amount_usd=amount_usd,
-            asset=settings.CRYPTOBOT_DEFAULT_ASSET,
-            description=description,
-            payload=payload_value,
-        )
-        if not result:
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail={'code': 'payment_creation_failed', 'message': 'Failed to create payment'},
-            )
-
-        payment_url, payment_extra = extract_cryptobot_payment_urls(result)
 
         message = build_renewal_pending_message(user, missing_amount, method)
 
@@ -2574,12 +2544,12 @@ async def submit_subscription_renewal_endpoint(
             subscription_id=subscription.id,
             requires_payment=True,
             payment_method=method,
-            payment_url=payment_url,
+            payment_url=payment_data['payment_url'],
             payment_amount_kopeks=missing_amount,
-            payment_id=result.get('local_payment_id'),
-            invoice_id=result.get('invoice_id'),
-            payment_payload=payload_value,
-            payment_extra=payment_extra,
+            payment_id=payment_data['payment_id'],
+            invoice_id=payment_data['invoice_id'],
+            payment_payload=payment_data['payment_payload'],
+            payment_extra=payment_data['payment_extra'],
         )
 
     raise HTTPException(
