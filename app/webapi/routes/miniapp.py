@@ -217,8 +217,13 @@ from .miniapp_helpers.tariff.purchase import (
     build_tariff_purchase_context,
     ensure_tariff_purchase_balance,
 )
-from .miniapp_helpers.tariff.switch import calculate_tariff_switch_cost
 from .miniapp_helpers.tariff.switch_context import resolve_tariff_switch_context
+from .miniapp_helpers.tariff.switch_flow import (
+    build_switch_charge_description,
+    build_switch_result_message,
+    calculate_switch_pricing,
+    ensure_switch_balance,
+)
 from .miniapp_helpers.tariff.topup import (
     build_topup_description,
     calculate_topup_price,
@@ -3643,22 +3648,15 @@ async def preview_tariff_switch_endpoint(
     promo_group = context.promo_group
     remaining_days = context.remaining_days
 
-    # Рассчитываем стоимость переключения
-    current_is_daily = getattr(current_tariff, 'is_daily', False) if current_tariff else False
-    new_is_daily = getattr(new_tariff, 'is_daily', False)
-
-    if current_is_daily and not new_is_daily:
-        # Переключение С суточного НА периодный - полная оплата нового тарифа
-        # Берём минимальную цену из периодов нового тарифа
-        min_period_price = 0
-        if new_tariff.period_prices:
-            min_period_price = min(new_tariff.period_prices.values())
-        upgrade_cost = min_period_price
-        is_upgrade = min_period_price > 0
-    else:
-        upgrade_cost, is_upgrade = calculate_tariff_switch_cost(
-            current_tariff, new_tariff, remaining_days, promo_group, user
-        )
+    switch_pricing = calculate_switch_pricing(
+        current_tariff,
+        new_tariff,
+        remaining_days,
+        promo_group,
+        user,
+    )
+    upgrade_cost = switch_pricing.upgrade_cost
+    is_upgrade = switch_pricing.is_upgrade
 
     balance = user.balance_kopeks or 0
     has_enough = balance >= upgrade_cost
@@ -3709,46 +3707,26 @@ async def switch_tariff_endpoint(
     promo_group = context.promo_group
     remaining_days = context.remaining_days
 
-    # Рассчитываем стоимость
-    current_is_daily = getattr(current_tariff, 'is_daily', False) if current_tariff else False
-    new_is_daily = getattr(new_tariff, 'is_daily', False)
-    switching_from_daily = current_is_daily and not new_is_daily
-
-    if switching_from_daily:
-        # Переключение С суточного НА периодный - полная оплата нового тарифа (минимальный период)
-        min_period_days = 30  # По умолчанию месяц
-        min_period_price = 0
-        if new_tariff.period_prices:
-            # Находим минимальный период и его цену
-            min_period_days = min(int(k) for k in new_tariff.period_prices.keys())
-            min_period_price = new_tariff.period_prices.get(str(min_period_days), 0)
-        upgrade_cost = min_period_price
-        is_upgrade = min_period_price > 0
-        # remaining_days для нового тарифа будет равен min_period_days после покупки
-        new_period_days = min_period_days
-    else:
-        upgrade_cost, is_upgrade = calculate_tariff_switch_cost(
-            current_tariff, new_tariff, remaining_days, promo_group, user
-        )
-        new_period_days = 0  # Не меняем дату окончания
+    switch_pricing = calculate_switch_pricing(
+        current_tariff,
+        new_tariff,
+        remaining_days,
+        promo_group,
+        user,
+    )
+    upgrade_cost = switch_pricing.upgrade_cost
+    new_period_days = switch_pricing.new_period_days
+    switching_from_daily = switch_pricing.switching_from_daily
 
     # Списываем доплату если апгрейд
     if upgrade_cost > 0:
-        if user.balance_kopeks < upgrade_cost:
-            missing = upgrade_cost - user.balance_kopeks
-            raise HTTPException(
-                status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail={
-                    'code': 'insufficient_funds',
-                    'message': f'Недостаточно средств. Не хватает {settings.format_price(missing)}',
-                    'missing_amount': missing,
-                },
-            )
-
-        if switching_from_daily:
-            description = f"Переход с суточного на тариф '{new_tariff.name}' ({new_period_days} дней)"
-        else:
-            description = f"Переход на тариф '{new_tariff.name}' (доплата за {remaining_days} дней)"
+        ensure_switch_balance(user, upgrade_cost)
+        description = build_switch_charge_description(
+            new_tariff_name=new_tariff.name,
+            switching_from_daily=switching_from_daily,
+            new_period_days=new_period_days,
+            remaining_days=remaining_days,
+        )
         success = await subtract_user_balance(db, user, upgrade_cost, description)
         if not success:
             raise HTTPException(
@@ -3822,15 +3800,7 @@ async def switch_tariff_endpoint(
         logger.error('Ошибка синхронизации с RemnaWave при смене тарифа', error=e)
 
     lang = getattr(user, 'language', settings.DEFAULT_LANGUAGE)
-    if upgrade_cost > 0:
-        if lang == 'ru':
-            message = f"Тариф изменён на '{new_tariff.name}'. Списано {settings.format_price(upgrade_cost)}"
-        else:
-            message = f"Switched to '{new_tariff.name}'. Charged {settings.format_price(upgrade_cost)}"
-    elif lang == 'ru':
-        message = f"Тариф изменён на '{new_tariff.name}'"
-    else:
-        message = f"Switched to '{new_tariff.name}'"
+    message = build_switch_result_message(lang, new_tariff.name, upgrade_cost)
 
     return MiniAppTariffSwitchResponse(
         success=True,
