@@ -227,6 +227,9 @@ from .miniapp_helpers.subscription.traffic_update import (
     ensure_traffic_update_allowed,
     resolve_new_traffic_value,
 )
+from .miniapp_helpers.subscription.update_finalize import (
+    finalize_subscription_update,
+)
 from .miniapp_helpers.tariff.base import ensure_tariffs_mode_enabled
 from .miniapp_helpers.tariff.daily import (
     build_daily_toggle_message,
@@ -2900,27 +2903,15 @@ async def update_subscription_servers_endpoint(
         ordered_selection.append(uuid)
 
     subscription.connected_squads = ordered_selection
-    subscription.updated_at = datetime.now(UTC)
-    await db.commit()
-    await db.refresh(subscription)
-    try:
-        await db.refresh(user)
-    except Exception:  # pragma: no cover - defensive refresh safeguard
-        pass
-
-    service = SubscriptionService()
-    await service.update_remnawave_user(db, subscription)
-
-    await with_admin_notification_service(
-        lambda service: service.send_subscription_update_notification(
-            db,
-            user,
-            subscription,
-            'servers',
-            old_servers,
-            subscription.connected_squads or [],
-            price_paid=max(total_cost, 0),
-        )
+    await finalize_subscription_update(
+        db,
+        user,
+        subscription,
+        change_type='servers',
+        old_value=old_servers,
+        new_value=subscription.connected_squads or [],
+        price_paid=max(total_cost, 0),
+        with_admin_notification_service=with_admin_notification_service,
     )
 
     return MiniAppSubscriptionUpdateResponse(success=True)
@@ -2963,27 +2954,15 @@ async def update_subscription_traffic_endpoint(
     )
 
     subscription.traffic_limit_gb = new_traffic
-    subscription.updated_at = datetime.now(UTC)
-    await db.commit()
-    await db.refresh(subscription)
-    try:
-        await db.refresh(user)
-    except Exception:  # pragma: no cover - defensive refresh safeguard
-        pass
-
-    service = SubscriptionService()
-    await service.update_remnawave_user(db, subscription)
-
-    await with_admin_notification_service(
-        lambda service: service.send_subscription_update_notification(
-            db,
-            user,
-            subscription,
-            'traffic',
-            old_traffic,
-            subscription.traffic_limit_gb,
-            price_paid=max(total_price_difference, 0),
-        )
+    await finalize_subscription_update(
+        db,
+        user,
+        subscription,
+        change_type='traffic',
+        old_value=old_traffic,
+        new_value=subscription.traffic_limit_gb,
+        price_paid=max(total_price_difference, 0),
+        with_admin_notification_service=with_admin_notification_service,
     )
 
     return MiniAppSubscriptionUpdateResponse(success=True)
@@ -3027,27 +3006,15 @@ async def update_subscription_devices_endpoint(
     )
 
     subscription.device_limit = new_devices
-    subscription.updated_at = datetime.now(UTC)
-    await db.commit()
-    await db.refresh(subscription)
-    try:
-        await db.refresh(user)
-    except Exception:  # pragma: no cover - defensive refresh safeguard
-        pass
-
-    service = SubscriptionService()
-    await service.update_remnawave_user(db, subscription)
-
-    await with_admin_notification_service(
-        lambda service: service.send_subscription_update_notification(
-            db,
-            user,
-            subscription,
-            'devices',
-            old_devices,
-            subscription.device_limit,
-            price_paid=max(price_to_charge, 0),
-        )
+    await finalize_subscription_update(
+        db,
+        user,
+        subscription,
+        change_type='devices',
+        old_value=old_devices,
+        new_value=subscription.device_limit,
+        price_paid=max(price_to_charge, 0),
+        with_admin_notification_service=with_admin_notification_service,
     )
 
     return MiniAppSubscriptionUpdateResponse(success=True)
