@@ -212,6 +212,7 @@ from .miniapp_payment_lookup_helpers import (
     find_recent_deposit,
     parse_client_timestamp,
 )
+from .miniapp_payment_status_helpers import classify_payment_status
 
 
 logger = structlog.get_logger(__name__)
@@ -246,29 +247,6 @@ def _get_tariff_monthly_price(tariff) -> int:
 
 _DECIMAL_ONE_HUNDRED = Decimal(100)
 _DECIMAL_CENT = Decimal('0.01')
-
-_PAYMENT_SUCCESS_STATUSES = {
-    'paid',
-    'success',
-    'succeeded',
-    'completed',
-    'captured',
-    'done',
-    'overpaid',
-}
-_PAYMENT_FAILURE_STATUSES = {
-    'fail',
-    'failed',
-    'canceled',
-    'cancelled',
-    'declined',
-    'expired',
-    'rejected',
-    'error',
-    'refunded',
-    'chargeback',
-}
-
 
 _PERIOD_ID_PATTERN = re.compile(r'(\d+)')
 
@@ -368,19 +346,6 @@ def _merge_purchase_selection_from_request(
     _maybe_set('device_limit', getattr(payload, 'device_limit', None))
 
     return base
-
-
-def _classify_status(status: str | None, is_paid: bool) -> str:
-    if is_paid:
-        return 'paid'
-    normalized = (status or '').strip().lower()
-    if not normalized:
-        return 'pending'
-    if normalized in _PAYMENT_SUCCESS_STATUSES:
-        return 'paid'
-    if normalized in _PAYMENT_FAILURE_STATUSES:
-        return 'failed'
-    return 'pending'
 
 
 async def _resolve_user_from_init_data(
@@ -1363,7 +1328,7 @@ async def _resolve_yookassa_payment_status(
         )
 
     succeeded = bool(payment.is_paid and (payment.status or '').lower() == 'succeeded')
-    status = _classify_status(payment.status, succeeded)
+    status = classify_payment_status(payment.status, succeeded)
     completed_at = payment.captured_at or payment.updated_at or payment.created_at
 
     return MiniAppPaymentStatusResult(
@@ -1430,7 +1395,7 @@ async def _resolve_mulenpay_payment_status(
 
     status_raw = status_info.get('status') or payment.status
     is_paid = bool(payment.is_paid)
-    status = _classify_status(status_raw, is_paid)
+    status = classify_payment_status(status_raw, is_paid)
     completed_at = payment.paid_at or payment.updated_at or payment.created_at
     message = None
     if status == 'failed':
@@ -1504,7 +1469,7 @@ async def _resolve_platega_payment_status(
 
     status_raw = (status_info or {}).get('status') or getattr(payment, 'status', None)
     is_paid_flag = bool((status_info or {}).get('is_paid') or getattr(payment, 'is_paid', False))
-    status_value = _classify_status(status_raw, is_paid_flag)
+    status_value = classify_payment_status(status_raw, is_paid_flag)
 
     completed_at = (
         getattr(refreshed_payment, 'paid_at', None)
@@ -1595,7 +1560,7 @@ async def _resolve_wata_payment_status(
     transaction_payload = (status_info or {}).get('transaction') if status_info else None
     status_raw = (status_info or {}).get('status') or getattr(payment, 'status', None)
     is_paid_flag = bool((status_info or {}).get('is_paid') or getattr(payment, 'is_paid', False))
-    status_value = _classify_status(status_raw, is_paid_flag)
+    status_value = classify_payment_status(status_raw, is_paid_flag)
     completed_at = (
         getattr(payment, 'paid_at', None)
         or getattr(payment, 'updated_at', None)
@@ -1690,7 +1655,7 @@ async def _resolve_pal24_payment_status(
 
     status_raw = status_info.get('status') or payment.status
     is_paid = bool(payment.is_paid)
-    status = _classify_status(status_raw, is_paid)
+    status = classify_payment_status(status_raw, is_paid)
     completed_at = payment.paid_at or payment.updated_at or payment.created_at
     message = None
     if status == 'failed':
@@ -1765,7 +1730,7 @@ async def _resolve_cryptobot_payment_status(
 
     status_raw = payment.status
     is_paid = (status_raw or '').lower() == 'paid'
-    status = _classify_status(status_raw, is_paid)
+    status = classify_payment_status(status_raw, is_paid)
     completed_at = payment.paid_at or payment.updated_at or payment.created_at
 
     amount_kopeks = None
@@ -1839,7 +1804,7 @@ async def _resolve_heleket_payment_status(
 
     status_raw = payment.status
     is_paid = bool(payment.is_paid)
-    status = _classify_status(status_raw, is_paid)
+    status = classify_payment_status(status_raw, is_paid)
     completed_at = payment.paid_at or payment.updated_at or payment.created_at
 
     return MiniAppPaymentStatusResult(
@@ -1903,7 +1868,7 @@ async def _resolve_cloudpayments_payment_status(
 
     status_raw = payment.status
     is_paid = bool(payment.is_paid)
-    status = _classify_status(status_raw, is_paid)
+    status = classify_payment_status(status_raw, is_paid)
     completed_at = payment.paid_at or payment.updated_at or payment.created_at
 
     return MiniAppPaymentStatusResult(
@@ -1963,7 +1928,7 @@ async def _resolve_freekassa_payment_status(
 
     status_raw = payment.status
     is_paid = bool(payment.is_paid)
-    status = _classify_status(status_raw, is_paid)
+    status = classify_payment_status(status_raw, is_paid)
     completed_at = payment.paid_at or payment.updated_at or payment.created_at
 
     return MiniAppPaymentStatusResult(
