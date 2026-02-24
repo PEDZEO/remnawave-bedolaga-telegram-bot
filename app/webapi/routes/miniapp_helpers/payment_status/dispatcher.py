@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import User
 from app.services.payment_service import PaymentService
 
-from ...schemas.miniapp import MiniAppPaymentStatusQuery, MiniAppPaymentStatusResult
+from ....schemas.miniapp import MiniAppPaymentStatusQuery, MiniAppPaymentStatusResult
 from .base import (
     resolve_mulenpay_payment_status,
     resolve_yookassa_payment_status,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ...schemas.miniapp import MiniAppPaymentStatusQuery, MiniAppPaymentStatusResult
+from ....schemas.miniapp import MiniAppPaymentStatusQuery, MiniAppPaymentStatusResult
 
 
 _PAYMENT_SUCCESS_STATUSES = {

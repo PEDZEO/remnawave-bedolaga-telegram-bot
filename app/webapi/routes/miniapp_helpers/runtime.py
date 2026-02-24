@@ -13,9 +13,9 @@ from app.services.remnawave_service import (
 )
 from app.services.subscription_service import SubscriptionService
 
+from ...schemas.miniapp import MiniAppConnectedServer, MiniAppDevice
 from ..miniapp_format_helpers import parse_datetime_string
 from ..miniapp_misc_helpers import is_remnawave_configured
-from ..schemas.miniapp import MiniAppConnectedServer, MiniAppDevice
 
 
 logger = structlog.get_logger(__name__)

@@ -10,7 +10,7 @@ from app.utils.user_utils import (
     get_user_referral_summary,
 )
 
-from ..schemas.miniapp import (
+from ...schemas.miniapp import (
     MiniAppReferralInfo,
     MiniAppReferralItem,
     MiniAppReferralList,
