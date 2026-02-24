@@ -213,6 +213,10 @@ from .miniapp_helpers.tariff.daily import (
     toggle_pause_state,
 )
 from .miniapp_helpers.tariff.model import build_tariff_model
+from .miniapp_helpers.tariff.purchase import (
+    build_tariff_purchase_context,
+    ensure_tariff_purchase_balance,
+)
 from .miniapp_helpers.tariff.switch import calculate_tariff_switch_cost
 from .miniapp_helpers.tariff.switch_context import resolve_tariff_switch_context
 from .miniapp_helpers.tariff.topup import (
@@ -3489,105 +3493,22 @@ async def purchase_tariff_endpoint(
 ) -> MiniAppTariffPurchaseResponse:
     """Покупка или смена тарифа."""
     user = await authorize_miniapp_user(payload.init_data, db)
-
-    if not settings.is_tariffs_mode():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'tariffs_mode_disabled',
-                'message': 'Tariffs mode is not enabled',
-            },
-        )
-
-    tariff = await get_tariff_by_id(db, payload.tariff_id)
-    if not tariff or not tariff.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                'code': 'tariff_not_found',
-                'message': 'Tariff not found or inactive',
-            },
-        )
-
-    # Проверяем доступность тарифа для пользователя
-    promo_group = (
-        user.get_primary_promo_group()
-        if hasattr(user, 'get_primary_promo_group')
-        else getattr(user, 'promo_group', None)
+    purchase_context = await build_tariff_purchase_context(
+        db,
+        user,
+        payload.tariff_id,
+        payload.period_days,
     )
-    promo_group_id = promo_group.id if promo_group else None
-    if not tariff.is_available_for_promo_group(promo_group_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                'code': 'tariff_not_available',
-                'message': 'This tariff is not available for your promo group',
-            },
-        )
-
-    # Получаем цену
-    is_daily_tariff = getattr(tariff, 'is_daily', False)
-    if is_daily_tariff:
-        # Для суточного тарифа принудительно 1 день (защита от манипуляций с period_days)
-        payload.period_days = 1
-        # Для суточного тарифа берём daily_price_kopeks (первый день)
-        base_price_kopeks = getattr(tariff, 'daily_price_kopeks', 0)
-        if base_price_kopeks <= 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    'code': 'invalid_daily_price',
-                    'message': 'Daily tariff has no price configured',
-                },
-            )
-    else:
-        # Для обычного тарифа получаем цену за выбранный период
-        base_price_kopeks = tariff.get_price_for_period(payload.period_days)
-        if base_price_kopeks is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    'code': 'invalid_period',
-                    'message': 'Invalid period for this tariff',
-                },
-            )
-
-    # Применяем скидку промогруппы (только для обычных тарифов, не для суточных)
-    price_kopeks = base_price_kopeks
-    discount_percent = 0
-    if not is_daily_tariff and promo_group:
-        raw_discounts = getattr(promo_group, 'period_discounts', None) or {}
-        for k, v in raw_discounts.items():
-            try:
-                if int(k) == payload.period_days:
-                    discount_percent = max(0, min(100, int(v)))
-                    break
-            except (TypeError, ValueError):
-                pass
-        if discount_percent > 0:
-            price_kopeks = int(base_price_kopeks * (100 - discount_percent) / 100)
-
-    # Проверяем баланс
-    if user.balance_kopeks < price_kopeks:
-        missing = price_kopeks - user.balance_kopeks
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={
-                'code': 'insufficient_funds',
-                'message': f'Недостаточно средств. Не хватает {settings.format_price(missing)}',
-                'missing_amount': missing,
-            },
-        )
+    tariff = purchase_context.tariff
+    price_kopeks = purchase_context.price_kopeks
+    period_days = purchase_context.period_days
+    is_daily_tariff = purchase_context.is_daily_tariff
+    ensure_tariff_purchase_balance(user, price_kopeks)
 
     subscription = getattr(user, 'subscription', None)
 
     # Списываем баланс
-    if is_daily_tariff:
-        description = f"Активация суточного тарифа '{tariff.name}' (первый день)"
-    elif discount_percent > 0:
-        description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней (скидка {discount_percent}%)"
-    else:
-        description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней"
+    description = purchase_context.description
     success = await subtract_user_balance(db, user, price_kopeks, description)
     if not success:
         raise HTTPException(
@@ -3622,7 +3543,7 @@ async def purchase_tariff_endpoint(
         subscription = await extend_subscription(
             db=db,
             subscription=subscription,
-            days=payload.period_days,
+            days=period_days,
             tariff_id=tariff.id,
             traffic_limit_gb=tariff.traffic_limit_gb,
             device_limit=tariff.device_limit,
@@ -3635,7 +3556,7 @@ async def purchase_tariff_endpoint(
         subscription = await create_paid_subscription(
             db=db,
             user_id=user.id,
-            duration_days=payload.period_days,
+            duration_days=period_days,
             traffic_limit_gb=tariff.traffic_limit_gb,
             device_limit=tariff.device_limit,
             connected_squads=squads,
@@ -3669,10 +3590,10 @@ async def purchase_tariff_endpoint(
         cart_data = {
             'cart_mode': 'extend',
             'subscription_id': subscription.id,
-            'period_days': payload.period_days,
+            'period_days': period_days,
             'total_price': price_kopeks,
             'tariff_id': tariff.id,
-            'description': f'Продление тарифа {tariff.name} на {payload.period_days} дней',
+            'description': f'Продление тарифа {tariff.name} на {period_days} дней',
         }
         await user_cart_service.save_user_cart(user.id, cart_data)
         user_id_display = user.telegram_id or user.email or f'#{user.id}'
