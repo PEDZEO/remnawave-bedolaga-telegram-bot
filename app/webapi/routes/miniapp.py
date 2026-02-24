@@ -206,6 +206,7 @@ from .miniapp_helpers.subscription.settings import (
     build_subscription_settings,
     prepare_server_catalog,
 )
+from .miniapp_helpers.tariff.base import ensure_tariffs_mode_enabled
 from .miniapp_helpers.tariff.daily import (
     build_daily_toggle_message,
     ensure_daily_resume_allowed,
@@ -3424,15 +3425,7 @@ async def get_tariffs_endpoint(
     """Возвращает список доступных тарифов для пользователя."""
     user = await authorize_miniapp_user(payload.init_data, db)
 
-    # Проверяем режим продаж
-    if not settings.is_tariffs_mode():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'tariffs_mode_disabled',
-                'message': 'Tariffs mode is not enabled',
-            },
-        )
+    ensure_tariffs_mode_enabled(message='Tariffs mode is not enabled')
 
     # Получаем промогруппу пользователя (с приоритетом)
     promo_group = (
@@ -3628,11 +3621,7 @@ async def preview_tariff_switch_endpoint(
 
     user = await authorize_miniapp_user(payload.init_data, db)
 
-    if not settings.is_tariffs_mode():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'tariffs_mode_disabled', 'message': 'Tariffs mode is not enabled'},
-        )
+    ensure_tariffs_mode_enabled(message='Tariffs mode is not enabled')
 
     context = await resolve_tariff_switch_context(
         db,
@@ -3686,11 +3675,7 @@ async def switch_tariff_endpoint(
     """Переключение тарифа без изменения даты окончания."""
     user = await authorize_miniapp_user(payload.init_data, db)
 
-    if not settings.is_tariffs_mode():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'tariffs_mode_disabled', 'message': 'Tariffs mode is not enabled'},
-        )
+    ensure_tariffs_mode_enabled(message='Tariffs mode is not enabled')
 
     context = await resolve_tariff_switch_context(
         db,
@@ -3784,15 +3769,7 @@ async def purchase_traffic_topup_endpoint(
     subscription = ensure_paid_subscription(user)
     validate_subscription_id(payload.subscription_id, subscription)
 
-    # Проверяем режим тарифов
-    if not settings.is_tariffs_mode():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'tariffs_mode_disabled',
-                'message': 'Traffic top-up is only available in tariffs mode',
-            },
-        )
+    ensure_tariffs_mode_enabled(message='Traffic top-up is only available in tariffs mode')
 
     tariff = await get_tariff_for_topup(db, subscription)
     base_price_kopeks = validate_topup_package(subscription, tariff, payload.gb)

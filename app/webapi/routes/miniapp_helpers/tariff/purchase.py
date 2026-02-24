@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.tariff import get_tariff_by_id
 
+from .base import ensure_tariffs_mode_enabled
+
 
 @dataclass(slots=True)
 class TariffPurchaseContext:
@@ -27,14 +29,7 @@ async def build_tariff_purchase_context(
     tariff_id: int,
     period_days: int,
 ) -> TariffPurchaseContext:
-    if not settings.is_tariffs_mode():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'tariffs_mode_disabled',
-                'message': 'Tariffs mode is not enabled',
-            },
-        )
+    ensure_tariffs_mode_enabled(message='Tariffs mode is not enabled')
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not tariff.is_active:
