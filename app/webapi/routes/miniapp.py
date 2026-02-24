@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Collection
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_FLOOR, ROUND_HALF_UP, ROUND_UP, Decimal, InvalidOperation
 from typing import Any
@@ -191,6 +190,7 @@ from ..schemas.miniapp import (
     MiniAppTrafficTopupRequest,
     MiniAppTransaction,
 )
+from .miniapp_auth_helpers import authorize_miniapp_user, ensure_paid_subscription
 from .miniapp_autopay_helpers import (
     _autopay_response_extras,
     _build_autopay_payload,
@@ -3242,8 +3242,8 @@ async def update_subscription_autopay_endpoint(
     payload: MiniAppSubscriptionAutopayRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionAutopayResponse:
-    user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(user)
+    user = await authorize_miniapp_user(payload.init_data, db)
+    subscription = ensure_paid_subscription(user)
     validate_subscription_id(payload.subscription_id, subscription)
 
     # Суточные подписки имеют свой механизм продления (DailySubscriptionService),
@@ -3350,7 +3350,7 @@ async def activate_subscription_trial_endpoint(
     payload: MiniAppSubscriptionTrialRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionTrialResponse:
-    user = await _authorize_miniapp_user(payload.init_data, db)
+    user = await authorize_miniapp_user(payload.init_data, db)
 
     existing_subscription = getattr(user, 'subscription', None)
     if existing_subscription is not None:
@@ -4129,105 +4129,6 @@ async def _prepare_subscription_renewal_options(
     return periods, pricing_map, recommended_option[0].id
 
 
-async def _authorize_miniapp_user(
-    init_data: str,
-    db: AsyncSession,
-) -> User:
-    if not init_data:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            detail={'code': 'unauthorized', 'message': 'Authorization data is missing'},
-        )
-
-    try:
-        webapp_data = parse_webapp_init_data(init_data, settings.BOT_TOKEN)
-    except TelegramWebAppAuthError as error:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            detail={'code': 'unauthorized', 'message': str(error)},
-        ) from error
-
-    telegram_user = webapp_data.get('user')
-    if not isinstance(telegram_user, dict) or 'id' not in telegram_user:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'invalid_user', 'message': 'Invalid Telegram user payload'},
-        )
-
-    try:
-        telegram_id = int(telegram_user['id'])
-    except (TypeError, ValueError):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'invalid_user', 'message': 'Invalid Telegram user identifier'},
-        ) from None
-
-    user = await get_user_by_telegram_id(db, telegram_id)
-    if not user:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            detail={'code': 'user_not_found', 'message': 'User not found'},
-        )
-
-    return user
-
-
-def _ensure_paid_subscription(
-    user: User,
-    *,
-    allowed_statuses: Collection[str] | None = None,
-) -> Subscription:
-    subscription = getattr(user, 'subscription', None)
-    if not subscription:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            detail={'code': 'subscription_not_found', 'message': 'Subscription not found'},
-        )
-
-    normalized_allowed_statuses = set(allowed_statuses or {'active'})
-
-    if getattr(subscription, 'is_trial', False) and 'trial' not in normalized_allowed_statuses:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            detail={
-                'code': 'paid_subscription_required',
-                'message': 'This action is available only for paid subscriptions',
-            },
-        )
-
-    actual_status = getattr(subscription, 'actual_status', None) or ''
-
-    if actual_status not in normalized_allowed_statuses:
-        if actual_status == 'trial':
-            detail = {
-                'code': 'paid_subscription_required',
-                'message': 'This action is available only for paid subscriptions',
-            }
-        elif actual_status == 'disabled':
-            detail = {
-                'code': 'subscription_disabled',
-                'message': 'Subscription is disabled',
-            }
-        else:
-            detail = {
-                'code': 'subscription_inactive',
-                'message': 'Subscription must be active to manage settings',
-            }
-
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=detail)
-
-    if not getattr(subscription, 'is_active', False) and 'expired' not in normalized_allowed_statuses:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            detail={
-                'code': 'subscription_inactive',
-                'message': 'Subscription must be active to manage settings',
-            },
-        )
-
-    return subscription
-
-
 async def _prepare_server_catalog(
     db: AsyncSession,
     user: User,
@@ -4489,8 +4390,8 @@ async def get_subscription_renewal_options_endpoint(
     payload: MiniAppSubscriptionRenewalOptionsRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionRenewalOptionsResponse:
-    user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(
+    user = await authorize_miniapp_user(payload.init_data, db)
+    subscription = ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial', 'expired'},
     )
@@ -4569,8 +4470,8 @@ async def submit_subscription_renewal_endpoint(
     payload: MiniAppSubscriptionRenewalRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionRenewalResponse:
-    user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(
+    user = await authorize_miniapp_user(payload.init_data, db)
+    subscription = ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial', 'expired'},
     )
@@ -4927,7 +4828,7 @@ async def get_subscription_purchase_options_endpoint(
     payload: MiniAppSubscriptionPurchaseOptionsRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionPurchaseOptionsResponse:
-    user = await _authorize_miniapp_user(payload.init_data, db)
+    user = await authorize_miniapp_user(payload.init_data, db)
     context = await purchase_service.build_options(db, user)
 
     data_payload = dict(context.payload)
@@ -4954,7 +4855,7 @@ async def subscription_purchase_preview_endpoint(
     payload: MiniAppSubscriptionPurchasePreviewRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionPurchasePreviewResponse:
-    user = await _authorize_miniapp_user(payload.init_data, db)
+    user = await authorize_miniapp_user(payload.init_data, db)
     context = await purchase_service.build_options(db, user)
 
     selection_payload = _merge_purchase_selection_from_request(payload)
@@ -4986,7 +4887,7 @@ async def subscription_purchase_endpoint(
     payload: MiniAppSubscriptionPurchaseRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionPurchaseResponse:
-    user = await _authorize_miniapp_user(payload.init_data, db)
+    user = await authorize_miniapp_user(payload.init_data, db)
     context = await purchase_service.build_options(db, user)
 
     selection_payload = _merge_purchase_selection_from_request(payload)
@@ -5057,8 +4958,8 @@ async def get_subscription_settings_endpoint(
     payload: MiniAppSubscriptionSettingsRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionSettingsResponse:
-    user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(
+    user = await authorize_miniapp_user(payload.init_data, db)
+    subscription = ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial'},
     )
@@ -5077,8 +4978,8 @@ async def update_subscription_servers_endpoint(
     payload: MiniAppSubscriptionServersUpdateRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionUpdateResponse:
-    user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(
+    user = await authorize_miniapp_user(payload.init_data, db)
+    subscription = ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial'},
     )
@@ -5285,8 +5186,8 @@ async def update_subscription_traffic_endpoint(
     payload: MiniAppSubscriptionTrafficUpdateRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionUpdateResponse:
-    user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(
+    user = await authorize_miniapp_user(payload.init_data, db)
+    subscription = ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial'},
     )
@@ -5444,8 +5345,8 @@ async def update_subscription_devices_endpoint(
     payload: MiniAppSubscriptionDevicesUpdateRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionUpdateResponse:
-    user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(
+    user = await authorize_miniapp_user(payload.init_data, db)
+    subscription = ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial'},
     )
@@ -5758,7 +5659,7 @@ async def get_tariffs_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppTariffsResponse:
     """Возвращает список доступных тарифов для пользователя."""
-    user = await _authorize_miniapp_user(payload.init_data, db)
+    user = await authorize_miniapp_user(payload.init_data, db)
 
     # Проверяем режим продаж
     if not settings.is_tariffs_mode():
@@ -5838,7 +5739,7 @@ async def purchase_tariff_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppTariffPurchaseResponse:
     """Покупка или смена тарифа."""
-    user = await _authorize_miniapp_user(payload.init_data, db)
+    user = await authorize_miniapp_user(payload.init_data, db)
 
     if not settings.is_tariffs_mode():
         raise HTTPException(
@@ -6120,7 +6021,7 @@ async def preview_tariff_switch_endpoint(
 ):
     """Предпросмотр переключения тарифа - показывает стоимость."""
 
-    user = await _authorize_miniapp_user(payload.init_data, db)
+    user = await authorize_miniapp_user(payload.init_data, db)
 
     if not settings.is_tariffs_mode():
         raise HTTPException(
@@ -6221,7 +6122,7 @@ async def switch_tariff_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ):
     """Переключение тарифа без изменения даты окончания."""
-    user = await _authorize_miniapp_user(payload.init_data, db)
+    user = await authorize_miniapp_user(payload.init_data, db)
 
     if not settings.is_tariffs_mode():
         raise HTTPException(
@@ -6423,8 +6324,8 @@ async def purchase_traffic_topup_endpoint(
     from app.utils.pricing_utils import calculate_prorated_price
     from app.webapi.schemas.miniapp import MiniAppTrafficTopupResponse
 
-    user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(user)
+    user = await authorize_miniapp_user(payload.init_data, db)
+    subscription = ensure_paid_subscription(user)
     validate_subscription_id(payload.subscription_id, subscription)
 
     # Проверяем режим тарифов
@@ -6597,7 +6498,7 @@ async def toggle_daily_subscription_pause_endpoint(
     from app.services.subscription_service import SubscriptionService
     from app.webapi.schemas.miniapp import MiniAppDailySubscriptionToggleResponse
 
-    user = await _authorize_miniapp_user(payload.init_data, db)
+    user = await authorize_miniapp_user(payload.init_data, db)
     subscription = user.subscription
 
     if not subscription:
