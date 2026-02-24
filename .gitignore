@@ -99,3 +99,7 @@ data/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local planning/tracking
+REFACTOR_TRACKER.md
+**/REFACTOR_TRACKER.md
