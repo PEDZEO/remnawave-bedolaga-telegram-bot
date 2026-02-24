@@ -92,6 +92,7 @@ from ..schemas.miniapp import (
     MiniAppConnectedServer,
     MiniAppCurrentTariff,
     MiniAppDailySubscriptionToggleRequest,
+    MiniAppDailySubscriptionToggleResponse,
     MiniAppDeviceRemovalRequest,
     MiniAppDeviceRemovalResponse,
     MiniAppFaq,
@@ -204,6 +205,12 @@ from .miniapp_helpers.subscription.renewal import (
 from .miniapp_helpers.subscription.settings import (
     build_subscription_settings,
     prepare_server_catalog,
+)
+from .miniapp_helpers.tariff.daily import (
+    build_daily_toggle_message,
+    ensure_daily_resume_allowed,
+    get_daily_tariff_for_subscription,
+    toggle_pause_state,
 )
 from .miniapp_helpers.tariff.model import build_tariff_model
 from .miniapp_helpers.tariff.switch import calculate_tariff_switch_cost
@@ -4010,7 +4017,6 @@ async def toggle_daily_subscription_pause_endpoint(
 ):
     """Переключает паузу/активацию суточной подписки."""
     from app.services.subscription_service import SubscriptionService
-    from app.webapi.schemas.miniapp import MiniAppDailySubscriptionToggleResponse
 
     user = await authorize_miniapp_user(payload.init_data, db)
     subscription = user.subscription
@@ -4021,48 +4027,13 @@ async def toggle_daily_subscription_pause_endpoint(
             detail={'code': 'no_subscription', 'message': 'No subscription found'},
         )
 
-    # Проверяем наличие тарифа
-    tariff_id = getattr(subscription, 'tariff_id', None)
-    if not tariff_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'no_tariff', 'message': 'Subscription has no tariff'},
-        )
-
-    tariff = await get_tariff_by_id(db, tariff_id)
-    if not tariff or not getattr(tariff, 'is_daily', False):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'not_daily_tariff', 'message': 'Subscription is not on a daily tariff'},
-        )
-
-    # Переключаем состояние паузы
-    is_currently_paused = getattr(subscription, 'is_daily_paused', False)
-    new_paused_state = not is_currently_paused
-    subscription.is_daily_paused = new_paused_state
+    tariff = await get_daily_tariff_for_subscription(db, subscription)
+    new_paused_state = toggle_pause_state(subscription)
 
     # Если снимаем с паузы, нужно проверить баланс для активации
     if not new_paused_state:
-        daily_price = getattr(tariff, 'daily_price_kopeks', 0)
-        if daily_price > 0 and user.balance_kopeks < daily_price:
-            raise HTTPException(
-                status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail={
-                    'code': 'insufficient_balance',
-                    'message': 'Insufficient balance to resume daily subscription',
-                    'required': daily_price,
-                    'balance': user.balance_kopeks,
-                },
-            )
-
-        # Восстанавливаем статус ACTIVE если подписка была DISABLED (недостаток средств)
-        from app.database.models import SubscriptionStatus
-
-        if subscription.status == SubscriptionStatus.DISABLED.value:
-            subscription.status = SubscriptionStatus.ACTIVE.value
-            # Обновляем время последнего списания для корректного расчёта следующего
-            subscription.last_daily_charge_at = datetime.now(UTC)
-            subscription.end_date = datetime.now(UTC) + timedelta(days=1)
+        was_reactivated = ensure_daily_resume_allowed(user, subscription, tariff)
+        if was_reactivated:
             logger.info('✅ Суточная подписка восстановлена из DISABLED в ACTIVE', subscription_id=subscription.id)
 
     await db.commit()
@@ -4082,10 +4053,7 @@ async def toggle_daily_subscription_pause_endpoint(
             logger.error('Ошибка синхронизации с RemnaWave при возобновлении', error=e)
 
     lang = getattr(user, 'language', settings.DEFAULT_LANGUAGE)
-    if new_paused_state:
-        message = 'Суточная подписка приостановлена' if lang == 'ru' else 'Daily subscription paused'
-    else:
-        message = 'Суточная подписка возобновлена' if lang == 'ru' else 'Daily subscription resumed'
+    message = build_daily_toggle_message(lang, new_paused_state)
 
     return MiniAppDailySubscriptionToggleResponse(
         success=True,
