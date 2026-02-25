@@ -349,7 +349,7 @@ class MonitoringService:
 
                 update_kwargs = dict(
                     uuid=user.remnawave_uuid,
-                    status=RemnaWaveUserStatus.ACTIVE if is_active else RemnaWaveUserStatus.EXPIRED,
+                    status=RemnaWaveUserStatus.ACTIVE if is_active else RemnaWaveUserStatus.DISABLED,
                     expire_at=subscription.end_date,
                     traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                     traffic_limit_strategy=TrafficLimitStrategy.MONTH,
@@ -368,7 +368,7 @@ class MonitoringService:
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link
                 await db.commit()
 
-                status_text = 'активным' if is_active else 'истёкшим'
+                status_text = 'активным' if is_active else 'отключенным'
                 logger.info(
                     '✅ Обновлен RemnaWave пользователь со статусом',
                     remnawave_uuid=user.remnawave_uuid,

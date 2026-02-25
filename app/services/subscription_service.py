@@ -367,7 +367,7 @@ class SubscriptionService:
             # Логируем если статус и end_date не согласованы (для отладки)
             if subscription.status == SubscriptionStatus.ACTIVE.value and subscription.end_date <= current_time:
                 logger.warning(
-                    '⚠️ update_remnawave_user: подписка имеет статус ACTIVE, но end_date <= now . Отправляем в RemnaWave как EXPIRED, но НЕ меняем статус в БД.',
+                    '⚠️ update_remnawave_user: подписка имеет статус ACTIVE, но end_date <= now . Отправляем в RemnaWave как DISABLED, но НЕ меняем статус в БД.',
                     subscription_id=subscription.id,
                     end_date=subscription.end_date,
                     current_time=current_time,
@@ -380,7 +380,7 @@ class SubscriptionService:
 
                 update_kwargs = dict(
                     uuid=user.remnawave_uuid,
-                    status=UserStatus.ACTIVE if is_actually_active else UserStatus.EXPIRED,
+                    status=UserStatus.ACTIVE if is_actually_active else UserStatus.DISABLED,
                     expire_at=subscription.end_date,
                     traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                     traffic_limit_strategy=get_traffic_reset_strategy(subscription.tariff),
@@ -415,7 +415,7 @@ class SubscriptionService:
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link
                 await db.commit()
 
-                status_text = 'активным' if is_actually_active else 'истёкшим'
+                status_text = 'активным' if is_actually_active else 'отключенным'
                 logger.info(
                     '✅ Обновлен RemnaWave пользователь со статусом',
                     remnawave_uuid=user.remnawave_uuid,

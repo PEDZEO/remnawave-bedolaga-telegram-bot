@@ -252,6 +252,39 @@ class RemnaWaveAPI:
         self.session: aiohttp.ClientSession | None = None
         self.authenticated = False
 
+    @staticmethod
+    def _normalize_mutable_user_status(
+        status: UserStatus | str | None, *, allow_none: bool = False
+    ) -> UserStatus | None:
+        """
+        RemnaWave now allows mutating only ACTIVE/DISABLED via create/update APIs.
+        EXPIRED/LIMITED are panel-managed states and must be mapped to DISABLED.
+        """
+        if status is None:
+            return None if allow_none else UserStatus.ACTIVE
+
+        if isinstance(status, UserStatus):
+            parsed_status = status
+        elif isinstance(status, str):
+            normalized = status.strip().upper()
+            try:
+                parsed_status = UserStatus(normalized)
+            except ValueError:
+                logger.warning('Unknown mutable user status provided, fallback to DISABLED', status=status)
+                return UserStatus.DISABLED
+        else:
+            logger.warning('Unsupported mutable user status type, fallback to DISABLED', status_type=type(status).__name__)
+            return UserStatus.DISABLED
+
+        if parsed_status in {UserStatus.ACTIVE, UserStatus.DISABLED}:
+            return parsed_status
+
+        logger.warning(
+            'Panel-managed status mapped to DISABLED for mutable API call',
+            provided_status=parsed_status.value,
+        )
+        return UserStatus.DISABLED
+
     def _detect_connection_type(self) -> str:
         parsed = urlparse(self.base_url)
 
@@ -440,9 +473,10 @@ class RemnaWaveAPI:
         tag: str | None = None,
         active_internal_squads: list[str] | None = None,
     ) -> RemnaWaveUser:
+        normalized_status = self._normalize_mutable_user_status(status)
         data = {
             'username': username,
-            'status': status.value,
+            'status': normalized_status.value,
             'expireAt': expire_at.isoformat(),
             'trafficLimitBytes': traffic_limit_bytes,
             'trafficLimitStrategy': traffic_limit_strategy.value,
@@ -543,7 +577,9 @@ class RemnaWaveAPI:
         data = {'uuid': uuid}
 
         if status:
-            data['status'] = status.value
+            normalized_status = self._normalize_mutable_user_status(status, allow_none=True)
+            if normalized_status is not None:
+                data['status'] = normalized_status.value
         if traffic_limit_bytes is not None:
             data['trafficLimitBytes'] = traffic_limit_bytes
         if traffic_limit_strategy:
