@@ -58,6 +58,6 @@ jobs:
       - name: Run mypy on critical modules
         run: >
           uv run mypy
-          app/external/remnawave_api.py
-          app/database/crud/subscription.py
-          app/cabinet/routes/subscription_helpers.py
+          -m app.external.remnawave_api
+          -m app.database.crud.subscription
+          -m app.cabinet.routes.subscription_helpers
