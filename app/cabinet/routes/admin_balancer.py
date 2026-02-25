@@ -121,16 +121,16 @@ async def get_balancer_ready(
 async def get_balancer_debug_stats(
     admin: User = Depends(get_current_admin_user),
 ) -> Any:
-    """Proxy balancer /debug/stats (admin token required)."""
-    return await _proxy_balancer_json('GET', '/debug/stats', requires_admin=True)
+    """Proxy balancer /admin/debug/stats (admin token required)."""
+    return await _proxy_balancer_json('GET', '/admin/debug/stats', requires_admin=True)
 
 
 @router.get('/node-stats')
 async def get_balancer_node_stats(
     admin: User = Depends(get_current_admin_user),
 ) -> Any:
-    """Proxy balancer /node-stats (admin token required)."""
-    return await _proxy_balancer_json('GET', '/node-stats', requires_admin=True)
+    """Proxy balancer /admin/node-stats (admin token required)."""
+    return await _proxy_balancer_json('GET', '/admin/node-stats', requires_admin=True)
 
 
 @router.get('/debug/token')
@@ -138,27 +138,27 @@ async def get_balancer_token_debug(
     token: str = Query(min_length=3, max_length=256),
     admin: User = Depends(get_current_admin_user),
 ) -> Any:
-    """Proxy balancer /debug/token/{token} (admin token required)."""
+    """Proxy balancer /admin/debug/token/{token} (admin token required)."""
     safe_token = token.strip().lstrip('/')
     if not safe_token:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Token is required')
-    return await _proxy_balancer_json('GET', f'/debug/token/{safe_token}', requires_admin=True)
+    return await _proxy_balancer_json('GET', f'/admin/debug/token/{safe_token}', requires_admin=True)
 
 
 @router.post('/refresh-groups')
 async def refresh_balancer_groups(
     admin: User = Depends(get_current_admin_user),
 ) -> Any:
-    """Proxy balancer /refresh-groups (admin token required)."""
-    return await _proxy_balancer_json('GET', '/refresh-groups', requires_admin=True)
+    """Proxy balancer /admin/refresh-groups (admin token required)."""
+    return await _proxy_balancer_json('GET', '/admin/refresh-groups', requires_admin=True)
 
 
 @router.post('/refresh-stats')
 async def refresh_balancer_stats(
     admin: User = Depends(get_current_admin_user),
 ) -> Any:
-    """Proxy balancer /refresh-stats (admin token required)."""
-    return await _proxy_balancer_json('GET', '/refresh-stats', requires_admin=True)
+    """Proxy balancer /admin/refresh-stats (admin token required)."""
+    return await _proxy_balancer_json('GET', '/admin/refresh-stats', requires_admin=True)
 
 
 @router.get('/groups')
