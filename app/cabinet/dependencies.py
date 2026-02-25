@@ -174,6 +174,7 @@ async def get_current_cabinet_user(
 
 
 async def get_optional_cabinet_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> User | None:
@@ -200,6 +201,19 @@ async def get_optional_cabinet_user(
 
     if not user or user.status != 'active':
         return None
+
+    # Optional auth should silently fail on identity mismatch.
+    init_data_raw = request.headers.get('X-Telegram-Init-Data')
+    if init_data_raw and user.telegram_id is not None:
+        tg_user = validate_telegram_init_data(init_data_raw, max_age_seconds=86400 * 30)
+        if tg_user and tg_user.get('id') != user.telegram_id:
+            logger.warning(
+                'Telegram identity mismatch in optional auth',
+                jwt_user_id=user.id,
+                jwt_telegram_id=user.telegram_id,
+                init_data_telegram_id=tg_user.get('id'),
+            )
+            return None
 
     return user
 
