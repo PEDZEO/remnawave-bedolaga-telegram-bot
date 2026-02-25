@@ -19,14 +19,14 @@
 **НЕ создавайте публичные Issues или Pull Requests**
 
 Вместо этого:
-1. Свяжитесь с [@fringg](https://t.me/fringg) напрямую в Telegram
+1. Свяжитесь с [@pedzeo](https://t.me/pedzeo) напрямую в Telegram
 2. Укажите в сообщении "SECURITY VULNERABILITY" в начале
 3. Опишите уязвимость детально
 4. Дайте время на исправление (обычно 90 дней)
 
 ### 📧 Контактная информация
 
-- **Telegram**: [@fringg](https://t.me/fringg)
+- **Telegram**: [@pedzeo](https://t.me/pedzeo)
 - **Response Time**: 24-48 часов
 - **Fix Timeline**: 7-30 дней (в зависимости от критичности)
 

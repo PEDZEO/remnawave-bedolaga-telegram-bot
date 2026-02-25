@@ -425,7 +425,7 @@ async def test_calculate_price():
 ### Сообщения о уязвимостях
 
 Для сообщений о критических уязвимостях безопасности:
-- Свяжитесь с [@fringg](https://t.me/fringg) напрямую
+- Свяжитесь с [@pedzeo](https://t.me/pedzeo) напрямую
 - Не создавайте публичные issues для уязвимостей
 - Дайте время на исправление перед публичным раскрытием
 
@@ -442,7 +442,7 @@ async def test_calculate_price():
 
 - **💬 Telegram Group:** [Bedolaga Chat](https://t.me/+wTdMtSWq8YdmZmVi) - общие вопросы
 - **🐛 GitHub Issues:** Технические вопросы и баги
-- **📧 Прямой контакт:** [@fringg](https://t.me/fringg) - только критические вопросы
+- **📧 Прямой контакт:** [@pedzeo](https://t.me/pedzeo) - только критические вопросы
 
 ### Часто задаваемые вопросы
 

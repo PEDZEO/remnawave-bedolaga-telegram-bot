@@ -50,7 +50,7 @@ _Полнофункциональное решение с управлением
 
 ---
 
-## 🧪 [Тестирование бота](https://t.me/zero_ping_vpn_bot?start=Git)
+## 🧪 [Тестирование бота](https://t.me/PedzeVPN_bot?start=Git)
 
 ## 💬 **[Bedolaga Chat](https://t.me/+wTdMtSWq8YdmZmVi)** - Для общения, вопросов, предложений
 
@@ -1884,7 +1884,7 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 
 ### 📞 **Контакты**
 
-- **💬 Telegram:** [@fringg](https://t.me/fringg) - вопросы по разработке (только по делу!)
+- **💬 Telegram:** [@pedzeo](https://t.me/pedzeo) - вопросы по разработке (только по делу!)
 - **💬 Telegram Group:** [Bedolaga Chat](https://t.me/+wTdMtSWq8YdmZmVi) - общение, вопросы, предложения
 - **🐛 Issues:** [GitHub Issues](https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/issues) - баги и предложения
 
@@ -2171,11 +2171,11 @@ make reload-follow
 - 🐛 **Баг?** → [GitHub Issues](https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/issues)
 - 💡 **Идея?** → [GitHub Discussions](https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/discussions)
 - 🆘 **Вопрос?** → [Bedolaga Chat](https://t.me/+wTdMtSWq8YdmZmVi)
-- 📧 **Личное?** → [@fringg](https://t.me/fringg)
+- 📧 **Личное?** → [@pedzeo](https://t.me/pedzeo)
 
 ---
 
-**Made with ❤️ by [@fringg](https://t.me/fringg) and amazing [contributors](https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/graphs/contributors)**
+**Made with ❤️ by [@pedzeo](https://t.me/pedzeo) and amazing [contributors](https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/graphs/contributors)**
 
 <div align="center">
 
