@@ -1,5 +1,22 @@
 # Changelog
 
+## [3.22.1](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.22.0...v3.22.1) (2026-02-25)
+
+
+### Bug Fixes
+
+* **ci:** make mypy checks pass locally and in workflow ([96d9116](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/96d9116ee466e2827a3ccdd8e1e68680b972d3bd))
+* make migrations 0010/0011 idempotent, escape HTML in crash notification ([fd6b6ea](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/fd6b6eae49d70b6c09b49ae77c46c99ed532f8c1))
+* prevent race condition expiring active daily subscriptions ([145f39d](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/145f39d9b87fdaecab4fac6a34e98658c5ddb6af))
+* **types:** resolve mypy issues in external and utils modules ([bf9cbcc](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/bf9cbcc0276decb9d808eb351344746ecb735126))
+
+
+### Documentation
+
+* clarify fork differences for users ([8a46a9b](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/8a46a9bbd1a0d8ca63740ede5525fcba9a5ec1da))
+* remove fork audience section ([e813803](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/e8138036bf331e649ad8ad2bd53dbcc2696c41ec))
+* update test bot and contact handles ([9f69726](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/9f6972635162172cf4de3b1cff2dcf6492131900))
+
 ## [3.22.0](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.21.0...v3.22.0) (2026-02-25)
 
 
