@@ -70,7 +70,7 @@ def validate_amount(amount_str: str, min_amount: float = 0, max_amount: float = 
         return None
 
 
-def validate_positive_integer(value: str | int, max_value: int = None) -> int | None:
+def validate_positive_integer(value: str | int, max_value: int | None = None) -> int | None:
     try:
         num = int(value)
         if num > 0 and (max_value is None or num <= max_value):

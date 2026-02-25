@@ -224,7 +224,7 @@ class RemnaWaveExternalSquad:
 
 
 class RemnaWaveAPIError(Exception):
-    def __init__(self, message: str, status_code: int = None, response_data: dict = None):
+    def __init__(self, message: str, status_code: int | None = None, response_data: dict[Any, Any] | None = None):
         self.message = message
         self.status_code = status_code
         self.response_data = response_data
@@ -407,12 +407,13 @@ class RemnaWaveAPI:
 
         for attempt in range(max_retries + 1):
             try:
-                kwargs = {'url': url, 'params': params}
-
-                if data:
-                    kwargs['json'] = data
-
-                async with self.session.request(method, **kwargs) as response:
+                request_json = data if data else None
+                async with self.session.request(
+                    method=method,
+                    url=url,
+                    params=params,
+                    json=request_json,
+                ) as response:
                     response_text = await response.text()
 
                     try:

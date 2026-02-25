@@ -73,6 +73,7 @@ class CurrencyConverter:
         except Exception as e:
             logger.debug('Ошибка получения курса ЦБ', error=e)
             return None
+        return None
 
     async def _fetch_from_exchangerate_api(self) -> float | None:
         """Получает курс с exchangerate-api.com"""
@@ -86,6 +87,7 @@ class CurrencyConverter:
         except Exception as e:
             logger.debug('Ошибка получения курса exchangerate-api', error=e)
             return None
+        return None
 
     async def _fetch_from_fixer(self) -> float | None:
         """Получает курс с fixer.io (бесплатный план)"""
@@ -106,6 +108,7 @@ class CurrencyConverter:
         except Exception as e:
             logger.debug('Ошибка получения курса fixer', error=e)
             return None
+        return None
 
     async def usd_to_rub(self, usd_amount: float) -> float:
         """Конвертирует USD в RUB"""
