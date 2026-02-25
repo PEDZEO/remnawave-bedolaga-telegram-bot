@@ -181,7 +181,7 @@ def resolve_hwid_device_limit(subscription: Subscription | None) -> int | None:
 
     if not settings.is_devices_selection_enabled():
         forced_limit = settings.get_disabled_mode_device_limit()
-        if forced_limit is not None and forced_limit > 0:
+        if forced_limit is not None and forced_limit >= 0:
             _logger.info(
                 'DEVICES_SELECTION disabled, using forced limit',
                 forced_limit=forced_limit,
