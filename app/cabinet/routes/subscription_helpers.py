@@ -138,7 +138,11 @@ def subscription_to_response(
     if is_daily and not is_daily_paused:
         last_charge = getattr(subscription, 'last_daily_charge_at', None)
         if last_charge:
-            next_daily_charge_at = last_charge + timedelta(days=1)
+            next_charge = last_charge + timedelta(days=1)
+            # Если время списания уже прошло, скрываем stale-значение
+            # и даем DailySubscriptionService обработать подписку.
+            if next_charge > now:
+                next_daily_charge_at = next_charge
 
     hide_link = settings.should_hide_subscription_link()
 
