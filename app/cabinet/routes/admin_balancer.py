@@ -1,6 +1,7 @@
 """Admin routes for xray-balancer middleware control."""
 
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 import structlog
@@ -180,4 +181,42 @@ async def update_balancer_groups(
         '/admin/groups',
         requires_admin=True,
         json_body=payload,
+    )
+
+
+@router.get('/quarantine')
+async def get_balancer_quarantine(
+    admin: User = Depends(get_current_admin_user),
+) -> Any:
+    """Proxy balancer /admin/quarantine (admin token required)."""
+    return await _proxy_balancer_json('GET', '/admin/quarantine', requires_admin=True)
+
+
+@router.post('/quarantine')
+async def add_balancer_quarantine(
+    payload: dict[str, Any],
+    admin: User = Depends(get_current_admin_user),
+) -> Any:
+    """Proxy balancer POST /admin/quarantine (admin token required)."""
+    return await _proxy_balancer_json(
+        'POST',
+        '/admin/quarantine',
+        requires_admin=True,
+        json_body=payload,
+    )
+
+
+@router.delete('/quarantine/{node_name:path}')
+async def remove_balancer_quarantine(
+    node_name: str,
+    admin: User = Depends(get_current_admin_user),
+) -> Any:
+    """Proxy balancer DELETE /admin/quarantine/{node} (admin token required)."""
+    safe_name = node_name.strip().lstrip('/')
+    if not safe_name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Node name is required')
+    return await _proxy_balancer_json(
+        'DELETE',
+        f'/admin/quarantine/{quote(safe_name, safe="")}',
+        requires_admin=True,
     )
