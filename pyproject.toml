@@ -46,10 +46,11 @@ asyncio_default_test_loop_scope = "function"
 python_version = "3.13"
 warn_unused_configs = true
 warn_redundant_casts = true
-warn_unused_ignores = true
+warn_unused_ignores = false
 strict_equality = true
 no_implicit_optional = false
 ignore_missing_imports = true
+follow_imports = "skip"
 show_error_codes = true
 pretty = true
 

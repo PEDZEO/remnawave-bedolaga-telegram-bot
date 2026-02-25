@@ -60,7 +60,7 @@ class BanSystemAPI:
         self,
         method: str,
         endpoint: str,
-        params: dict[str, str | int] | None = None,
+        params: dict[str, object] | None = None,
         json_data: dict[str, Any] | None = None,
     ) -> Any:
         """Execute HTTP request."""
@@ -142,7 +142,7 @@ class BanSystemAPI:
             limit: Number of users per page (max 100)
             status: Filter by status (over_limit, with_limit, unlimited)
         """
-        params: dict[str, str | int] = {'offset': offset, 'limit': min(limit, 100)}
+        params: dict[str, object] = {'offset': offset, 'limit': min(limit, 100)}
         if status:
             params['status'] = status
         return await self._request('GET', '/api/users', params=params)

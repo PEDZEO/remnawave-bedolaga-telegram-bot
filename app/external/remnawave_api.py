@@ -477,9 +477,9 @@ class RemnaWaveAPI:
         active_internal_squads: list[str] | None = None,
     ) -> RemnaWaveUser:
         normalized_status = self._normalize_mutable_user_status(status)
-        data = {
+        data: dict[str, Any] = {
             'username': username,
-            'status': normalized_status.value,
+            'status': (normalized_status or UserStatus.ACTIVE).value,
             'expireAt': expire_at.isoformat(),
             'trafficLimitBytes': traffic_limit_bytes,
             'trafficLimitStrategy': traffic_limit_strategy.value,
@@ -577,7 +577,7 @@ class RemnaWaveAPI:
         tag: str | None = None,
         active_internal_squads: list[str] | None = None,
     ) -> RemnaWaveUser:
-        data = {'uuid': uuid}
+        data: dict[str, Any] = {'uuid': uuid}
 
         if status:
             normalized_status = self._normalize_mutable_user_status(status, allow_none=True)
@@ -647,7 +647,7 @@ class RemnaWaveAPI:
             new_short_uuid: Новый короткий UUID (опционально, рекомендуется генерировать автоматически)
             revoke_only_passwords: Если True, меняются только пароли без изменения URL подписки
         """
-        data = {}
+        data: dict[str, Any] = {}
         if new_short_uuid:
             data['shortUuid'] = new_short_uuid
         if revoke_only_passwords:
@@ -709,14 +709,14 @@ class RemnaWaveAPI:
             raise
 
     async def create_internal_squad(self, name: str, inbounds: list[str]) -> RemnaWaveInternalSquad:
-        data = {'name': name, 'inbounds': inbounds}
+        data: dict[str, Any] = {'name': name, 'inbounds': inbounds}
         response = await self._make_request('POST', '/api/internal-squads', data)
         return self._parse_internal_squad(response['response'])
 
     async def update_internal_squad(
         self, uuid: str, name: str | None = None, inbounds: list[str] | None = None
     ) -> RemnaWaveInternalSquad:
-        data = {'uuid': uuid}
+        data: dict[str, Any] = {'uuid': uuid}
         if name:
             data['name'] = name
         if inbounds is not None:
@@ -755,7 +755,7 @@ class RemnaWaveAPI:
         items: список словарей с uuid и viewPosition
         Пример: [{'uuid': '...', 'viewPosition': 0}, {'uuid': '...', 'viewPosition': 1}]
         """
-        data = {'items': items}
+        data: dict[str, Any] = {'items': items}
         response = await self._make_request('POST', '/api/internal-squads/actions/reorder', data)
         return [self._parse_internal_squad(squad) for squad in response['response']['internalSquads']]
 
@@ -777,7 +777,7 @@ class RemnaWaveAPI:
             raise
 
     async def create_external_squad(self, name: str) -> RemnaWaveExternalSquad:
-        data = {'name': name}
+        data: dict[str, Any] = {'name': name}
         response = await self._make_request('POST', '/api/external-squads', data)
         return self._parse_external_squad(response['response'])
 
@@ -793,7 +793,7 @@ class RemnaWaveAPI:
         custom_remarks: dict[str, Any] | None = None,
         subpage_config_uuid: str | None = None,
     ) -> RemnaWaveExternalSquad:
-        data = {'uuid': uuid}
+        data: dict[str, Any] = {'uuid': uuid}
         if name is not None:
             data['name'] = name
         if templates is not None:
@@ -830,7 +830,7 @@ class RemnaWaveAPI:
         return response['response']['eventSent']
 
     async def reorder_external_squads(self, items: list[dict[str, Any]]) -> list[RemnaWaveExternalSquad]:
-        data = {'items': items}
+        data: dict[str, Any] = {'items': items}
         response = await self._make_request('POST', '/api/external-squads/actions/reorder', data)
         return [self._parse_external_squad(squad) for squad in response['response']['externalSquads']]
 
@@ -893,6 +893,7 @@ class RemnaWaveAPI:
         return info
 
     async def get_subscription_by_short_uuid(self, short_uuid: str) -> str:
+        assert self.session is not None
         async with self.session.get(f'{self.base_url}/api/sub/{short_uuid}') as response:
             if response.status >= 400:
                 raise RemnaWaveAPIError(f'Failed to get subscription: {response.status}')
@@ -903,6 +904,7 @@ class RemnaWaveAPI:
         if client_type not in valid_types:
             raise ValueError(f'Invalid client type. Must be one of: {valid_types}')
 
+        assert self.session is not None
         async with self.session.get(f'{self.base_url}/api/sub/{short_uuid}/{client_type}') as response:
             if response.status >= 400:
                 raise RemnaWaveAPIError(f'Failed to get subscription: {response.status}')
@@ -925,6 +927,7 @@ class RemnaWaveAPI:
         return links
 
     async def get_outline_subscription(self, short_uuid: str, encoded_tag: str) -> str:
+        assert self.session is not None
         async with self.session.get(f'{self.base_url}/api/sub/outline/{short_uuid}/ss/{encoded_tag}') as response:
             if response.status >= 400:
                 raise RemnaWaveAPIError(f'Failed to get outline subscription: {response.status}')
@@ -1015,14 +1018,14 @@ class RemnaWaveAPI:
             raise
 
     async def create_subscription_page_config(self, name: str) -> SubscriptionPageConfig:
-        data = {'name': name}
+        data: dict[str, Any] = {'name': name}
         response = await self._make_request('POST', '/api/subscription-page-configs', data)
         return self._parse_subscription_page_config(response['response'])
 
     async def update_subscription_page_config(
         self, uuid: str, name: str | None = None, config: dict[str, Any] | None = None
     ) -> SubscriptionPageConfig:
-        data = {'uuid': uuid}
+        data: dict[str, Any] = {'uuid': uuid}
         if name is not None:
             data['name'] = name
         if config is not None:
@@ -1035,13 +1038,13 @@ class RemnaWaveAPI:
         return response['response']['isDeleted']
 
     async def reorder_subscription_page_configs(self, items: list[dict[str, Any]]) -> list[SubscriptionPageConfig]:
-        data = {'items': items}
+        data: dict[str, Any] = {'items': items}
         response = await self._make_request('POST', '/api/subscription-page-configs/actions/reorder', data)
         configs_data = response['response'].get('configs', [])
         return [self._parse_subscription_page_config(c) for c in configs_data]
 
     async def clone_subscription_page_config(self, clone_from_uuid: str) -> SubscriptionPageConfig:
-        data = {'cloneFromUuid': clone_from_uuid}
+        data: dict[str, Any] = {'cloneFromUuid': clone_from_uuid}
         response = await self._make_request('POST', '/api/subscription-page-configs/actions/clone', data)
         return self._parse_subscription_page_config(response['response'])
 
@@ -1314,7 +1317,7 @@ def format_bytes(bytes_value: int) -> str:
         return '0 B'
 
     units = ['B', 'KB', 'MB', 'GB', 'TB']
-    size = bytes_value
+    size = float(bytes_value)
     unit_index = 0
 
     while size >= 1024 and unit_index < len(units) - 1:
