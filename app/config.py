@@ -686,6 +686,7 @@ class Settings(BaseSettings):
 
     ENABLE_DEEP_LINKS: bool = True
     APP_CONFIG_CACHE_TTL: int = 3600
+    APP_CONFIG_PATH: str | None = '.env'
 
     VERSION_CHECK_ENABLED: bool = True
     VERSION_CHECK_REPO: str = 'PEDZEO/remnawave-bedolaga-telegram-bot'
@@ -1423,6 +1424,10 @@ class Settings(BaseSettings):
 
     def get_app_config_cache_ttl(self) -> int:
         return self.APP_CONFIG_CACHE_TTL
+
+    def get_app_config_path(self) -> str | None:
+        path = (self.APP_CONFIG_PATH or '').strip()
+        return path or None
 
     def build_external_admin_token(self, bot_username: str) -> str:
         """Генерирует детерминированный и криптографически стойкий токен внешней админки."""
