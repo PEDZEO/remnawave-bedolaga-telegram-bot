@@ -1,4 +1,4 @@
-name: Lint
+name: CI
 
 on:
   push:
@@ -25,3 +25,39 @@ jobs:
 
       - name: Check linting
         run: uv run ruff check .
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - run: uv sync --group dev
+
+      - name: Run tests with coverage threshold
+        run: uv run pytest --maxfail=1 --disable-warnings --cov=app --cov-report=term --cov-fail-under=25
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - run: uv sync --group dev
+
+      - name: Run mypy on critical modules
+        run: >
+          uv run mypy
+          app/external/remnawave_api.py
+          app/database/crud/subscription.py
+          app/cabinet/routes/subscription_helpers.py

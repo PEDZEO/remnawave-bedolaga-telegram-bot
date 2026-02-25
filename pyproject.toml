@@ -32,6 +32,7 @@ dev = [
     'pytest',
     'pytest-asyncio',
     'pytest-cov',
+    'mypy',
 ]
 
 [tool.uv]
@@ -40,6 +41,17 @@ package = false
 [tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "function"
 asyncio_default_test_loop_scope = "function"
+
+[tool.mypy]
+python_version = "3.13"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+strict_equality = true
+no_implicit_optional = true
+ignore_missing_imports = true
+show_error_codes = true
+pretty = true
 
 [tool.ruff]
 target-version = 'py313'
