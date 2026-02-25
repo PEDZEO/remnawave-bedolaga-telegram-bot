@@ -37,6 +37,23 @@ _Полнофункциональное решение с управлением
 
 ---
 
+## 🍴 Чем этот форк отличается
+
+- **Репозиторий форка:** `https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot`
+- **Оригинальный upstream:** `https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot`
+
+### Для кого этот форк
+
+Этот вариант ориентирован на тех, кому нужен стабильный продакшн-стек под экосистему PEDZEO: бот + кабинет + balancer.
+
+### Ключевые отличия для пользователя
+
+- **Усиленная стабильность в проде:** добавлены и проверены фиксы для бэкапов, RBAC, миграций и daily-подписок.
+- **Интеграция с экосистемой PEDZEO:** дополнительные админ-прокси и маршруты для совместной работы с кабинетом и balancer.
+- **Более поддерживаемая модульная структура:** часть логики разнесена по helper-модулям, что упрощает точечные доработки и снижает риск регрессий.
+
+---
+
 ## 🧪 [Тестирование бота](https://t.me/zero_ping_vpn_bot?start=Git)
 
 ## 💬 **[Bedolaga Chat](https://t.me/+wTdMtSWq8YdmZmVi)** - Для общения, вопросов, предложений
@@ -100,7 +117,7 @@ _Полнофункциональное решение с управлением
 
 ```bash
 # 1. Скачай репозиторий
-git clone https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot.git
+git clone https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot.git
 cd remnawave-bedolaga-telegram-bot
 
 # 2. Создай необходимые директории
@@ -129,7 +146,7 @@ make test           # Запустить тесты
 
 ```bash
 # 1. Скачай репозиторий
-git clone https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot.git
+git clone https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot.git
 cd remnawave-bedolaga-telegram-bot
 
 # 2. Настрой конфиг
