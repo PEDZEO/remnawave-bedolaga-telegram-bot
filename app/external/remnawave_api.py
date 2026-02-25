@@ -273,7 +273,9 @@ class RemnaWaveAPI:
                 logger.warning('Unknown mutable user status provided, fallback to DISABLED', status=status)
                 return UserStatus.DISABLED
         else:
-            logger.warning('Unsupported mutable user status type, fallback to DISABLED', status_type=type(status).__name__)
+            logger.warning(
+                'Unsupported mutable user status type, fallback to DISABLED', status_type=type(status).__name__
+            )
             return UserStatus.DISABLED
 
         if parsed_status in {UserStatus.ACTIVE, UserStatus.DISABLED}:
