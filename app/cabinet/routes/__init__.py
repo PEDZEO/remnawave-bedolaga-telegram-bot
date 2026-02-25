@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from .account_linking import router as account_linking_router
 from .admin_account_linking import router as admin_account_linking_router
 from .admin_apps import router as admin_apps_router
+from .admin_audit_log import router as admin_audit_log_router
 from .admin_balancer import router as admin_balancer_router
 from .admin_ban_system import router as admin_ban_system_router
 from .admin_broadcasts import router as admin_broadcasts_router
@@ -113,6 +114,9 @@ router.include_router(admin_pinned_messages_router)
 router.include_router(admin_button_styles_router)
 router.include_router(admin_menu_layout_router)
 router.include_router(admin_channels_router)
+router.include_router(admin_roles_router)
+router.include_router(admin_policies_router)
+router.include_router(admin_audit_log_router)
 
 # WebSocket route
 router.include_router(websocket_router)
