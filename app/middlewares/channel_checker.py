@@ -4,7 +4,7 @@ from typing import Any
 
 import structlog
 from aiogram import BaseMiddleware, Bot, types
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, TelegramObject, Update
 from redis import asyncio as aioredis
@@ -133,9 +133,9 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         if isinstance(event, (Message, CallbackQuery)):
             telegram_id = event.from_user.id if event.from_user else None
         elif isinstance(event, Update):
-            if event.message:
+            if event.message and event.message.from_user:
                 telegram_id = event.message.from_user.id
-            elif event.callback_query:
+            elif event.callback_query and event.callback_query.from_user:
                 telegram_id = event.callback_query.from_user.id
 
         if telegram_id is None:
@@ -185,7 +185,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             if await cache.exists(rate_key):
                 try:
                     await event.answer()
-                except TelegramBadRequest:
+                except TelegramAPIError:
                     pass
                 return None
             await cache.set(rate_key, 1, expire=5)
@@ -233,7 +233,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                     ),
                     show_alert=True,
                 )
-            except TelegramBadRequest:
+            except TelegramAPIError:
                 pass
             return None
 
