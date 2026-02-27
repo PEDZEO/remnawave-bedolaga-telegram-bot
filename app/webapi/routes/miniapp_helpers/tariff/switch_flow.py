@@ -4,10 +4,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
+from sqlalchemy import delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.server_squad import get_all_server_squads
+from app.database.models import TrafficPurchase
 
 from .switch import calculate_tariff_switch_cost
 
@@ -112,8 +114,11 @@ async def apply_tariff_switch_to_subscription(
     subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
     subscription.device_limit = new_tariff.device_limit
     subscription.connected_squads = squads
+    await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
     subscription.purchased_traffic_gb = 0
     subscription.traffic_reset_at = None
+    if settings.RESET_TRAFFIC_ON_TARIFF_SWITCH:
+        subscription.traffic_used_gb = 0.0
 
     new_is_daily = getattr(new_tariff, 'is_daily', False)
     old_is_daily = getattr(current_tariff, 'is_daily', False)
