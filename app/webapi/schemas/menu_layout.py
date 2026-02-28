@@ -75,7 +75,8 @@ class ButtonConditions(BaseModel):
     is_trial_user: bool | None = Field(default=None, description='Пользователь на пробном периоде')
     has_autopay: bool | None = Field(default=None, description='Автоплатёж включён')
 
-    model_config = ConfigDict(extra='forbid')
+    # Keep backward/forward compatibility with stored condition keys.
+    model_config = ConfigDict(extra='allow')
 
 
 class MenuButtonConfig(BaseModel):
