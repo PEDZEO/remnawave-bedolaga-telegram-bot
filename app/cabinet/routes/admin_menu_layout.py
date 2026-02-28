@@ -112,6 +112,17 @@ async def update_menu_layout(
     return _serialize_config(updated, settings.MENU_LAYOUT_ENABLED, updated_at)
 
 
+@router.post('/reset', response_model=MenuLayoutResponse)
+async def reset_menu_layout(
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> MenuLayoutResponse:
+    _ = admin
+    config = await MenuLayoutService.reset_to_default(db)
+    updated_at = await MenuLayoutService.get_config_updated_at(db)
+    return _serialize_config(config, settings.MENU_LAYOUT_ENABLED, updated_at)
+
+
 @router.patch('/buttons/{button_id}', response_model=MenuButtonConfig)
 async def update_menu_button(
     button_id: str,
