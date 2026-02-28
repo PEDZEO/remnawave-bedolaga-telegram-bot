@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.22.2](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.22.1...v3.22.2) (2026-02-28)
+
+
+### Bug Fixes
+
+* **updates:** enforce PEDZEO repos in admin releases endpoint ([08ef64a](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/08ef64ac920cc4dbe06cfb7c3c641239aec371c4))
+* **updates:** use PEDZEO cabinet repository for release links ([94deff3](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/94deff3551f70a45dfc315d9cef13e3fbfe1ef3a))
+
 ## [3.22.1](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.22.0...v3.22.1) (2026-02-25)
 
 
