@@ -43,6 +43,7 @@ class ReleasesResponse(BaseModel):
 
 # ============ Cabinet releases cache ============
 
+BOT_REPO = 'PEDZEO/remnawave-bedolaga-telegram-bot'
 CABINET_REPO = 'PEDZEO/cabinet-frontend'
 _cabinet_cache: dict = {}
 _cabinet_last_check: datetime | None = None
@@ -96,6 +97,16 @@ async def get_releases(
     current_user: User = Depends(require_permission('updates:read')),
 ) -> ReleasesResponse:
     """Get release information for bot and cabinet."""
+    if version_service.repo != BOT_REPO:
+        logger.warning(
+            'Overriding version check repo for admin updates',
+            configured_repo=version_service.repo,
+            enforced_repo=BOT_REPO,
+        )
+        version_service.repo = BOT_REPO
+        version_service._cache.clear()
+        version_service._last_check = None
+
     # Bot releases
     bot_releases_raw = await version_service._fetch_releases()
     has_updates, _ = await version_service.check_for_updates()
@@ -115,7 +126,7 @@ async def get_releases(
         current_version=version_service.current_version,
         has_updates=has_updates,
         releases=bot_releases,
-        repo_url=f'https://github.com/{version_service.repo}',
+        repo_url=f'https://github.com/{BOT_REPO}',
     )
 
     # Cabinet releases
