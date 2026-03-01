@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.22.3](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.22.2...v3.22.3) (2026-03-01)
+
+
+### Bug Fixes
+
+* **cabinet:** add menu layout reset endpoint ([f5da309](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/f5da30989e0a547b77720a0eff481525c47e004d))
+* **menu-layout:** allow unknown condition keys in schema ([64895d1](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/64895d1d8a433e2f081dd0526966ca745d1c727e))
+* **menu-layout:** keep buy button visible for active users in tariffs mode ([d7326f3](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/d7326f333440985b200a2b39e67c542f223f80d6))
+
 ## [3.22.2](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.22.1...v3.22.2) (2026-02-28)
 
 
