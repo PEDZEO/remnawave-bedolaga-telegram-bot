@@ -9,9 +9,22 @@ from app.utils.decorators import admin_required, error_handler
 
 
 logger = structlog.get_logger(__name__)
+BOT_REPO = 'PEDZEO/remnawave-bedolaga-telegram-bot'
+
+
+def _ensure_bot_repo() -> None:
+    """Keep Telegram updates checker pinned to our fork repository."""
+    if version_service.repo != BOT_REPO:
+        logger.warning(
+            'Принудительно возвращаем репозиторий проверки версий на форк',
+            configured_repo=version_service.repo,
+            enforced_repo=BOT_REPO,
+        )
+        version_service.repo = BOT_REPO
 
 
 def get_updates_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
+    _ensure_bot_repo()
     buttons = [
         [InlineKeyboardButton(text='🔄 Проверить обновления', callback_data='admin_updates_check')],
         [InlineKeyboardButton(text='📋 Информация о версии', callback_data='admin_updates_info')],
@@ -38,6 +51,7 @@ def get_version_info_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
 @admin_required
 @error_handler
 async def show_updates_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    _ensure_bot_repo()
     try:
         version_info = await version_service.get_version_info()
 
@@ -79,6 +93,7 @@ async def show_updates_menu(callback: types.CallbackQuery, db_user: User, db: As
 @admin_required
 @error_handler
 async def check_updates(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    _ensure_bot_repo()
     await callback.answer('🔄 Проверяю обновления...')
 
     try:
@@ -138,6 +153,7 @@ async def check_updates(callback: types.CallbackQuery, db_user: User, db: AsyncS
 @admin_required
 @error_handler
 async def show_version_info(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    _ensure_bot_repo()
     await callback.answer('📋 Загружаю информацию о версиях...')
 
     try:
