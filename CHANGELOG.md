@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.22.4](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.22.3...v3.22.4) (2026-03-01)
+
+
+### Bug Fixes
+
+* **updates:** pin telegram update checker to fork repository ([23d6814](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/23d681429a1b5783df752a373fd13ef16f239b7f))
+
 ## [3.22.3](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.22.2...v3.22.3) (2026-03-01)
 
 
