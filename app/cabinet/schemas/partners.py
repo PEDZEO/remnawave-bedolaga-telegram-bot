@@ -131,6 +131,9 @@ class CampaignSummary(BaseModel):
     name: str
     start_parameter: str
     is_active: bool
+    registrations_count: int = 0
+    referrals_count: int = 0
+    earnings_kopeks: int = 0
 
 
 class AdminPartnerDetailResponse(BaseModel):
