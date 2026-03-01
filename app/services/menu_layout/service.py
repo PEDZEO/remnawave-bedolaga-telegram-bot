@@ -793,7 +793,9 @@ class MenuLayoutService:
 
         # show_buy
         if conditions.get('show_buy') is True:
-            if context.has_active_subscription and context.subscription_is_active:
+            # In tariffs mode we keep "buy subscription" available even for active users
+            # so they can proactively extend/change plans from the main menu.
+            if not settings.is_tariffs_mode() and context.has_active_subscription and context.subscription_is_active:
                 return False
 
         # has_saved_cart
