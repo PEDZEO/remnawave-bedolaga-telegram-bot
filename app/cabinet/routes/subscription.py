@@ -219,6 +219,12 @@ async def renew_subscription(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Renew subscription (pay from balance)."""
+    if getattr(user, 'restriction_subscription', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Subscription renewal is restricted for this account',
+        )
+
     await db.refresh(user, ['subscription'])
 
     if not user.subscription:
@@ -479,6 +485,12 @@ async def purchase_traffic(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Purchase additional traffic."""
+    if getattr(user, 'restriction_subscription', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Subscription purchases are restricted for this account',
+        )
+
     from app.database.crud.subscription import add_subscription_traffic
     from app.database.crud.tariff import get_tariff_by_id
     from app.utils.pricing_utils import calculate_prorated_price
@@ -745,6 +757,12 @@ async def purchase_devices_legacy(
 
     DEPRECATED: Use /devices/purchase instead for full tariff and discount support.
     """
+    if getattr(user, 'restriction_subscription', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Subscription purchases are restricted for this account',
+        )
+
     await db.refresh(user, ['subscription'])
 
     if not user.subscription:
@@ -1455,6 +1473,12 @@ async def submit_purchase(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, Any]:
     """Submit subscription purchase (deduct from balance, classic mode only)."""
+    if getattr(user, 'restriction_subscription', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Subscription purchases are restricted for this account',
+        )
+
     # This endpoint is for classic mode only, tariffs mode uses /purchase-tariff
     if settings.is_tariffs_mode():
         raise HTTPException(
@@ -1592,6 +1616,12 @@ async def purchase_tariff(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, Any]:
     """Purchase a tariff (for tariffs mode)."""
+    if getattr(user, 'restriction_subscription', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Subscription purchases are restricted for this account',
+        )
+
     try:
         # Check tariffs mode
         if not settings.is_tariffs_mode():
@@ -1993,6 +2023,12 @@ async def purchase_devices(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Purchase additional device slots for subscription."""
+    if getattr(user, 'restriction_subscription', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Subscription purchases are restricted for this account',
+        )
+
     try:
         await db.refresh(user, ['subscription'])
         subscription = user.subscription
