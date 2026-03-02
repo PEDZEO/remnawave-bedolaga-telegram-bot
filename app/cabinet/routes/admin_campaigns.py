@@ -70,6 +70,11 @@ def _get_web_link(start_parameter: str) -> str | None:
     return None
 
 
+def _safe_div(value: float | None, divisor: int = 100) -> float:
+    """Safely divide kopeks to rubles, handling None values."""
+    return (value or 0) / divisor
+
+
 def _get_partner_name(campaign: AdvertisingCampaign) -> str | None:
     """Get partner display name from campaign."""
     if not campaign.partner_user_id or not campaign.partner:
