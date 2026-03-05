@@ -2838,6 +2838,14 @@ async def update_subscription_devices_endpoint(
     )
     _validate_subscription_id(payload.subscription_id, subscription)
 
+    # Re-read subscription under row lock to prevent concurrent device purchases exceeding limit
+    locked_result = await db.execute(
+        select(Subscription)
+        .where(Subscription.id == subscription.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    subscription = locked_result.scalar_one()
     current_devices, new_devices = resolve_device_limits(payload, subscription)
     old_devices = current_devices
 
@@ -2859,6 +2867,45 @@ async def update_subscription_devices_endpoint(
         charged_months=charged_months,
         subscription_end_date=subscription.end_date,
     )
+
+    if price_to_charge > 0:
+        # Re-lock subscription after subtract_user_balance committed (which released all locks).
+        # Re-validate to prevent concurrent device purchases from exceeding the limit or double-charging.
+        relock_result = await db.execute(
+            select(Subscription)
+            .where(Subscription.id == subscription.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        subscription = relock_result.scalar_one()
+
+        actual_current = subscription.device_limit or 1
+        actual_delta = new_devices - actual_current
+        max_devices_limit = settings.MAX_DEVICES_LIMIT
+
+        if actual_delta <= 0 or (max_devices_limit > 0 and new_devices > max_devices_limit):
+            # Concurrent request already applied the change or pushed limit beyond max — refund
+            user_refund = await db.execute(
+                select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
+            )
+            refund_user = user_refund.scalar_one()
+            refund_user.balance_kopeks += price_to_charge
+            await db.commit()
+            if actual_delta <= 0:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    detail={
+                        'code': 'already_applied',
+                        'message': 'Изменение уже применено параллельным запросом. Баланс возвращён.',
+                    },
+                )
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail={
+                    'code': 'devices_limit_exceeded',
+                    'message': f'Превышен максимальный лимит устройств ({max_devices_limit}). Баланс возвращён.',
+                },
+            )
 
     subscription.device_limit = new_devices
     await finalize_subscription_update(
