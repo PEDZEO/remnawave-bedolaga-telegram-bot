@@ -440,6 +440,7 @@ async def handle_simple_subscription_pay_with_balance(
             price_kopeks,
             purchase_description,
             consume_promo_offer=False,
+            mark_as_paid_subscription=True,
         )
 
         if not success:
@@ -2160,6 +2161,7 @@ async def confirm_simple_subscription_purchase(
             price_kopeks,
             purchase_description,
             consume_promo_offer=False,
+            mark_as_paid_subscription=True,
         )
 
         if not success:
