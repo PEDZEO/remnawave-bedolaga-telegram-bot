@@ -24,9 +24,17 @@ async def execute_tariff_renewal(
     from app.database.crud.transaction import create_transaction
     from app.database.crud.user import subtract_user_balance
     from app.database.models import TransactionType
+    from app.utils.promo_offer import get_user_active_promo_discount_percent
 
     try:
-        success = await subtract_user_balance(db, user, final_total, description)
+        success = await subtract_user_balance(
+            db,
+            user,
+            final_total,
+            description,
+            consume_promo_offer=get_user_active_promo_discount_percent(user) > 0,
+            mark_as_paid_subscription=True,
+        )
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -38,7 +46,7 @@ async def execute_tariff_renewal(
             db,
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=-final_total,
+            amount_kopeks=final_total,
             description=description,
         )
 
