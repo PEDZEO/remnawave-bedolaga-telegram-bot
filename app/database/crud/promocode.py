@@ -83,7 +83,6 @@ async def create_promocode(
         logger.info('✅ Создан промокод', code=code)
     return promocode
 
-
 async def check_user_promocode_usage(db: AsyncSession, user_id: int, promocode_id: int) -> bool:
     result = await db.execute(
         select(PromoCodeUse).where(and_(PromoCodeUse.user_id == user_id, PromoCodeUse.promocode_id == promocode_id))
@@ -91,12 +90,22 @@ async def check_user_promocode_usage(db: AsyncSession, user_id: int, promocode_i
     return result.scalar_one_or_none() is not None
 
 
-async def create_promocode_use(db: AsyncSession, promocode_id: int, user_id: int) -> PromoCodeUse:
+async def create_promocode_use(db: AsyncSession, promocode_id: int, user_id: int) -> PromoCodeUse | None:
+    from sqlalchemy.exc import IntegrityError
+
     promocode_use = PromoCodeUse(promocode_id=promocode_id, user_id=user_id, used_at=datetime.now(UTC))
 
-    db.add(promocode_use)
-    await db.commit()
-    await db.refresh(promocode_use)
+    try:
+        async with db.begin_nested():
+            db.add(promocode_use)
+            await db.flush()
+    except IntegrityError:
+        logger.warning(
+            '⚠️ Дублирующая запись использования промокода (race condition)',
+            promocode_id=promocode_id,
+            user_id=user_id,
+        )
+        return None
 
     logger.info('📝 Записано использование промокода пользователем', promocode_id=promocode_id, user_id=user_id)
     return promocode_use
