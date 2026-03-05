@@ -1986,7 +1986,7 @@ class BroadcastHistory(Base):
     failed_count = Column(Integer, default=0)
     blocked_count = Column(Integer, default=0)
     status = Column(String(50), default='in_progress')
-    admin_id = Column(Integer, ForeignKey('users.id'))
+    admin_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     admin_name = Column(String(255))
     created_at = Column(AwareDateTime(), server_default=func.now())
     completed_at = Column(AwareDateTime(), nullable=True)
