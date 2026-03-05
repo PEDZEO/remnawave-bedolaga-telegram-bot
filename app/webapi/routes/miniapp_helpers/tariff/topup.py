@@ -171,6 +171,6 @@ async def execute_topup_purchase(
         db,
         user_id=user.id,
         type=TransactionType.SUBSCRIPTION_PAYMENT,
-        amount_kopeks=-final_price,
+        amount_kopeks=final_price,
         description=description,
     )
