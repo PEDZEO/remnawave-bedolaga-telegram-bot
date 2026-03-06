@@ -1,16 +1,17 @@
 FROM python:3.13-slim AS builder
+COPY --from=ghcr.io/astral-sh/uv:0.8.15 /uv /uvx /bin/
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_LINK_MODE=copy \
+    PATH="/opt/venv/bin:$PATH"
 
-COPY requirements.txt .
+COPY pyproject.toml uv.lock ./
 
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN uv sync --frozen --no-dev
 
 FROM python:3.13-slim
 

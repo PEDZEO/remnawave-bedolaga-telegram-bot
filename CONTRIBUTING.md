@@ -89,9 +89,10 @@
 
 ### Требования
 
-- Python 3.11+
+- Python 3.13+
 - Docker и Docker Compose
 - Git
+- uv (https://docs.astral.sh/uv/)
 - PostgreSQL 15+ (опционально для локальной разработки)
 - Redis (опционально для локальной разработки)
 
@@ -103,30 +104,21 @@ git clone https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot.git
 cd remnawave-bedolaga-telegram-bot
 ```
 
-2. **Создайте виртуальное окружение:**
+2. **Установите зависимости через uv:**
 ```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# или
-venv\Scripts\activate  # Windows
+uv sync --group dev
 ```
 
-3. **Установите зависимости:**
-```bash
-pip install -r requirements.txt
-pip install -r requirements-dev.txt  # если есть dev зависимости
-```
-
-4. **Настройте окружение:**
+3. **Настройте окружение:**
 ```bash
 cp .env.example .env
 # Отредактируйте .env файл с вашими настройками
 ```
 
-5. **Запустите через Docker (рекомендуется):**
+4. **Запустите через Docker (рекомендуется):**
 ```bash
 docker compose up -d postgres redis
-python main.py
+uv run python main.py
 ```
 
 ### Структура проекта
@@ -143,7 +135,8 @@ bedolaga_bot/
 ├── migrations/             # Миграции БД (если нужны)
 ├── tests/                  # Тесты (создать при необходимости)
 ├── docs/                   # Документация
-└── requirements.txt        # Зависимости
+├── pyproject.toml          # Зависимости и настройки проекта
+└── uv.lock                 # Зафиксированные версии зависимостей
 ```
 
 ## 🎨 Стандарты кода
@@ -335,7 +328,7 @@ git checkout -b feature/new-payment-method
 # Запуск с тестовой базой
 export DATABASE_URL="sqlite:///test.db"
 export BOT_TOKEN="test_token"
-python main.py
+uv run python main.py
 ```
 
 ### Тестирование компонентов
