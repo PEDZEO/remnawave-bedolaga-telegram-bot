@@ -16,6 +16,7 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import text
 
 revision: str = '0014'
 down_revision: Union[str, None] = '0013'
@@ -160,6 +161,27 @@ def _has_fk(table_name: str, fk_name: str) -> bool:
     return any(fk.get('name') == fk_name for fk in _inspector().get_foreign_keys(table_name))
 
 
+def _get_actual_fk_name(table_name: str, column_name: str) -> str | None:
+    result = op.get_bind().execute(
+        text("""
+            SELECT con.conname
+            FROM pg_constraint con
+            JOIN pg_class rel ON rel.oid = con.conrelid
+            JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+            JOIN pg_attribute att ON att.attrelid = con.conrelid
+                AND att.attnum = ANY(con.conkey)
+            WHERE rel.relname = :table
+                AND att.attname = :column
+                AND con.contype = 'f'
+                AND nsp.nspname = 'public'
+            LIMIT 1
+        """),
+        {'table': table_name, 'column': column_name},
+    )
+    row = result.fetchone()
+    return row[0] if row else None
+
+
 def upgrade() -> None:
     # Step 1: clean orphan links before FK recreation
     for table, column, nullable in _ALL_USER_FKS:
@@ -179,8 +201,9 @@ def upgrade() -> None:
     for table, column, ondelete, fk_name in _FK_CHANGES:
         if not _has_column(table, column):
             continue
-        if _has_fk(table, fk_name):
-            op.drop_constraint(fk_name, table, type_='foreignkey')
+        actual_fk = _get_actual_fk_name(table, column)
+        if actual_fk:
+            op.drop_constraint(actual_fk, table, type_='foreignkey')
         op.create_foreign_key(fk_name, table, 'users', [column], ['id'], ondelete=ondelete)
 
 
@@ -188,6 +211,7 @@ def downgrade() -> None:
     for table, column, _ondelete, fk_name in _FK_CHANGES:
         if not _has_column(table, column):
             continue
-        if _has_fk(table, fk_name):
-            op.drop_constraint(fk_name, table, type_='foreignkey')
+        actual_fk = _get_actual_fk_name(table, column)
+        if actual_fk:
+            op.drop_constraint(actual_fk, table, type_='foreignkey')
         op.create_foreign_key(fk_name, table, 'users', [column], ['id'])
