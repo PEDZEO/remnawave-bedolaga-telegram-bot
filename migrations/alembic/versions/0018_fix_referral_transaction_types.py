@@ -1,7 +1,7 @@
 """fix historical referral transactions recorded as deposit
 
-Revision ID: 0014
-Revises: 0013
+Revision ID: 0018
+Revises: 0017
 Create Date: 2026-03-02
 
 Data-only migration: updates transactions.type from 'deposit' to 'referral_reward'
@@ -14,8 +14,8 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = '0014'
-down_revision: Union[str, None] = '0013'
+revision: str = '0018'
+down_revision: Union[str, None] = '0017'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
