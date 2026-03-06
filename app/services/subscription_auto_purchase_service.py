@@ -341,9 +341,6 @@ async def _auto_extend_subscription(
     *,
     bot: Bot | None = None,
 ) -> bool:
-    # Lazy import to avoid circular dependency
-    from app.cabinet.routes.websocket import notify_user_subscription_renewed
-
     try:
         prepared = await _prepare_auto_extend_context(db, user, cart_data)
     except Exception as error:  # pragma: no cover - defensive logging
@@ -483,12 +480,11 @@ async def _auto_extend_subscription(
     new_end_date = updated_subscription.end_date
     end_date_label = format_local_datetime(new_end_date, '%d.%m.%Y %H:%M')
 
-    # Уведомление администраторам (не зависит от наличия bot)
+    # Уведомление администраторам
     try:
-        from app.services.subscription_renewal_service import with_admin_notification_service
-
-        await with_admin_notification_service(
-            lambda svc: svc.send_subscription_extension_notification(
+        if bot:
+            notification_service = AdminNotificationService(bot)
+            await notification_service.send_subscription_extension_notification(
                 db,
                 user,
                 updated_subscription,
@@ -498,7 +494,21 @@ async def _auto_extend_subscription(
                 new_end_date=new_end_date,
                 balance_after=user.balance_kopeks,
             )
-        )
+        else:
+            from app.services.subscription_renewal_service import with_admin_notification_service
+
+            await with_admin_notification_service(
+                lambda svc: svc.send_subscription_extension_notification(
+                    db,
+                    user,
+                    updated_subscription,
+                    transaction,
+                    prepared.period_days,
+                    old_end_date,
+                    new_end_date=new_end_date,
+                    balance_after=user.balance_kopeks,
+                )
+            )
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
             '⚠️ Автопокупка: не удалось уведомить администраторов о продлении пользователя',
@@ -564,6 +574,8 @@ async def _auto_extend_subscription(
 
     # Send WebSocket notification to cabinet frontend
     try:
+        from app.cabinet.routes.websocket import notify_user_subscription_renewed
+
         await notify_user_subscription_renewed(
             user_id=user.id,
             new_expires_at=new_end_date.isoformat() if new_end_date else '',
@@ -766,15 +778,21 @@ async def _auto_purchase_tariff(
     await user_cart_service.delete_user_cart(user.id)
     await clear_subscription_checkout_draft(user.id)
 
-    # Уведомление администраторам (не зависит от наличия bot)
+    # Уведомление администраторам
     try:
-        from app.services.subscription_renewal_service import with_admin_notification_service
-
-        await with_admin_notification_service(
-            lambda svc: svc.send_subscription_purchase_notification(
+        if bot:
+            notification_service = AdminNotificationService(bot)
+            await notification_service.send_subscription_purchase_notification(
                 db, user, subscription, transaction, period_days, was_trial_conversion
             )
-        )
+        else:
+            from app.services.subscription_renewal_service import with_admin_notification_service
+
+            await with_admin_notification_service(
+                lambda svc: svc.send_subscription_purchase_notification(
+                    db, user, subscription, transaction, period_days, was_trial_conversion
+                )
+            )
     except Exception as error:
         logger.warning(
             '⚠️ Автопокупка тарифа: не удалось уведомить админов о покупке пользователя',
@@ -1037,15 +1055,21 @@ async def _auto_purchase_daily_tariff(
     await user_cart_service.delete_user_cart(user.id)
     await clear_subscription_checkout_draft(user.id)
 
-    # Уведомление администраторам (не зависит от наличия bot)
+    # Уведомление администраторам
     try:
-        from app.services.subscription_renewal_service import with_admin_notification_service
-
-        await with_admin_notification_service(
-            lambda svc: svc.send_subscription_purchase_notification(
+        if bot:
+            notification_service = AdminNotificationService(bot)
+            await notification_service.send_subscription_purchase_notification(
                 db, user, subscription, transaction, 1, was_trial_conversion
             )
-        )
+        else:
+            from app.services.subscription_renewal_service import with_admin_notification_service
+
+            await with_admin_notification_service(
+                lambda svc: svc.send_subscription_purchase_notification(
+                    db, user, subscription, transaction, 1, was_trial_conversion
+                )
+            )
     except Exception as error:
         logger.warning(
             '⚠️ Автопокупка суточного тарифа: не удалось уведомить админов о покупке пользователя',
@@ -1547,10 +1571,6 @@ async def auto_purchase_saved_cart_after_topup(
     """Attempts to automatically purchase a subscription from a saved cart."""
 
     # Lazy imports to avoid circular dependency
-    from app.cabinet.routes.websocket import (
-        notify_user_subscription_activated,
-        notify_user_subscription_renewed,
-    )
     from app.database.crud.transaction import get_user_transactions
 
     if not settings.is_auto_purchase_after_topup_enabled():
@@ -1768,6 +1788,11 @@ async def auto_purchase_saved_cart_after_topup(
 
     # Send WebSocket notification to cabinet frontend
     try:
+        from app.cabinet.routes.websocket import (
+            notify_user_subscription_activated,
+            notify_user_subscription_renewed,
+        )
+
         if was_trial_conversion:
             # Trial conversion = activation
             await notify_user_subscription_activated(
