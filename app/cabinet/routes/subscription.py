@@ -3016,7 +3016,7 @@ async def get_devices(
         return {
             'devices': [],
             'total': 0,
-            'device_limit': user.subscription.device_limit or 1,
+            'device_limit': user.subscription.device_limit or 0,
         }
 
     try:
@@ -3044,7 +3044,7 @@ async def get_devices(
             return {
                 'devices': formatted_devices,
                 'total': response.get('total', len(formatted_devices)),
-                'device_limit': user.subscription.device_limit or 1,
+                'device_limit': user.subscription.device_limit or 0,
             }
 
     except Exception as e:
@@ -3052,7 +3052,7 @@ async def get_devices(
         return {
             'devices': [],
             'total': 0,
-            'device_limit': user.subscription.device_limit or 1,
+            'device_limit': user.subscription.device_limit or 0,
         }
 
 
