@@ -1163,7 +1163,7 @@ async def _auto_add_devices(
         await user_cart_service.delete_user_cart(user.id)
         return False
 
-    if subscription.status not in ('active', 'trial', 'ACTIVE', 'TRIAL'):
+    if subscription.status not in ('active', 'trial', 'disabled', 'ACTIVE', 'TRIAL', 'DISABLED'):
         logger.warning(
             '🔁 Автопокупка устройств: подписка пользователя не активна (status=)',
             format_user_id=_format_user_id(user),
@@ -1213,6 +1213,9 @@ async def _auto_add_devices(
         )
         await db.rollback()
         return False
+
+    # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+    await reactivate_subscription(db, subscription)
 
     # Синхронизация с RemnaWave
     try:
@@ -1325,7 +1328,11 @@ async def _auto_add_traffic(
     """Auto-purchase traffic from saved cart after balance topup."""
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-    from app.database.crud.subscription import add_subscription_traffic, get_subscription_by_user_id
+    from app.database.crud.subscription import (
+        add_subscription_traffic,
+        get_subscription_by_user_id,
+        reactivate_subscription,
+    )
     from app.database.crud.user import subtract_user_balance
     from app.database.models import PaymentMethod
 
@@ -1358,7 +1365,7 @@ async def _auto_add_traffic(
         await user_cart_service.delete_user_cart(user.id)
         return False
 
-    if subscription.status not in ('active', 'trial', 'ACTIVE', 'TRIAL'):
+    if subscription.status not in ('active', 'trial', 'disabled', 'ACTIVE', 'TRIAL', 'DISABLED'):
         logger.warning(
             '🔁 Автопокупка трафика: подписка пользователя не активна (status=)',
             format_user_id=_format_user_id(user),
@@ -1419,6 +1426,9 @@ async def _auto_add_traffic(
         )
         await db.rollback()
         return False
+
+    # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+    await reactivate_subscription(db, subscription)
 
     # Sync with RemnaWave
     try:
