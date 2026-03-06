@@ -821,7 +821,10 @@ async def handle_custom_confirm(
     try:
         # Списываем баланс
         success = await subtract_user_balance(
-            db, db_user, total_price, f'Покупка тарифа {tariff.name} на {custom_days} дней',
+            db,
+            db_user,
+            total_price,
+            f'Покупка тарифа {tariff.name} на {custom_days} дней',
             consume_promo_offer=get_user_active_promo_discount_percent(db_user) > 0,
             mark_as_paid_subscription=True,
         )
@@ -1133,7 +1136,10 @@ async def confirm_tariff_purchase(
     try:
         # Списываем баланс
         success = await subtract_user_balance(
-            db, db_user, final_price, f'Покупка тарифа {tariff.name} на {period} дней',
+            db,
+            db_user,
+            final_price,
+            f'Покупка тарифа {tariff.name} на {period} дней',
             consume_promo_offer=get_user_active_promo_discount_percent(db_user) > 0,
             mark_as_paid_subscription=True,
         )
@@ -1293,7 +1299,10 @@ async def confirm_daily_tariff_purchase(
     try:
         # Списываем первый день сразу
         success = await subtract_user_balance(
-            db, db_user, daily_price, f'Покупка суточного тарифа {tariff.name} (первый день)',
+            db,
+            db_user,
+            daily_price,
+            f'Покупка суточного тарифа {tariff.name} (первый день)',
             mark_as_paid_subscription=True,
         )
         if not success:
@@ -1706,7 +1715,10 @@ async def confirm_tariff_extend(
     try:
         # Списываем баланс
         success = await subtract_user_balance(
-            db, db_user, final_price, f'Продление тарифа {tariff.name} на {period} дней',
+            db,
+            db_user,
+            final_price,
+            f'Продление тарифа {tariff.name} на {period} дней',
             consume_promo_offer=get_user_active_promo_discount_percent(db_user) > 0,
             mark_as_paid_subscription=True,
         )
@@ -2239,7 +2251,10 @@ async def confirm_tariff_switch(
     try:
         # Списываем баланс
         success = await subtract_user_balance(
-            db, db_user, final_price, f'Смена тарифа на {tariff.name} ({period} дней)',
+            db,
+            db_user,
+            final_price,
+            f'Смена тарифа на {tariff.name} ({period} дней)',
             consume_promo_offer=get_user_active_promo_discount_percent(db_user) > 0,
             mark_as_paid_subscription=True,
         )
@@ -2410,7 +2425,10 @@ async def confirm_daily_tariff_switch(
     try:
         # Списываем первый день сразу
         success = await subtract_user_balance(
-            db, db_user, daily_price, f'Смена на суточный тариф {tariff.name} (первый день)',
+            db,
+            db_user,
+            daily_price,
+            f'Смена на суточный тариф {tariff.name} (первый день)',
             mark_as_paid_subscription=True,
         )
         if not success:
@@ -2973,7 +2991,10 @@ async def confirm_instant_switch(
         # Списываем баланс если это upgrade
         if is_upgrade and upgrade_cost > 0:
             success = await subtract_user_balance(
-                db, db_user, upgrade_cost, f'Переключение на тариф {new_tariff.name}',
+                db,
+                db_user,
+                upgrade_cost,
+                f'Переключение на тариф {new_tariff.name}',
                 consume_promo_offer=get_user_active_promo_discount_percent(db_user) > 0,
                 mark_as_paid_subscription=True,
             )
@@ -3025,7 +3046,10 @@ async def confirm_instant_switch(
             if upgrade_cost == 0 and daily_price > 0:
                 if user_balance >= daily_price:
                     success = await subtract_user_balance(
-                        db, db_user, daily_price, f'Переключение на суточный тариф {new_tariff.name} (первый день)',
+                        db,
+                        db_user,
+                        daily_price,
+                        f'Переключение на суточный тариф {new_tariff.name} (первый день)',
                         mark_as_paid_subscription=True,
                     )
                     if not success:

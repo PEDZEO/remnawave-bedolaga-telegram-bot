@@ -1019,7 +1019,10 @@ class MonitoringService:
 
                 if user.balance_kopeks >= charge_amount:
                     success = await subtract_user_balance(
-                        db, user, charge_amount, 'Автопродление подписки',
+                        db,
+                        user,
+                        charge_amount,
+                        'Автопродление подписки',
                         mark_as_paid_subscription=True,
                     )
 

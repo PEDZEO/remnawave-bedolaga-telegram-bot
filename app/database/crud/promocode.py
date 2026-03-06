@@ -83,6 +83,7 @@ async def create_promocode(
         logger.info('✅ Создан промокод', code=code)
     return promocode
 
+
 async def check_user_promocode_usage(db: AsyncSession, user_id: int, promocode_id: int) -> bool:
     result = await db.execute(
         select(PromoCodeUse).where(and_(PromoCodeUse.user_id == user_id, PromoCodeUse.promocode_id == promocode_id))

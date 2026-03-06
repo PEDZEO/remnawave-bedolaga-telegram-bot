@@ -9,8 +9,10 @@ import structlog
 try:
     from redis.exceptions import NoScriptError
 except Exception:  # pragma: no cover - test stubs may shadow redis package
+
     class NoScriptError(Exception):
         pass
+
 
 from app.config import settings
 
@@ -383,6 +385,7 @@ return c
         except Exception:
             logger.warning('Rate limiter error', key=key, exc_info=True)
             return fail_closed
+
     @staticmethod
     async def is_rate_limited(user_id: int, action: str, limit: int, window: int) -> bool:
         key = cache_key('rate_limit', user_id, action)
