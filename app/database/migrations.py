@@ -92,7 +92,7 @@ async def _remap_legacy_revision_if_needed() -> bool:
 
 
 async def run_alembic_upgrade() -> None:
-    """Run ``alembic upgrade head``, auto-stamping existing databases first."""
+    """Run ``alembic upgrade heads``, auto-stamping existing databases first."""
     await _remap_legacy_revision_if_needed()
 
     if await _needs_auto_stamp():
@@ -102,13 +102,13 @@ async def run_alembic_upgrade() -> None:
         await _stamp_alembic_revision(_INITIAL_REVISION)
 
     cfg = _get_alembic_config()
-    await _run_alembic_command(command.upgrade, cfg, 'head')
+    await _run_alembic_command(command.upgrade, cfg, 'heads')
     logger.info('Alembic миграции применены')
 
 
 async def stamp_alembic_head() -> None:
     """Stamp the DB as being at head without running migrations (for existing DBs)."""
-    await _stamp_alembic_revision('head')
+    await _stamp_alembic_revision('heads')
 
 
 async def _stamp_alembic_revision(revision: str) -> None:
