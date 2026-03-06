@@ -4,6 +4,8 @@ from typing import Any
 
 import redis.asyncio as redis
 import structlog
+
+
 try:
     from redis.exceptions import NoScriptError
 except Exception:  # pragma: no cover - test stubs may shadow redis package

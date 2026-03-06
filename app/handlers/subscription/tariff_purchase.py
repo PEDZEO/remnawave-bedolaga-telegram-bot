@@ -822,6 +822,7 @@ async def handle_custom_confirm(
         # Списываем баланс
         success = await subtract_user_balance(
             db, db_user, total_price, f'Покупка тарифа {tariff.name} на {custom_days} дней',
+            consume_promo_offer=get_user_active_promo_discount_percent(db_user) > 0,
             mark_as_paid_subscription=True,
         )
         if not success:
@@ -1133,6 +1134,7 @@ async def confirm_tariff_purchase(
         # Списываем баланс
         success = await subtract_user_balance(
             db, db_user, final_price, f'Покупка тарифа {tariff.name} на {period} дней',
+            consume_promo_offer=get_user_active_promo_discount_percent(db_user) > 0,
             mark_as_paid_subscription=True,
         )
         if not success:
@@ -1705,6 +1707,7 @@ async def confirm_tariff_extend(
         # Списываем баланс
         success = await subtract_user_balance(
             db, db_user, final_price, f'Продление тарифа {tariff.name} на {period} дней',
+            consume_promo_offer=get_user_active_promo_discount_percent(db_user) > 0,
             mark_as_paid_subscription=True,
         )
         if not success:
@@ -2237,6 +2240,7 @@ async def confirm_tariff_switch(
         # Списываем баланс
         success = await subtract_user_balance(
             db, db_user, final_price, f'Смена тарифа на {tariff.name} ({period} дней)',
+            consume_promo_offer=get_user_active_promo_discount_percent(db_user) > 0,
             mark_as_paid_subscription=True,
         )
         if not success:
@@ -2970,6 +2974,7 @@ async def confirm_instant_switch(
         if is_upgrade and upgrade_cost > 0:
             success = await subtract_user_balance(
                 db, db_user, upgrade_cost, f'Переключение на тариф {new_tariff.name}',
+                consume_promo_offer=get_user_active_promo_discount_percent(db_user) > 0,
                 mark_as_paid_subscription=True,
             )
             if not success:
