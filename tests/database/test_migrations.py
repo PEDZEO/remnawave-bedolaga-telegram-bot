@@ -35,7 +35,7 @@ async def test_run_alembic_upgrade_applies_legacy_remap(monkeypatch: pytest.Monk
     remap_mock.assert_awaited_once()
     needs_stamp_mock.assert_awaited_once()
     stamp_mock.assert_not_awaited()
-    upgrade_mock.assert_called_once_with(cfg, 'head')
+    upgrade_mock.assert_called_once_with(cfg, 'heads')
 
 
 @pytest.mark.asyncio
@@ -54,4 +54,4 @@ async def test_stamp_alembic_head_runs_stamp_command(monkeypatch: pytest.MonkeyP
 
     await migrations.stamp_alembic_head()
 
-    stamp_mock.assert_called_once_with(cfg, 'head')
+    stamp_mock.assert_called_once_with(cfg, 'heads')
