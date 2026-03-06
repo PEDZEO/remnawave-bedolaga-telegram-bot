@@ -1195,13 +1195,10 @@ async def update_user_subscription(
                 detail='traffic_gb parameter is required for add_traffic action',
             )
 
-        from app.database.crud.subscription import add_subscription_traffic, reactivate_subscription
+        from app.database.crud.subscription import add_subscription_traffic
 
         await add_subscription_traffic(db, subscription, request.traffic_gb)
-
-        # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
-        await reactivate_subscription(db, subscription)
-
+        await db.commit()
         await db.refresh(subscription)
 
         # Sync to Remnawave panel
