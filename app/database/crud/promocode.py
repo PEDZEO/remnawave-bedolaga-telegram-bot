@@ -84,28 +84,6 @@ async def create_promocode(
     return promocode
 
 
-async def use_promocode(db: AsyncSession, promocode_id: int, user_id: int) -> bool:
-    try:
-        promocode = await get_promocode_by_id(db, promocode_id)
-        if not promocode:
-            return False
-
-        usage = PromoCodeUse(promocode_id=promocode_id, user_id=user_id)
-        db.add(usage)
-
-        promocode.current_uses += 1
-
-        await db.commit()
-
-        logger.info('✅ Промокод использован пользователем', code=promocode.code, user_id=user_id)
-        return True
-
-    except Exception as e:
-        logger.error('Ошибка использования промокода', error=e)
-        await db.rollback()
-        return False
-
-
 async def check_user_promocode_usage(db: AsyncSession, user_id: int, promocode_id: int) -> bool:
     result = await db.execute(
         select(PromoCodeUse).where(and_(PromoCodeUse.user_id == user_id, PromoCodeUse.promocode_id == promocode_id))
