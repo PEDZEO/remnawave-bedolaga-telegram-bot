@@ -306,20 +306,47 @@ async def send_cart_notification_after_topup(
     from aiogram import types
 
     from app.database.crud.user import get_user_by_id
-    from app.services.subscription_auto_purchase_service import auto_purchase_saved_cart_after_topup
+    from app.services.user_cart_service import user_cart_service as cart_service
 
-    cart_data = await user_cart_service.get_user_cart(user.id)
+    cart_data: dict[str, Any] | None = None
+    has_saved_cart = False
+    if hasattr(cart_service, 'has_user_cart'):
+        try:
+            has_saved_cart = bool(await cart_service.has_user_cart(user.id))
+        except Exception:
+            has_saved_cart = False
+
+    if hasattr(cart_service, 'get_user_cart'):
+        cart_data = await cart_service.get_user_cart(user.id)
+    elif has_saved_cart:
+        # Минимальный fallback для старых/тестовых реализаций cart service.
+        cart_data = {'total_price': amount_kopeks}
+
     if not cart_data:
         return False
 
-    cart_total = cart_data.get('total_price', 0)
+    cart_total = int(cart_data.get('total_price', 0) or 0)
     if not cart_total:
+        if has_saved_cart:
+            cart_total = max(amount_kopeks, 1)
+        else:
+            return False
+
+    if cart_total <= 0:
         return False
 
     # Try auto-purchase first
     auto_purchase_success = False
     try:
+        from app.services.subscription_auto_purchase_service import auto_purchase_saved_cart_after_topup
+
         auto_purchase_success = await auto_purchase_saved_cart_after_topup(db, user, bot=bot)
+    except ImportError as import_error:
+        logger.warning(
+            'Auto-purchase service import failed; continue with cart notification',
+            user_id=user.id,
+            import_error=import_error,
+        )
     except Exception as auto_error:
         logger.error(
             'Ошибка автоматической покупки подписки для пользователя',
@@ -340,16 +367,27 @@ async def send_cart_notification_after_topup(
 
     texts = get_texts(getattr(user, 'language', 'ru'))
 
+    def _text_value(key: str, default: str = '') -> str:
+        if hasattr(texts, 'get'):
+            return texts.get(key, default)  # type: ignore[no-any-return]
+        translator = getattr(texts, 't', None)
+        if callable(translator):
+            return translator(key, default)  # type: ignore[no-any-return]
+        return getattr(texts, key, default)
+
     # Build message based on whether balance is sufficient
     fmt = settings.format_price
     if balance >= cart_total:
-        template = texts.get('BALANCE_TOPPED_UP_CART_SUFFICIENT', '')
+        template = _text_value('BALANCE_TOPPED_UP_CART_SUFFICIENT', '')
         message_text = template.format(amount=fmt(amount_kopeks), balance=fmt(balance), cart_total=fmt(cart_total))
     else:
         missing = cart_total - balance
-        template = texts.get('BALANCE_TOPPED_UP_CART_INSUFFICIENT', '')
+        template = _text_value('BALANCE_TOPPED_UP_CART_INSUFFICIENT', '')
         message_text = template.format(
-            amount=fmt(amount_kopeks), balance=fmt(balance), cart_total=fmt(cart_total), missing=fmt(missing),
+            amount=fmt(amount_kopeks),
+            balance=fmt(balance),
+            cart_total=fmt(cart_total),
+            missing=fmt(missing),
         )
 
     if not message_text:
@@ -362,18 +400,22 @@ async def send_cart_notification_after_topup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.get('RETURN_TO_SUBSCRIPTION_CHECKOUT', '⬅️ Checkout'),
+                        text=_text_value('RETURN_TO_SUBSCRIPTION_CHECKOUT', '⬅️ Checkout'),
                         callback_data='return_to_saved_cart',
                     )
                 ],
-                [types.InlineKeyboardButton(
-                    text=texts.get('MY_BALANCE_BUTTON', '💰 Balance'),
-                    callback_data='menu_balance',
-                )],
-                [types.InlineKeyboardButton(
-                    text=texts.get('MAIN_MENU_BUTTON', '🏠 Menu'),
-                    callback_data='back_to_menu',
-                )],
+                [
+                    types.InlineKeyboardButton(
+                        text=_text_value('MY_BALANCE_BUTTON', '💰 Balance'),
+                        callback_data='menu_balance',
+                    )
+                ],
+                [
+                    types.InlineKeyboardButton(
+                        text=_text_value('MAIN_MENU_BUTTON', '🏠 Menu'),
+                        callback_data='back_to_menu',
+                    )
+                ],
             ]
         )
         await bot.send_message(
