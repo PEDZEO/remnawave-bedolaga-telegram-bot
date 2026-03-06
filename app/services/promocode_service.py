@@ -160,6 +160,7 @@ class PromoCodeService:
                 .where(PromoCode.id == promocode.id)
                 .values(current_uses=PromoCode.current_uses + 1)
             )
+            promocode.current_uses += 1
             await db.commit()
 
             logger.info('✅ Пользователь активировал промокод', _format_user_log=self._format_user_log(user), code=code)

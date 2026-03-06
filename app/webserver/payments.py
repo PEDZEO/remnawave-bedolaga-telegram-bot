@@ -392,13 +392,13 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
             if client_ip is None:
                 return JSONResponse(
-                    {'status': 'error', 'reason': 'unknown_ip'},
+                    {'status': 'error', 'reason': 'unknown_ip', 'ip': str(remote_ip) if remote_ip else None},
                     status_code=status.HTTP_403_FORBIDDEN,
                 )
 
             if not yookassa_webhook_module.is_yookassa_ip_allowed(client_ip):
                 return JSONResponse(
-                    {'status': 'error', 'reason': 'forbidden_ip'},
+                    {'status': 'error', 'reason': 'forbidden_ip', 'ip': str(client_ip)},
                     status_code=status.HTTP_403_FORBIDDEN,
                 )
 
