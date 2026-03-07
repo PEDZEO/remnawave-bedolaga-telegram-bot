@@ -11,6 +11,7 @@ from app.database.models import User
 from app.services.faq_service import FaqService
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
+from app.services.ultima_agreement_service import get_ultima_agreement
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 
@@ -73,6 +74,15 @@ class PrivacyPolicyResponse(BaseModel):
 class PublicOfferResponse(BaseModel):
     """Public offer."""
 
+    content: str
+    updated_at: str | None = None
+
+
+class UltimaAgreementResponse(BaseModel):
+    """Ultima agreement page."""
+
+    requested_language: str
+    language: str
     content: str
     updated_at: str | None = None
 
@@ -217,6 +227,21 @@ async def get_public_offer(
 Условия использования сервиса.
 """,
         updated_at=None,
+    )
+
+
+@router.get('/ultima-agreement', response_model=UltimaAgreementResponse)
+async def get_ultima_agreement_page(
+    language: str = Query('ru', min_length=2, max_length=10),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get Ultima-only agreement page."""
+    agreement = await get_ultima_agreement(db, language)
+    return UltimaAgreementResponse(
+        requested_language=agreement.requested_language,
+        language=agreement.language,
+        content=agreement.content,
+        updated_at=agreement.updated_at,
     )
 
 
