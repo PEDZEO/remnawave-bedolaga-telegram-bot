@@ -46,6 +46,11 @@ from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.referral_service import process_referral_registration
 from app.services.subscription_service import SubscriptionService
 from app.services.support_settings_service import SupportSettingsService
+from app.services.ultima_start_service import (
+    build_ultima_start_keyboard,
+    get_ultima_start_config,
+    is_ultima_mode_enabled,
+)
 from app.states import RegistrationStates
 from app.utils.promo_offer import (
     build_promo_offer_hint,
@@ -92,6 +97,68 @@ async def _get_custom_main_menu_buttons(
             error=error,
         )
         return []
+
+
+async def _send_main_entrypoint_message(
+    *,
+    db: AsyncSession,
+    user,
+    texts,
+    send_answer,
+    bot: Bot | None = None,
+    chat_id: int | None = None,
+    allow_logo: bool = False,
+) -> None:
+    if await is_ultima_mode_enabled(db):
+        ultima_config = await get_ultima_start_config(db)
+        await send_answer(
+            ultima_config.message_text,
+            reply_markup=build_ultima_start_keyboard(ultima_config),
+            parse_mode='HTML',
+            disable_web_page_preview=True,
+        )
+        return
+
+    has_active_subscription, subscription_is_active = _calculate_subscription_flags(getattr(user, 'subscription', None))
+    menu_text = await get_main_menu_text(user, texts, db)
+
+    is_admin = settings.is_admin(user.telegram_id)
+    is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
+    custom_buttons = await _get_custom_main_menu_buttons(
+        db,
+        is_admin=is_admin,
+        has_active_subscription=has_active_subscription,
+        subscription_is_active=subscription_is_active,
+    )
+
+    keyboard = await get_main_menu_keyboard_async(
+        db=db,
+        user=user,
+        language=user.language,
+        is_admin=is_admin,
+        has_had_paid_subscription=user.has_had_paid_subscription,
+        has_active_subscription=has_active_subscription,
+        subscription_is_active=subscription_is_active,
+        balance_kopeks=user.balance_kopeks,
+        subscription=user.subscription,
+        is_moderator=is_moderator,
+        custom_buttons=custom_buttons,
+    )
+
+    if allow_logo and bot and chat_id and settings.ENABLE_LOGO_MODE and len(menu_text) <= 900:
+        from app.utils.message_patch import _cache_logo_file_id, get_logo_media
+
+        result = await bot.send_photo(
+            chat_id=chat_id,
+            photo=get_logo_media(),
+            caption=menu_text,
+            reply_markup=keyboard,
+            parse_mode='HTML',
+        )
+        _cache_logo_file_id(result)
+        return
+
+    await send_answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
 
 
 async def _send_pinned_message(
@@ -509,39 +576,17 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             except Exception as e:
                 logger.error('Ошибка отправки уведомления о рекламной кампании', error=e)
 
-        has_active_subscription, subscription_is_active = _calculate_subscription_flags(user.subscription)
-
         pinned_message = await get_active_pinned_message(db)
 
         if pinned_message and pinned_message.send_before_menu:
             await _send_pinned_message(message.bot, db, user, pinned_message)
 
-        menu_text = await get_main_menu_text(user, texts, db)
-
-        is_admin = settings.is_admin(user.telegram_id)
-        is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
-
-        custom_buttons = await _get_custom_main_menu_buttons(
-            db,
-            is_admin=is_admin,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-        )
-
-        keyboard = await get_main_menu_keyboard_async(
+        await _send_main_entrypoint_message(
             db=db,
             user=user,
-            language=user.language,
-            is_admin=is_admin,
-            has_had_paid_subscription=user.has_had_paid_subscription,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-            balance_kopeks=user.balance_kopeks,
-            subscription=user.subscription,
-            is_moderator=is_moderator,
-            custom_buttons=custom_buttons,
+            texts=texts,
+            send_answer=message.answer,
         )
-        await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
 
         if pinned_message and not pinned_message.send_before_menu:
             await _send_pinned_message(message.bot, db, user, pinned_message)
@@ -1143,35 +1188,13 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
 
         await db.refresh(existing_user, ['subscription'])
 
-        has_active_subscription, subscription_is_active = _calculate_subscription_flags(existing_user.subscription)
-
-        menu_text = await get_main_menu_text(existing_user, texts, db)
-
-        is_admin = settings.is_admin(existing_user.telegram_id)
-        is_moderator = (not is_admin) and SupportSettingsService.is_moderator(existing_user.telegram_id)
-
-        custom_buttons = await _get_custom_main_menu_buttons(
-            db,
-            is_admin=is_admin,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-        )
-
         try:
-            keyboard = await get_main_menu_keyboard_async(
+            await _send_main_entrypoint_message(
                 db=db,
                 user=existing_user,
-                language=existing_user.language,
-                is_admin=is_admin,
-                has_had_paid_subscription=existing_user.has_had_paid_subscription,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-                balance_kopeks=existing_user.balance_kopeks,
-                subscription=existing_user.subscription,
-                is_moderator=is_moderator,
-                custom_buttons=custom_buttons,
+                texts=texts,
+                send_answer=callback.message.answer,
             )
-            await callback.message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
             await _send_pinned_message(callback.bot, db, existing_user)
         except Exception as e:
             logger.error('Ошибка при показе главного меню существующему пользователю', error=e)
@@ -1325,37 +1348,13 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             telegram_id=user.telegram_id,
         )
 
-        has_active_subscription, subscription_is_active = _calculate_subscription_flags(
-            getattr(user, 'subscription', None)
-        )
-
-        menu_text = await get_main_menu_text(user, texts, db)
-
-        is_admin = settings.is_admin(user.telegram_id)
-        is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
-
-        custom_buttons = await _get_custom_main_menu_buttons(
-            db,
-            is_admin=is_admin,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-        )
-
         try:
-            keyboard = await get_main_menu_keyboard_async(
+            await _send_main_entrypoint_message(
                 db=db,
                 user=user,
-                language=user.language,
-                is_admin=is_admin,
-                has_had_paid_subscription=user.has_had_paid_subscription,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-                balance_kopeks=user.balance_kopeks,
-                subscription=user.subscription,
-                is_moderator=is_moderator,
-                custom_buttons=custom_buttons,
+                texts=texts,
+                send_answer=callback.message.answer,
             )
-            await callback.message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
             await _send_pinned_message(callback.bot, db, user)
             logger.info('✅ Главное меню показано пользователю', telegram_id=user.telegram_id)
         except Exception as e:
@@ -1390,35 +1389,13 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
 
         await db.refresh(existing_user, ['subscription'])
 
-        has_active_subscription, subscription_is_active = _calculate_subscription_flags(existing_user.subscription)
-
-        menu_text = await get_main_menu_text(existing_user, texts, db)
-
-        is_admin = settings.is_admin(existing_user.telegram_id)
-        is_moderator = (not is_admin) and SupportSettingsService.is_moderator(existing_user.telegram_id)
-
-        custom_buttons = await _get_custom_main_menu_buttons(
-            db,
-            is_admin=is_admin,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-        )
-
         try:
-            keyboard = await get_main_menu_keyboard_async(
+            await _send_main_entrypoint_message(
                 db=db,
                 user=existing_user,
-                language=existing_user.language,
-                is_admin=is_admin,
-                has_had_paid_subscription=existing_user.has_had_paid_subscription,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-                balance_kopeks=existing_user.balance_kopeks,
-                subscription=existing_user.subscription,
-                is_moderator=is_moderator,
-                custom_buttons=custom_buttons,
+                texts=texts,
+                send_answer=message.answer,
             )
-            await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
             await _send_pinned_message(message.bot, db, existing_user)
         except Exception as e:
             logger.error('Ошибка при показе главного меню существующему пользователю', error=e)
@@ -1608,37 +1585,13 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             telegram_id=user.telegram_id,
         )
 
-        has_active_subscription, subscription_is_active = _calculate_subscription_flags(
-            getattr(user, 'subscription', None)
-        )
-
-        menu_text = await get_main_menu_text(user, texts, db)
-
-        is_admin = settings.is_admin(user.telegram_id)
-        is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
-
-        custom_buttons = await _get_custom_main_menu_buttons(
-            db,
-            is_admin=is_admin,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-        )
-
         try:
-            keyboard = await get_main_menu_keyboard_async(
+            await _send_main_entrypoint_message(
                 db=db,
                 user=user,
-                language=user.language,
-                is_admin=is_admin,
-                has_had_paid_subscription=user.has_had_paid_subscription,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-                balance_kopeks=user.balance_kopeks,
-                subscription=user.subscription,
-                is_moderator=is_moderator,
-                custom_buttons=custom_buttons,
+                texts=texts,
+                send_answer=message.answer,
             )
-            await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
             logger.info('✅ Главное меню показано пользователю', telegram_id=user.telegram_id)
             await _send_pinned_message(message.bot, db, user)
         except Exception as e:
@@ -1964,50 +1917,19 @@ async def required_sub_channel_check(
             logger.info('🗑️ CHANNEL CHECK: Redis payload удален после успешной проверки подписки')
 
         if user and user.status != UserStatus.DELETED.value:
-            has_active_subscription, subscription_is_active = _calculate_subscription_flags(user.subscription)
-
-            menu_text = await get_main_menu_text(user, texts, db)
-
-            is_admin = settings.is_admin(user.telegram_id)
-            is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
-
-            custom_buttons = await _get_custom_main_menu_buttons(
-                db,
-                is_admin=is_admin,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-            )
-
-            keyboard = await get_main_menu_keyboard_async(
+            await _send_main_entrypoint_message(
                 db=db,
                 user=user,
-                language=user.language,
-                is_admin=is_admin,
-                has_had_paid_subscription=user.has_had_paid_subscription,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-                balance_kopeks=user.balance_kopeks,
-                subscription=user.subscription,
-                is_moderator=is_moderator,
-                custom_buttons=custom_buttons,
+                texts=texts,
+                send_answer=lambda text, **kwargs: bot.send_message(
+                    chat_id=query.from_user.id,
+                    text=text,
+                    **kwargs,
+                ),
+                bot=bot,
+                chat_id=query.from_user.id,
+                allow_logo=True,
             )
-
-            if settings.ENABLE_LOGO_MODE and len(menu_text) <= 900:
-                _result = await bot.send_photo(
-                    chat_id=query.from_user.id,
-                    photo=get_logo_media(),
-                    caption=menu_text,
-                    reply_markup=keyboard,
-                    parse_mode='HTML',
-                )
-                _cache_logo_file_id(_result)
-            else:
-                await bot.send_message(
-                    chat_id=query.from_user.id,
-                    text=menu_text,
-                    reply_markup=keyboard,
-                    parse_mode='HTML',
-                )
             await _send_pinned_message(bot, db, user)
         else:
             from app.keyboards.inline import get_rules_keyboard
@@ -2057,50 +1979,19 @@ async def required_sub_channel_check(
                             logger.error('Ошибка при обработке реферальной регистрации', error=e)
 
                     # Показываем главное меню после создания пользователя
-                    has_active_subscription, subscription_is_active = _calculate_subscription_flags(user.subscription)
-
-                    menu_text = await get_main_menu_text(user, texts, db)
-
-                    is_admin = settings.is_admin(user.telegram_id)
-                    is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
-
-                    custom_buttons = await _get_custom_main_menu_buttons(
-                        db,
-                        is_admin=is_admin,
-                        has_active_subscription=has_active_subscription,
-                        subscription_is_active=subscription_is_active,
-                    )
-
-                    keyboard = await get_main_menu_keyboard_async(
+                    await _send_main_entrypoint_message(
                         db=db,
                         user=user,
-                        language=user.language,
-                        is_admin=is_admin,
-                        has_had_paid_subscription=user.has_had_paid_subscription,
-                        has_active_subscription=has_active_subscription,
-                        subscription_is_active=subscription_is_active,
-                        balance_kopeks=user.balance_kopeks,
-                        subscription=user.subscription,
-                        is_moderator=is_moderator,
-                        custom_buttons=custom_buttons,
+                        texts=texts,
+                        send_answer=lambda text, **kwargs: bot.send_message(
+                            chat_id=query.from_user.id,
+                            text=text,
+                            **kwargs,
+                        ),
+                        bot=bot,
+                        chat_id=query.from_user.id,
+                        allow_logo=True,
                     )
-
-                    if settings.ENABLE_LOGO_MODE and len(menu_text) <= 900:
-                        _result = await bot.send_photo(
-                            chat_id=query.from_user.id,
-                            photo=get_logo_media(),
-                            caption=menu_text,
-                            reply_markup=keyboard,
-                            parse_mode='HTML',
-                        )
-                        _cache_logo_file_id(_result)
-                    else:
-                        await bot.send_message(
-                            chat_id=query.from_user.id,
-                            text=menu_text,
-                            reply_markup=keyboard,
-                            parse_mode='HTML',
-                        )
                     await _send_pinned_message(bot, db, user)
                 else:
                     await bot.send_message(

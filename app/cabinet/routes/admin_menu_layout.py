@@ -6,12 +6,19 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cabinet.dependencies import get_cabinet_db, get_current_admin_user
 from app.config import settings
 from app.database.models import User
 from app.services.menu_layout_service import MenuLayoutService
+from app.services.ultima_start_service import (
+    DEFAULT_BUTTON_TEXT,
+    DEFAULT_MESSAGE_TEXT,
+    get_ultima_start_config,
+    set_ultima_start_config,
+)
 from app.webapi.schemas.menu_layout import (
     ButtonClickStats,
     ButtonClickStatsResponse,
@@ -37,6 +44,18 @@ from app.webapi.schemas.menu_layout import (
 
 
 router = APIRouter(prefix='/admin/menu-layout', tags=['Admin Menu Layout'])
+
+
+class UltimaStartConfigResponse(BaseModel):
+    message_text: str
+    button_text: str
+    button_url: str
+
+
+class UltimaStartConfigUpdate(BaseModel):
+    message_text: str = Field(default=DEFAULT_MESSAGE_TEXT, min_length=1, max_length=4096)
+    button_text: str = Field(default=DEFAULT_BUTTON_TEXT, min_length=1, max_length=64)
+    button_url: str = Field(default='', max_length=1024)
 
 
 def _serialize_config(config: dict[str, Any], is_enabled: bool, updated_at: Any) -> MenuLayoutResponse:
@@ -121,6 +140,41 @@ async def reset_menu_layout(
     config = await MenuLayoutService.reset_to_default(db)
     updated_at = await MenuLayoutService.get_config_updated_at(db)
     return _serialize_config(config, settings.MENU_LAYOUT_ENABLED, updated_at)
+
+
+@router.get('/ultima-start', response_model=UltimaStartConfigResponse)
+async def get_ultima_start_settings(
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> UltimaStartConfigResponse:
+    _ = admin
+    config = await get_ultima_start_config(db)
+    return UltimaStartConfigResponse(
+        message_text=config.message_text,
+        button_text=config.button_text,
+        button_url=config.button_url,
+    )
+
+
+@router.put('/ultima-start', response_model=UltimaStartConfigResponse)
+async def update_ultima_start_settings(
+    payload: UltimaStartConfigUpdate,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> UltimaStartConfigResponse:
+    _ = admin
+    config = await set_ultima_start_config(
+        db,
+        message_text=payload.message_text,
+        button_text=payload.button_text,
+        button_url=payload.button_url,
+    )
+    await db.commit()
+    return UltimaStartConfigResponse(
+        message_text=config.message_text,
+        button_text=config.button_text,
+        button_url=config.button_url,
+    )
 
 
 @router.patch('/buttons/{button_id}', response_model=MenuButtonConfig)
