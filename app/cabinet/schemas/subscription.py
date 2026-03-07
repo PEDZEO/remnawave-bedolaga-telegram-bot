@@ -156,6 +156,7 @@ class TariffPurchaseRequest(BaseModel):
 
     tariff_id: int = Field(..., description='Tariff ID to purchase')
     period_days: int = Field(..., ge=1, le=3650, description='Period in days')
+    device_limit: int | None = Field(None, ge=1, le=100, description='Target device limit for this purchase')
     traffic_gb: int | None = Field(
         None, ge=0, le=100_000, description='Custom traffic in GB (for custom_traffic_enabled tariffs)'
     )

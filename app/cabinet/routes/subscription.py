@@ -1794,26 +1794,51 @@ async def purchase_tariff(
             traffic_limit_gb = request.traffic_gb
             price_kopeks += traffic_price_kopeks
 
-        # Проверяем, есть ли докупленные устройства при продлении того же тарифа
+        # Проверяем, есть ли докупленные устройства/новый device_limit для тарифа
         existing_subscription = await get_subscription_by_user_id(db, user.id)
         extra_devices = 0
         effective_device_limit = tariff.device_limit
-        if existing_subscription and existing_subscription.tariff_id == tariff.id:
-            extra_devices = max(0, (existing_subscription.device_limit or 0) - (tariff.device_limit or 0))
-            if extra_devices > 0:
-                effective_device_limit = existing_subscription.device_limit
-                if not is_daily_tariff:
-                    from app.utils.pricing_utils import calculate_months_from_days
+        if request.device_limit is not None:
+            effective_device_limit = request.device_limit
+        elif existing_subscription and existing_subscription.tariff_id == tariff.id:
+            effective_device_limit = max(tariff.device_limit or 1, existing_subscription.device_limit or 1)
 
-                    device_price_per_month = tariff.device_price_kopeks or settings.PRICE_PER_DEVICE
-                    months = calculate_months_from_days(period_days)
-                    extra_devices_cost = extra_devices * device_price_per_month * months
-                    # Применяем скидку промогруппы на устройства
-                    if promo_group and extra_devices_cost > 0:
-                        devices_discount_pct = promo_group.get_discount_percent('devices', period_days)
-                        if devices_discount_pct > 0:
-                            extra_devices_cost = extra_devices_cost - (extra_devices_cost * devices_discount_pct // 100)
-                    price_kopeks += extra_devices_cost
+        tariff_min_device_limit = tariff.device_limit or 1
+        if effective_device_limit < tariff_min_device_limit:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f'Минимальное количество устройств для тарифа: {tariff_min_device_limit}',
+            )
+
+        if tariff.max_device_limit and effective_device_limit > tariff.max_device_limit:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f'Максимальное количество устройств для тарифа: {tariff.max_device_limit}',
+            )
+
+        if (
+            not tariff.max_device_limit
+            and settings.MAX_DEVICES_LIMIT > 0
+            and effective_device_limit > settings.MAX_DEVICES_LIMIT
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f'Максимальное количество устройств: {settings.MAX_DEVICES_LIMIT}',
+            )
+
+        extra_devices = max(0, (effective_device_limit or 0) - (tariff.device_limit or 0))
+        if extra_devices > 0 and not is_daily_tariff:
+            from app.utils.pricing_utils import calculate_months_from_days
+
+            device_price_per_month = tariff.device_price_kopeks or settings.PRICE_PER_DEVICE
+            months = calculate_months_from_days(period_days)
+            extra_devices_cost = extra_devices * device_price_per_month * months
+            # Применяем скидку промогруппы на устройства
+            if promo_group and extra_devices_cost > 0:
+                devices_discount_pct = promo_group.get_discount_percent('devices', period_days)
+                if devices_discount_pct > 0:
+                    extra_devices_cost = extra_devices_cost - (extra_devices_cost * devices_discount_pct // 100)
+            price_kopeks += extra_devices_cost
 
         # Apply promo offer discount (temporary discount from promo offers)
         price_before_promo_offer = price_kopeks
@@ -1944,7 +1969,7 @@ async def purchase_tariff(
                 user_id=user.id,
                 duration_days=period_days,
                 traffic_limit_gb=traffic_limit_gb,
-                device_limit=tariff.device_limit,
+                device_limit=effective_device_limit,
                 connected_squads=squads,
                 tariff_id=tariff.id,
             )
