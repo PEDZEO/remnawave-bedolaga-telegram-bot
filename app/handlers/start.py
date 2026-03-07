@@ -421,9 +421,11 @@ async def _continue_registration_after_language(
     try:
         await target_message.answer(rules_text, reply_markup=get_rules_keyboard(language))
     except TelegramForbiddenError:
+        fallback_user_id = message.from_user.id if message else None
+        source_user_id = callback.from_user.id if callback else fallback_user_id
         logger.warning(
             '⚠️ Пользователь заблокировал бота, пропускаем отправку правил',
-            from_user_id=callback.from_user.id if callback else message.from_user.id,
+            from_user_id=source_user_id,
         )
         return
     await state.set_state(RegistrationStates.waiting_for_rules_accept)
@@ -689,6 +691,25 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         logger.info('🆕 Новый пользователь, начинаем регистрацию')
 
     data = await state.get_data() or {}
+
+    # Ultima mode: skip language/rules/privacy/trial onboarding for new registrations.
+    if await is_ultima_mode_enabled(db):
+        if not data.get('language'):
+            default_language = (
+                (settings.DEFAULT_LANGUAGE or DEFAULT_LANGUAGE)
+                if isinstance(settings.DEFAULT_LANGUAGE, str)
+                else DEFAULT_LANGUAGE
+            )
+            data['language'] = default_language.split('-')[0].lower()
+            await state.set_data(data)
+            logger.info(
+                'ULTIMA START: new user onboarding flow skipped, using direct registration path',
+                telegram_id=message.from_user.id,
+                language=data['language'],
+            )
+        await complete_registration(message, state, db)
+        return
+
     if not data.get('language'):
         if settings.is_language_selection_enabled():
             await _prompt_language_selection(message, state)
@@ -1316,7 +1337,10 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
 
     from app.database.crud.welcome_text import get_welcome_text_for_user
 
-    offer_text = await get_welcome_text_for_user(db, callback.from_user)
+    if await is_ultima_mode_enabled(db):
+        offer_text = None
+    else:
+        offer_text = await get_welcome_text_for_user(db, callback.from_user)
 
     if offer_text:
         try:
@@ -1546,7 +1570,10 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
 
     from app.database.crud.welcome_text import get_welcome_text_for_user
 
-    offer_text = await get_welcome_text_for_user(db, message.from_user)
+    if await is_ultima_mode_enabled(db):
+        offer_text = None
+    else:
+        offer_text = await get_welcome_text_for_user(db, message.from_user)
 
     if offer_text:
         try:
