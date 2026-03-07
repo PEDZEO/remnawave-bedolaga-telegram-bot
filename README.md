@@ -52,7 +52,7 @@ _Полнофункциональное решение с управлением
 
 ## 🧪 [Тестирование бота](https://t.me/PedzeVPN_bot?start=Git)
 
-## 💬 **[Bedolaga Chat](https://t.me/+wTdMtSWq8YdmZmVi)** - Для общения, вопросов, предложений
+## 💬 **[Bedolaga Chat](https://t.me/+0SeZ_EpPkSthMGM6)** - Для общения, вопросов, предложений
 
 ---
 
@@ -1885,7 +1885,7 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 ### 📞 **Контакты**
 
 - **💬 Telegram:** [@pedzeo](https://t.me/pedzeo) - вопросы по разработке (только по делу!)
-- **💬 Telegram Group:** [Bedolaga Chat](https://t.me/+wTdMtSWq8YdmZmVi) - общение, вопросы, предложения
+- **💬 Telegram Group:** [Bedolaga Chat](https://t.me/+0SeZ_EpPkSthMGM6) - общение, вопросы, предложения
 - **🐛 Issues:** [GitHub Issues](https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/issues) - баги и предложения
 
 ### 📚 **Полезные ресурсы**
@@ -1935,7 +1935,7 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 </td>
 <td align="center">
 <h3>💬 Присоединись к сообществу</h3>
-<a href="https://t.me/+wTdMtSWq8YdmZmVi">
+<a href="https://t.me/+0SeZ_EpPkSthMGM6">
 <img src="https://img.shields.io/badge/Telegram-Bedolaga_Chat-blue?style=for-the-badge&logo=telegram" alt="Community">
 </a>
 </td>
@@ -2162,7 +2162,7 @@ make reload-follow
 4. Убедитесь, что все контейнеры запущены
 5. Попробуйте перезапустить: `docker compose restart`
 
-Если не помогло - пишите в [чат поддержки](https://t.me/+wTdMtSWq8YdmZmVi)
+Если не помогло - пишите в [чат поддержки](https://t.me/+0SeZ_EpPkSthMGM6)
 
 </details>
 
@@ -2170,7 +2170,7 @@ make reload-follow
 
 - 🐛 **Баг?** → [GitHub Issues](https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/issues)
 - 💡 **Идея?** → [GitHub Discussions](https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/discussions)
-- 🆘 **Вопрос?** → [Bedolaga Chat](https://t.me/+wTdMtSWq8YdmZmVi)
+- 🆘 **Вопрос?** → [Bedolaga Chat](https://t.me/+0SeZ_EpPkSthMGM6)
 - 📧 **Личное?** → [@pedzeo](https://t.me/pedzeo)
 
 ---
