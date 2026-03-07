@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import uuid4
 
 import jwt
 
@@ -74,6 +75,8 @@ def create_refresh_token(user_id: int) -> str:
     payload = {
         'sub': str(user_id),
         'type': 'refresh',
+        # Ensure each refresh token is unique even within the same second.
+        'jti': uuid4().hex,
         'exp': expires,
         'iat': datetime.now(UTC),
     }
