@@ -1,5 +1,7 @@
 """Service for managing payment method display configurations in cabinet."""
 
+from typing import TYPE_CHECKING
+
 import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +12,11 @@ from app.database.models import PaymentMethodConfig, PromoGroup
 
 
 logger = structlog.get_logger(__name__)
+
+if TYPE_CHECKING:
+    from app.database.models import User
+
+DEFAULT_SUBSCRIPTION_PAYMENT_KEY = '__default_subscription_payment__'
 
 
 # ============ Default method definitions ============
@@ -305,6 +312,18 @@ async def update_config(
         if key in data:
             setattr(config, key, data[key])
 
+    # Keep only one default subscription payment method
+    sub_options = data.get('sub_options')
+    if isinstance(sub_options, dict) and sub_options.get(DEFAULT_SUBSCRIPTION_PAYMENT_KEY) is True:
+        other_configs = await get_all_configs(db)
+        for other in other_configs:
+            if other.method_id == method_id:
+                continue
+            if isinstance(other.sub_options, dict) and other.sub_options.get(DEFAULT_SUBSCRIPTION_PAYMENT_KEY):
+                updated = dict(other.sub_options)
+                updated[DEFAULT_SUBSCRIPTION_PAYMENT_KEY] = False
+                other.sub_options = updated
+
     # Update promo groups M2M if specified
     if promo_group_ids is not None:
         if promo_group_ids:
@@ -435,6 +454,9 @@ async def get_enabled_methods_for_user(
                 'max_amount_kopeks': max_amount,
                 'options': options,
                 'sort_order': config.sort_order,
+                'is_default_for_subscription': bool(
+                    isinstance(config.sub_options, dict) and config.sub_options.get(DEFAULT_SUBSCRIPTION_PAYMENT_KEY)
+                ),
             }
         )
 

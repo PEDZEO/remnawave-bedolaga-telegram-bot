@@ -1381,6 +1381,7 @@ async def _build_tariff_response(
         'is_unlimited_traffic': tariff.traffic_limit_gb == 0,
         'device_limit': actual_device_limit,
         'base_device_limit': tariff.device_limit,
+        'max_device_limit': tariff.max_device_limit,
         'extra_devices_count': extra_devices_count,
         'device_price_kopeks': device_price,
         'servers_count': servers_count,

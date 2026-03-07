@@ -57,6 +57,7 @@ class PaymentMethodResponse(BaseModel):
     max_amount_kopeks: int
     is_available: bool = True
     options: list[dict[str, Any]] | None = None
+    is_default_for_subscription: bool = False
 
 
 class TopUpRequest(BaseModel):

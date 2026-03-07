@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
 from app.services.payment_method_config_service import (
+    DEFAULT_SUBSCRIPTION_PAYMENT_KEY,
     _get_method_defaults,
     get_all_configs,
     get_all_promo_groups,
@@ -50,6 +51,7 @@ class PaymentMethodConfigResponse(BaseModel):
     promo_group_filter_mode: str
     allowed_promo_group_ids: list[int] = Field(default_factory=list)
     is_provider_configured: bool
+    is_default_for_subscription: bool = False
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -112,6 +114,9 @@ def _enrich_config(config, defaults: dict) -> PaymentMethodConfigResponse:
         promo_group_filter_mode=config.promo_group_filter_mode,
         allowed_promo_group_ids=[pg.id for pg in config.allowed_promo_groups],
         is_provider_configured=method_def.get('is_configured', False),
+        is_default_for_subscription=bool(
+            isinstance(config.sub_options, dict) and config.sub_options.get(DEFAULT_SUBSCRIPTION_PAYMENT_KEY)
+        ),
         created_at=config.created_at,
         updated_at=config.updated_at,
     )
@@ -179,7 +184,7 @@ async def update_payment_method(
 ):
     """Update a payment method configuration."""
     # Build update data dict
-    data = {}
+    data: dict[str, object] = {}
 
     if request.is_enabled is not None:
         data['is_enabled'] = request.is_enabled

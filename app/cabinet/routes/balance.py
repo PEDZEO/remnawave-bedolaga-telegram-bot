@@ -209,6 +209,7 @@ async def get_payment_methods(
                 max_amount_kopeks=method_data['max_amount_kopeks'],
                 is_available=True,
                 options=options,
+                is_default_for_subscription=bool(method_data.get('is_default_for_subscription', False)),
             )
         )
 
