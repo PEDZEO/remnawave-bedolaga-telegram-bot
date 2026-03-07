@@ -64,6 +64,7 @@ from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
 from app.utils.timezone import format_local_datetime
+from app.utils.ultima_notifications import strip_bot_menu_buttons_for_ultima
 
 
 # Кулдаун между повторными уведомлениями об автоплатеже с недостаточным балансом (6 часов)
@@ -99,6 +100,8 @@ class MonitoringService:
         """Отправляет сообщение, добавляя логотип при необходимости."""
         if not self.bot:
             raise RuntimeError('Bot instance is not available')
+
+        reply_markup = await strip_bot_menu_buttons_for_ultima(reply_markup)
 
         # Skip email-only users (no telegram_id)
         if not chat_id:

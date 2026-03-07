@@ -31,6 +31,7 @@ from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 from app.utils.pricing_utils import format_period_description
 from app.utils.timezone import format_local_datetime
+from app.utils.ultima_notifications import strip_bot_menu_buttons_for_ultima
 
 
 logger = structlog.get_logger(__name__)
@@ -559,7 +560,7 @@ async def _auto_extend_subscription(
             await bot.send_message(
                 chat_id=user.telegram_id,
                 text=full_message,
-                reply_markup=keyboard,
+                reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard),
                 parse_mode='HTML',
             )
         except Exception as error:  # pragma: no cover - defensive logging
@@ -845,7 +846,7 @@ async def _auto_purchase_tariff(
             await bot.send_message(
                 chat_id=user.telegram_id,
                 text=f'{message}\n\n{hint}',
-                reply_markup=keyboard,
+                reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard),
                 parse_mode='HTML',
             )
         except Exception as error:
@@ -1122,7 +1123,7 @@ async def _auto_purchase_daily_tariff(
             await bot.send_message(
                 chat_id=user.telegram_id,
                 text=message,
-                reply_markup=keyboard,
+                reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard),
                 parse_mode='HTML',
             )
         except Exception as error:
@@ -1381,7 +1382,7 @@ async def _auto_add_devices(
             await bot.send_message(
                 chat_id=user.telegram_id,
                 text=message,
-                reply_markup=keyboard,
+                reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard),
                 parse_mode='HTML',
             )
         except Exception as error:
@@ -1594,7 +1595,7 @@ async def _auto_add_traffic(
             await bot.send_message(
                 chat_id=user.telegram_id,
                 text=message,
-                reply_markup=keyboard,
+                reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard),
                 parse_mode='HTML',
             )
         except Exception as error:
@@ -1829,7 +1830,7 @@ async def auto_purchase_saved_cart_after_topup(
                 await bot.send_message(
                     chat_id=user.telegram_id,
                     text=full_message,
-                    reply_markup=keyboard,
+                    reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard),
                     parse_mode='HTML',
                 )
             except Exception as error:  # pragma: no cover - defensive logging

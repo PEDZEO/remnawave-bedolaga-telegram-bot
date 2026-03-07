@@ -28,6 +28,10 @@ from app.services.subscription_checkout_service import (
 from app.services.user_cart_service import user_cart_service
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.payment_logger import payment_logger as logger
+from app.utils.ultima_notifications import (
+    is_ultima_mode_enabled_cached,
+    strip_bot_menu_buttons_for_ultima,
+)
 
 
 class PaymentCommonMixin:
@@ -122,23 +126,24 @@ class PaymentCommonMixin:
                         ]
                     )
 
-        # Стандартные кнопки быстрого доступа к балансу и главному меню.
-        keyboard_rows.append(
-            [
-                build_miniapp_or_callback_button(
-                    text='💰 Мой баланс',
-                    callback_data='menu_balance',
-                )
-            ]
-        )
-        keyboard_rows.append(
-            [
-                InlineKeyboardButton(
-                    text='🏠 Главное меню',
-                    callback_data='back_to_menu',
-                )
-            ]
-        )
+        # В Ultima режиме не показываем кнопки перехода в меню бота.
+        if not await is_ultima_mode_enabled_cached():
+            keyboard_rows.append(
+                [
+                    build_miniapp_or_callback_button(
+                        text='💰 Мой баланс',
+                        callback_data='menu_balance',
+                    )
+                ]
+            )
+            keyboard_rows.append(
+                [
+                    InlineKeyboardButton(
+                        text='🏠 Главное меню',
+                        callback_data='back_to_menu',
+                    )
+                ]
+            )
 
         return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
@@ -204,7 +209,7 @@ class PaymentCommonMixin:
                 chat_id=telegram_id,
                 text=message,
                 parse_mode='HTML',
-                reply_markup=keyboard,
+                reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard),
             )
         except Exception as error:
             logger.error('Ошибка отправки уведомления пользователю', telegram_id=telegram_id, error=error)
@@ -421,7 +426,7 @@ async def send_cart_notification_after_topup(
         await bot.send_message(
             chat_id=user.telegram_id,
             text=message_text,
-            reply_markup=keyboard,
+            reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard),
             parse_mode='HTML',
         )
         sent = True

@@ -15,6 +15,7 @@ from aiogram import Bot
 
 from app.config import settings
 from app.database.models import User, UserStatus
+from app.utils.ultima_notifications import strip_bot_menu_buttons_for_ultima
 
 
 logger = structlog.get_logger(__name__)
@@ -216,11 +217,12 @@ class NotificationDeliveryService:
         try:
             from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
+            safe_markup = await strip_bot_menu_buttons_for_ultima(markup)
             await asyncio.wait_for(
                 bot.send_message(
                     chat_id=user.telegram_id,
                     text=message,
-                    reply_markup=markup,
+                    reply_markup=safe_markup,
                     parse_mode='HTML',
                 ),
                 timeout=15.0,
