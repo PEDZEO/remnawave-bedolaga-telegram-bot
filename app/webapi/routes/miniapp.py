@@ -3174,6 +3174,16 @@ async def switch_tariff_endpoint(
             upgrade_cost=upgrade_cost,
             description=description,
         )
+    else:
+        # Бесплатный переход (downgrade) — записываем в историю
+        description = f"Переход на тариф '{new_tariff.name}'"
+        await create_transaction(
+            db=db,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=0,
+            description=description,
+        )
 
     await apply_tariff_switch_to_subscription(
         db,
