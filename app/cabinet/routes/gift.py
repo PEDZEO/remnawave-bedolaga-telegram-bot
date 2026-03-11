@@ -18,6 +18,7 @@ from app.database.models import (
     Tariff,
     TransactionType,
     User,
+    UserPromoGroup,
 )
 from app.services.guest_purchase_service import (
     GuestPurchaseError,
@@ -320,7 +321,14 @@ async def create_gift_purchase(
 
     # Lock user row to prevent concurrent promo offer double-spend
     locked_result = await db.execute(
-        select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
+        select(User)
+        .options(
+            selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
+            selectinload(User.promo_group),
+        )
+        .where(User.id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     user = locked_result.scalar_one()
 
