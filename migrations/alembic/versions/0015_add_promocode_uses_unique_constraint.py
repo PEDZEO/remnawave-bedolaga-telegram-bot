@@ -29,12 +29,26 @@ def upgrade() -> None:
         )
     """)
 
-    op.create_unique_constraint(
-        'uq_promocode_uses_user_promo',
-        'promocode_uses',
-        ['user_id', 'promocode_id'],
-    )
+    # Idempotent create to avoid failures if the constraint was already added.
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'uq_promocode_uses_user_promo'
+            ) THEN
+                ALTER TABLE promocode_uses
+                ADD CONSTRAINT uq_promocode_uses_user_promo
+                UNIQUE (user_id, promocode_id);
+            END IF;
+        END
+        $$;
+    """)
 
 
 def downgrade() -> None:
-    op.drop_constraint('uq_promocode_uses_user_promo', 'promocode_uses', type_='unique')
+    op.execute("""
+        ALTER TABLE IF EXISTS promocode_uses
+        DROP CONSTRAINT IF EXISTS uq_promocode_uses_user_promo
+    """)

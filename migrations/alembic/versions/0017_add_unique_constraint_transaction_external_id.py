@@ -35,12 +35,26 @@ def upgrade() -> None:
           )
     """)
 
-    op.create_unique_constraint(
-        'uq_transaction_external_id_method',
-        'transactions',
-        ['external_id', 'payment_method'],
-    )
+    # Idempotent create to avoid failures if the constraint was already added.
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'uq_transaction_external_id_method'
+            ) THEN
+                ALTER TABLE transactions
+                ADD CONSTRAINT uq_transaction_external_id_method
+                UNIQUE (external_id, payment_method);
+            END IF;
+        END
+        $$;
+    """)
 
 
 def downgrade() -> None:
-    op.drop_constraint('uq_transaction_external_id_method', 'transactions', type_='unique')
+    op.execute("""
+        ALTER TABLE IF EXISTS transactions
+        DROP CONSTRAINT IF EXISTS uq_transaction_external_id_method
+    """)
