@@ -70,6 +70,11 @@ class BotConfigurationService:
 
     READ_ONLY_KEYS: set[str] = {'EXTERNAL_ADMIN_TOKEN', 'EXTERNAL_ADMIN_TOKEN_BOT_ID'}
     PLAIN_TEXT_KEYS: set[str] = {'EXTERNAL_ADMIN_TOKEN', 'EXTERNAL_ADMIN_TOKEN_BOT_ID'}
+    ADMIN_OVERRIDE_ENV_KEYS: set[str] = {
+        'TRIAL_DURATION_DAYS',
+        'TRIAL_TRAFFIC_LIMIT_GB',
+        'TRIAL_DEVICE_LIMIT',
+    }
 
     CATEGORY_TITLES: dict[str, str] = {
         'CORE': '🤖 Основные настройки',
@@ -1028,7 +1033,7 @@ class BotConfigurationService:
     _definitions: dict[str, SettingDefinition] = {}
     _original_values: dict[str, Any] = settings.model_dump()
     _overrides_raw: dict[str, str | None] = {}
-    _env_override_keys: set[str] = set(ENV_OVERRIDE_KEYS)
+    _env_override_keys: set[str] = set(ENV_OVERRIDE_KEYS) - ADMIN_OVERRIDE_ENV_KEYS
     _callback_tokens: dict[str, str] = {}
     _token_to_key: dict[str, str] = {}
     _choice_tokens: dict[str, dict[Any, str]] = {}
