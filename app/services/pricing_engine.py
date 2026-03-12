@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from app.config import CLASSIC_PERIOD_PRICES, PERIOD_PRICES, settings
 from app.database.crud.server_squad import get_server_squad_by_uuid
-from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.pricing_utils import calculate_months_from_days
+from app.utils.promo_offer import get_user_active_promo_discount_percent
+
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.database.models import Subscription, User
+
 
 logger = structlog.get_logger()
 
@@ -25,7 +33,7 @@ class RenewalPricing:
     final_total: int  # kopeks — amount to charge
     period_days: int
     is_tariff_mode: bool
-    breakdown: dict = field(default_factory=dict)
+    breakdown: dict[str, Any] = field(default_factory=dict)
 
 
 class PricingEngine:
@@ -55,7 +63,7 @@ class PricingEngine:
     async def _calculate_servers_price(
         self,
         country_uuids: list[str],
-        db,  # AsyncSession
+        db: AsyncSession,
         *,
         promo_group_id: int | None = None,
     ) -> tuple[int, list[dict]]:
@@ -136,11 +144,11 @@ class PricingEngine:
 
     async def calculate_renewal_price(
         self,
-        db,  # AsyncSession
-        subscription,
+        db: AsyncSession,
+        subscription: Subscription,
         period_days: int,
         *,
-        user=None,
+        user: User | None = None,
     ) -> RenewalPricing:
         """Calculate renewal price for a subscription.
 
@@ -158,11 +166,11 @@ class PricingEngine:
 
     async def _calculate_tariff_mode(
         self,
-        db,
-        subscription,
+        db: AsyncSession,
+        subscription: Subscription,
         period_days: int,
         *,
-        user=None,
+        user: User | None = None,
     ) -> RenewalPricing:
         """Price calculation when subscription is linked to a Tariff."""
         tariff = subscription.tariff
@@ -203,7 +211,7 @@ class PricingEngine:
             devices_price=devices_price,
             promo_group_discount=group_discount,
             promo_offer_discount=offer_discount,
-            final_total=final_total,
+            final_total=max(0, final_total),
             period_days=period_days,
             is_tariff_mode=True,
             breakdown=breakdown,
@@ -215,11 +223,11 @@ class PricingEngine:
 
     async def _calculate_classic_mode(
         self,
-        db,
-        subscription,
+        db: AsyncSession,
+        subscription: Subscription,
         period_days: int,
         *,
-        user=None,
+        user: User | None = None,
     ) -> RenewalPricing:
         """Price calculation for legacy (non-tariff) subscriptions.
 
@@ -321,7 +329,7 @@ class PricingEngine:
             devices_price=devices_price,
             promo_group_discount=total_group_discount,
             promo_offer_discount=promo_offer_discount,
-            final_total=final_total,
+            final_total=max(0, final_total),
             period_days=period_days,
             is_tariff_mode=False,
             breakdown=breakdown,

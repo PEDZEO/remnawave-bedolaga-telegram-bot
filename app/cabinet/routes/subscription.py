@@ -8,8 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import PERIOD_PRICES, settings
-from app.services.pricing_engine import PricingEngine
+from app.config import settings
 from app.database.crud.server_squad import get_server_squad_by_uuid
 from app.database.crud.subscription import (
     create_paid_subscription,
@@ -25,6 +24,7 @@ from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
 )
+from app.services.pricing_engine import PricingEngine
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_purchase_service import (
     MiniAppSubscriptionPurchaseService,
@@ -208,10 +208,26 @@ async def renew_subscription(
             detail='No subscription found',
         )
 
+    # Validate period_days against available periods (prevent arbitrary periods)
+    subscription = user.subscription
+    if subscription.tariff_id and subscription.tariff and subscription.tariff.period_prices:
+        available_periods = [int(p) for p in subscription.tariff.period_prices.keys()]
+    else:
+        available_periods = settings.get_available_renewal_periods()
+
+    if request.period_days not in available_periods:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Selected renewal period is not available',
+        )
+
     # Unified pricing via PricingEngine
     pricing_engine = PricingEngine()
     pricing = await pricing_engine.calculate_renewal_price(
-        db, user.subscription, request.period_days, user=user,
+        db,
+        subscription,
+        request.period_days,
+        user=user,
     )
     price_kopeks = pricing.final_total
     promo_offer_discount_value = pricing.promo_offer_discount
