@@ -290,7 +290,9 @@ class TributeService:
                 f'Спасибо за оплату! 🙏'
             )
 
-            await self.bot.send_message(user_id, text, reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard), parse_mode='Markdown')
+            await self.bot.send_message(
+                user_id, text, reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard), parse_mode='Markdown'
+            )
 
             # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
             from app.services.payment.common import send_cart_notification_after_topup
@@ -324,7 +326,9 @@ class TributeService:
                 ]
             )
 
-            await self.bot.send_message(user_id, text, reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard), parse_mode='Markdown')
+            await self.bot.send_message(
+                user_id, text, reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard), parse_mode='Markdown'
+            )
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о неудачном платеже', error=e)
@@ -353,7 +357,9 @@ class TributeService:
                 ]
             )
 
-            await self.bot.send_message(user_id, text, reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard), parse_mode='Markdown')
+            await self.bot.send_message(
+                user_id, text, reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard), parse_mode='Markdown'
+            )
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о возврате', error=e)

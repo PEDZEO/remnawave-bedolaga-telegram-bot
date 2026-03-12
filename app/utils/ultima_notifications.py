@@ -83,4 +83,3 @@ async def strip_bot_menu_buttons_for_ultima(markup: Any | None) -> Any | None:
         return None
 
     return InlineKeyboardMarkup(inline_keyboard=filtered_rows)
-

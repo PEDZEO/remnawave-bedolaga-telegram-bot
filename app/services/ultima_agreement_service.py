@@ -12,8 +12,7 @@ from app.database.models import SystemSetting
 
 ULTIMA_AGREEMENT_KEY = 'CABINET_ULTIMA_AGREEMENT_CONTENT'
 DEFAULT_ULTIMA_AGREEMENT_CONTENT = (
-    '<h3>Пользовательское соглашение</h3>'
-    '<p>Используя сервис, вы подтверждаете согласие с правилами использования.</p>'
+    '<h3>Пользовательское соглашение</h3><p>Используя сервис, вы подтверждаете согласие с правилами использования.</p>'
 )
 
 
