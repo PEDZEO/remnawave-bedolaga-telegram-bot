@@ -244,6 +244,8 @@ async def get_tariff(
         daily_price_kopeks=tariff.daily_price_kopeks,
         # Режим сброса трафика
         traffic_reset_mode=tariff.traffic_reset_mode,
+        # Внешний сквад
+        external_squad_uuid=tariff.external_squad_uuid,
         created_at=tariff.created_at,
         updated_at=tariff.updated_at,
     )
@@ -299,6 +301,8 @@ async def create_new_tariff(
         daily_price_kopeks=request.daily_price_kopeks,
         # Режим сброса трафика
         traffic_reset_mode=request.traffic_reset_mode,
+        # Внешний сквад
+        external_squad_uuid=request.external_squad_uuid,
     )
 
     logger.info('Admin created tariff', admin_id=admin.id, tariff_id=tariff.id, tariff_name=tariff.name)
@@ -394,6 +398,9 @@ async def update_existing_tariff(
     # Режим сброса трафика (None допускается как значение для сброса к глобальной настройке)
     if 'traffic_reset_mode' in request.model_fields_set:
         updates['traffic_reset_mode'] = request.traffic_reset_mode
+    # Внешний сквад (None допускается для сброса)
+    if 'external_squad_uuid' in request.model_fields_set:
+        updates['external_squad_uuid'] = request.external_squad_uuid
 
     if updates:
         await update_tariff(db, tariff, **updates)

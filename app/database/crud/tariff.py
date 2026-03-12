@@ -159,7 +159,6 @@ async def create_tariff(
     description: str | None = None,
     display_order: int = 0,
     is_active: bool = True,
-    show_in_gift: bool = True,
     traffic_limit_gb: int = 100,
     device_limit: int = 1,
     device_price_kopeks: int | None = None,
@@ -186,6 +185,8 @@ async def create_tariff(
     traffic_price_per_gb_kopeks: int = 0,
     min_traffic_gb: int = 1,
     max_traffic_gb: int = 1000,
+    # Видимость в разделе подарков
+    show_in_gift: bool = True,
     # Режим сброса трафика
     traffic_reset_mode: str | None = None,  # DAY, WEEK, MONTH, NO_RESET, None = глобальная настройка
 ) -> Tariff:
@@ -262,7 +263,6 @@ async def update_tariff(
     description: str | None = None,
     display_order: int | None = None,
     is_active: bool | None = None,
-    show_in_gift: bool | None = None,
     traffic_limit_gb: int | None = None,
     device_limit: int | None = None,
     device_price_kopeks: int | None = ...,  # ... = не передан, None = сбросить
@@ -289,6 +289,8 @@ async def update_tariff(
     traffic_price_per_gb_kopeks: int | None = None,
     min_traffic_gb: int | None = None,
     max_traffic_gb: int | None = None,
+    # Видимость в разделе подарков
+    show_in_gift: bool | None = None,
     # Режим сброса трафика
     traffic_reset_mode: str | None = ...,  # ... = не передан, None = сбросить к глобальной настройке
 ) -> Tariff:
