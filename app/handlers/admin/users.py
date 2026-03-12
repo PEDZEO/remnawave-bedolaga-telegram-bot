@@ -19,7 +19,6 @@ from app.database.crud.campaign import (
 from app.database.crud.promo_group import get_promo_groups_with_counts
 from app.database.crud.server_squad import (
     get_all_server_squads,
-    get_server_ids_by_uuids,
     get_server_squad_by_id,
     get_server_squad_by_uuid,
 )
@@ -4181,46 +4180,13 @@ async def _calculate_subscription_period_price(
     subscription_service: SubscriptionService | None = None,
 ) -> int:
     """Рассчитывает стоимость подписки для администратора с учётом всех параметров."""
+    from app.services.pricing_engine import PricingEngine
 
-    service = subscription_service or SubscriptionService()
-
-    connected_squads = list(subscription.connected_squads or [])
-    server_ids = []
-
-    if connected_squads:
-        try:
-            server_ids = await get_server_ids_by_uuids(db, connected_squads)
-            if len(server_ids) != len(connected_squads):
-                logger.warning(
-                    'Не удалось сопоставить все сервера подписки пользователя для расчёта цены',
-                    telegram_id=target_user.telegram_id,
-                )
-        except Exception as e:
-            logger.error(
-                'Не удалось получить идентификаторы серверов для расчёта цены подписки пользователя',
-                telegram_id=target_user.telegram_id,
-                e=e,
-            )
-            server_ids = []
-    traffic_limit_gb = subscription.traffic_limit_gb
-    if traffic_limit_gb is None:
-        traffic_limit_gb = settings.DEFAULT_TRAFFIC_LIMIT_GB
-
-    device_limit = subscription.device_limit
-    if not device_limit or device_limit < 0:
-        device_limit = settings.DEFAULT_DEVICE_LIMIT
-
-    total_price, _ = await service.calculate_subscription_price(
-        period_days=period_days,
-        traffic_gb=traffic_limit_gb,
-        server_squad_ids=server_ids,
-        devices=device_limit,
-        db=db,
-        user=target_user,
-        promo_group=target_user.promo_group,
+    pricing_engine = PricingEngine()
+    pricing = await pricing_engine.calculate_renewal_price(
+        db, subscription, period_days, user=target_user,
     )
-
-    return total_price
+    return pricing.final_total
 
 
 @admin_required
