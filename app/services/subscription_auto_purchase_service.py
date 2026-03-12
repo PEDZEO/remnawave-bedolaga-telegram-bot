@@ -226,37 +226,29 @@ async def _prepare_auto_extend_context(
         )
         return None
 
-    # Если в корзине есть tariff_id - пересчитываем цену по актуальному тарифу
+    # Fresh pricing via unified PricingEngine (no stale cart prices)
     tariff_id = cart_data.get('tariff_id')
     if tariff_id:
         tariff_id = _safe_int(tariff_id)
-        price_kopeks = await _get_tariff_price_for_period(db, user, tariff_id, period_days)
-        if price_kopeks is None:
-            # Тариф недоступен или период отсутствует - используем сохранённую цену как fallback
-            price_kopeks = _safe_int(
-                cart_data.get('total_price') or cart_data.get('price') or cart_data.get('final_price'),
-            )
-            logger.warning(
-                '🔁 Автопокупка: не удалось пересчитать цену тарифа , используем сохранённую',
-                tariff_id=tariff_id,
-                price_kopeks=price_kopeks,
-            )
-        # Добавляем стоимость докупленных устройств при продлении того же тарифа
-        elif subscription.tariff_id == tariff_id:
-            from app.database.crud.tariff import get_tariff_by_id as _get_tariff
 
-            _tariff = await _get_tariff(db, tariff_id)
-            if _tariff:
-                extra_devices = max(0, (subscription.device_limit or 0) - (_tariff.device_limit or 0))
-                if extra_devices > 0:
-                    from app.utils.pricing_utils import calculate_months_from_days
+    from app.services.pricing_engine import PricingEngine
 
-                    device_price_per_month = _tariff.device_price_kopeks or settings.PRICE_PER_DEVICE
-                    months = calculate_months_from_days(period_days)
-                    price_kopeks += extra_devices * device_price_per_month * months
-    else:
+    pricing_engine = PricingEngine()
+    try:
+        pricing = await pricing_engine.calculate_renewal_price(
+            db, subscription, period_days, user=user,
+        )
+        price_kopeks = pricing.final_total
+    except Exception as e:
+        # Fallback to saved cart price if PricingEngine fails
         price_kopeks = _safe_int(
             cart_data.get('total_price') or cart_data.get('price') or cart_data.get('final_price'),
+        )
+        logger.warning(
+            'Автопокупка: ошибка PricingEngine, используем сохранённую цену',
+            format_user_id=_format_user_id(user),
+            error=str(e),
+            fallback_price=price_kopeks,
         )
 
     if price_kopeks <= 0:
