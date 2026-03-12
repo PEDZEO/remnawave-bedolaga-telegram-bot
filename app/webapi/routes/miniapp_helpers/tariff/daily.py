@@ -33,7 +33,16 @@ async def get_daily_tariff_for_subscription(
 
 def toggle_pause_state(subscription) -> bool:
     is_currently_paused = getattr(subscription, 'is_daily_paused', False)
-    new_paused_state = not is_currently_paused
+    was_disabled = getattr(subscription, 'status', None) in (
+        SubscriptionStatus.DISABLED.value,
+        SubscriptionStatus.EXPIRED.value,
+        SubscriptionStatus.LIMITED.value,
+    )
+    # System-disabled subscriptions may not be marked as paused explicitly.
+    if was_disabled and not is_currently_paused:
+        new_paused_state = False
+    else:
+        new_paused_state = not is_currently_paused
     subscription.is_daily_paused = new_paused_state
     return new_paused_state
 
@@ -55,7 +64,11 @@ def ensure_daily_resume_allowed(
             },
         )
 
-    if subscription.status == SubscriptionStatus.DISABLED.value:
+    if subscription.status in (
+        SubscriptionStatus.DISABLED.value,
+        SubscriptionStatus.EXPIRED.value,
+        SubscriptionStatus.LIMITED.value,
+    ):
         subscription.status = SubscriptionStatus.ACTIVE.value
         subscription.last_daily_charge_at = datetime.now(UTC)
         subscription.end_date = datetime.now(UTC) + timedelta(days=1)

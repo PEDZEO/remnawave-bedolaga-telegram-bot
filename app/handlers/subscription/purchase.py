@@ -207,7 +207,15 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 
     current_time = datetime.now(UTC)
 
-    if subscription.status == 'expired' or subscription.end_date <= current_time:
+    if subscription.status == 'limited':
+        actual_status = 'limited'
+        status_display = texts.t('SUBSCRIPTION_STATUS_LIMITED', 'Трафик исчерпан')
+        status_emoji = '⚠️'
+    elif subscription.status == 'disabled':
+        actual_status = 'disabled'
+        status_display = texts.t('SUBSCRIPTION_STATUS_DISABLED', 'Приостановлена')
+        status_emoji = '⏸️'
+    elif subscription.status == 'expired' or subscription.end_date <= current_time:
         actual_status = 'expired'
         status_display = texts.t('SUBSCRIPTION_STATUS_EXPIRED', 'Истекла')
         status_emoji = '🔴'
@@ -3027,7 +3035,11 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
     from app.database.models import SubscriptionStatus
 
     was_paused = getattr(subscription, 'is_daily_paused', False)
-    is_inactive = subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.EXPIRED.value)
+    is_inactive = subscription.status in (
+        SubscriptionStatus.DISABLED.value,
+        SubscriptionStatus.EXPIRED.value,
+        SubscriptionStatus.LIMITED.value,
+    )
     needs_resume = was_paused or is_inactive
 
     # При возобновлении проверяем баланс

@@ -108,11 +108,18 @@ async def apply_tariff_switch_to_subscription(
     new_period_days: int,
     logger,
 ) -> None:
+    from app.database.crud.subscription import calc_device_limit_on_tariff_switch
+
     squads = await resolve_tariff_squads(db, new_tariff)
 
     subscription.tariff_id = new_tariff.id
     subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
-    subscription.device_limit = new_tariff.device_limit
+    subscription.device_limit = calc_device_limit_on_tariff_switch(
+        current_device_limit=subscription.device_limit,
+        old_tariff_device_limit=current_tariff.device_limit if current_tariff else None,
+        new_tariff_device_limit=new_tariff.device_limit,
+        max_device_limit=new_tariff.max_device_limit,
+    )
     subscription.connected_squads = squads
     await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
     subscription.purchased_traffic_gb = 0

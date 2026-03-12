@@ -121,6 +121,7 @@ class SubscriptionStatus(Enum):
     ACTIVE = 'active'
     EXPIRED = 'expired'
     DISABLED = 'disabled'
+    LIMITED = 'limited'
     PENDING = 'pending'
 
 
@@ -1245,6 +1246,9 @@ class Subscription(Base):
         if self.status == SubscriptionStatus.DISABLED.value:
             return 'disabled'
 
+        if self.status == SubscriptionStatus.LIMITED.value:
+            return 'limited'
+
         if self.status == SubscriptionStatus.ACTIVE.value:
             if end is None or end <= current_time:
                 return 'expired'
@@ -1269,6 +1273,8 @@ class Subscription(Base):
             return '🟢 Активна'
         if actual_status == 'disabled':
             return '⚫ Отключена'
+        if actual_status == 'limited':
+            return '⚠️ Трафик исчерпан'
         if actual_status == 'trial':
             return '🎯 Тестовая'
 
@@ -1286,6 +1292,8 @@ class Subscription(Base):
             return '💎'
         if actual_status == 'disabled':
             return '⚫'
+        if actual_status == 'limited':
+            return '⚠️'
         if actual_status == 'trial':
             return '🎁'
 
@@ -1334,7 +1342,7 @@ class Subscription(Base):
         else:
             self.end_date = datetime.now(UTC) + timedelta(days=days)
 
-        if self.status == SubscriptionStatus.EXPIRED.value:
+        if self.status in (SubscriptionStatus.EXPIRED.value, SubscriptionStatus.LIMITED.value):
             self.status = SubscriptionStatus.ACTIVE.value
 
     def add_traffic(self, gb: int):
