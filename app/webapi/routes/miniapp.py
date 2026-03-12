@@ -1083,6 +1083,1542 @@ async def get_payment_statuses(
     return MiniAppPaymentStatusResponse(results=results)
 
 
+async def _resolve_payment_status_entry(
+    *,
+    payment_service: PaymentService,
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+) -> MiniAppPaymentStatusResult:
+    method = (query.method or '').strip().lower()
+    if not method:
+        return MiniAppPaymentStatusResult(
+            method='',
+            status='unknown',
+            message='Payment method is required',
+        )
+
+    if method in {'yookassa', 'yookassa_sbp'}:
+        return await _resolve_yookassa_payment_status(
+            db,
+            user,
+            query,
+            method=method,
+        )
+    if method == 'mulenpay':
+        return await _resolve_mulenpay_payment_status(payment_service, db, user, query)
+    if method == 'platega':
+        return await _resolve_platega_payment_status(payment_service, db, user, query)
+    if method == 'wata':
+        return await _resolve_wata_payment_status(payment_service, db, user, query)
+    if method == 'pal24':
+        return await _resolve_pal24_payment_status(payment_service, db, user, query)
+    if method == 'cryptobot':
+        return await _resolve_cryptobot_payment_status(db, user, query)
+    if method == 'heleket':
+        return await _resolve_heleket_payment_status(db, user, query)
+    if method == 'cloudpayments':
+        return await _resolve_cloudpayments_payment_status(db, user, query)
+    if method == 'freekassa':
+        return await _resolve_freekassa_payment_status(db, user, query)
+    if method == 'stars':
+        return await _resolve_stars_payment_status(db, user, query)
+    if method == 'tribute':
+        return await _resolve_tribute_payment_status(db, user, query)
+
+    return MiniAppPaymentStatusResult(
+        method=method,
+        status='unknown',
+        message='Unsupported payment method',
+    )
+
+
+async def _resolve_yookassa_payment_status(
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+    *,
+    method: str = 'yookassa',
+) -> MiniAppPaymentStatusResult:
+    from app.database.crud.yookassa import (
+        get_yookassa_payment_by_id,
+        get_yookassa_payment_by_local_id,
+    )
+
+    payment = None
+    if query.local_payment_id:
+        payment = await get_yookassa_payment_by_local_id(db, query.local_payment_id)
+    if not payment and query.payment_id:
+        payment = await get_yookassa_payment_by_id(db, query.payment_id)
+
+    if not payment or payment.user_id != user.id:
+        return MiniAppPaymentStatusResult(
+            method=method,
+            status='pending',
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message='Payment not found',
+            extra={
+                'local_payment_id': query.local_payment_id,
+                'payment_id': query.payment_id,
+                'invoice_id': query.payment_id,
+                'payload': query.payload,
+                'started_at': query.started_at,
+            },
+        )
+
+    succeeded = bool(payment.is_paid and (payment.status or '').lower() == 'succeeded')
+    status = _classify_status(payment.status, succeeded)
+    completed_at = payment.captured_at or payment.updated_at or payment.created_at
+
+    return MiniAppPaymentStatusResult(
+        method=method,
+        status=status,
+        is_paid=status == 'paid',
+        amount_kopeks=payment.amount_kopeks,
+        currency=payment.currency,
+        completed_at=completed_at,
+        transaction_id=payment.transaction_id,
+        external_id=payment.yookassa_payment_id,
+        extra={
+            'status': payment.status,
+            'is_paid': payment.is_paid,
+            'local_payment_id': payment.id,
+            'payment_id': payment.yookassa_payment_id,
+            'invoice_id': payment.yookassa_payment_id,
+            'payload': query.payload,
+            'started_at': query.started_at,
+        },
+    )
+
+
+async def _resolve_mulenpay_payment_status(
+    payment_service: PaymentService,
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+) -> MiniAppPaymentStatusResult:
+    if not query.local_payment_id:
+        return MiniAppPaymentStatusResult(
+            method='mulenpay',
+            status='pending',
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message='Missing payment identifier',
+            extra={
+                'local_payment_id': query.local_payment_id,
+                'invoice_id': query.invoice_id,
+                'payment_id': query.payment_id,
+                'payload': query.payload,
+                'started_at': query.started_at,
+            },
+        )
+
+    status_info = await payment_service.get_mulenpay_payment_status(db, query.local_payment_id)
+    payment = status_info.get('payment') if status_info else None
+
+    if not payment or payment.user_id != user.id:
+        return MiniAppPaymentStatusResult(
+            method='mulenpay',
+            status='pending',
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message='Payment not found',
+            extra={
+                'local_payment_id': query.local_payment_id,
+                'invoice_id': query.invoice_id,
+                'payment_id': query.payment_id,
+                'payload': query.payload,
+                'started_at': query.started_at,
+            },
+        )
+
+    status_raw = status_info.get('status') or payment.status
+    is_paid = bool(payment.is_paid)
+    status = _classify_status(status_raw, is_paid)
+    completed_at = payment.paid_at or payment.updated_at or payment.created_at
+    message = None
+    if status == 'failed':
+        remote_status = status_info.get('remote_status_code') or status_raw
+        if remote_status:
+            message = f'Status: {remote_status}'
+
+    return MiniAppPaymentStatusResult(
+        method='mulenpay',
+        status=status,
+        is_paid=status == 'paid',
+        amount_kopeks=payment.amount_kopeks,
+        currency=payment.currency,
+        completed_at=completed_at,
+        transaction_id=payment.transaction_id,
+        external_id=str(payment.mulen_payment_id or payment.uuid),
+        message=message,
+        extra={
+            'status': payment.status,
+            'remote_status': status_info.get('remote_status_code'),
+            'local_payment_id': payment.id,
+            'payment_id': payment.mulen_payment_id,
+            'uuid': str(payment.uuid),
+            'payload': query.payload,
+            'started_at': query.started_at,
+        },
+    )
+
+
+async def _resolve_platega_payment_status(
+    payment_service: PaymentService,
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+) -> MiniAppPaymentStatusResult:
+    from app.database.crud.platega import (
+        get_platega_payment_by_correlation_id,
+        get_platega_payment_by_id,
+        get_platega_payment_by_transaction_id,
+    )
+
+    payment = None
+    local_id = query.local_payment_id
+    if local_id:
+        payment = await get_platega_payment_by_id(db, local_id)
+
+    if not payment and query.payment_id:
+        payment = await get_platega_payment_by_transaction_id(db, query.payment_id)
+
+    if not payment and query.payload:
+        correlation = str(query.payload).replace('platega:', '')
+        payment = await get_platega_payment_by_correlation_id(db, correlation)
+
+    if not payment or payment.user_id != user.id:
+        return MiniAppPaymentStatusResult(
+            method='platega',
+            status='pending',
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message='Payment not found',
+            extra={
+                'local_payment_id': query.local_payment_id,
+                'payment_id': query.payment_id,
+                'payload': query.payload,
+                'started_at': query.started_at,
+            },
+        )
+
+    status_info = await payment_service.get_platega_payment_status(db, payment.id)
+    refreshed_payment = (status_info or {}).get('payment') or payment
+
+    status_raw = (status_info or {}).get('status') or getattr(payment, 'status', None)
+    is_paid_flag = bool((status_info or {}).get('is_paid') or getattr(payment, 'is_paid', False))
+    status_value = _classify_status(status_raw, is_paid_flag)
+
+    completed_at = (
+        getattr(refreshed_payment, 'paid_at', None)
+        or getattr(refreshed_payment, 'updated_at', None)
+        or getattr(refreshed_payment, 'created_at', None)
+    )
+
+    extra: dict[str, Any] = {
+        'local_payment_id': refreshed_payment.id,
+        'payment_id': refreshed_payment.platega_transaction_id,
+        'correlation_id': refreshed_payment.correlation_id,
+        'status': status_raw,
+        'is_paid': getattr(refreshed_payment, 'is_paid', False),
+        'payload': query.payload,
+        'started_at': query.started_at,
+    }
+
+    if status_info and status_info.get('remote'):
+        extra['remote'] = status_info.get('remote')
+
+    return MiniAppPaymentStatusResult(
+        method='platega',
+        status=status_value,
+        is_paid=status_value == 'paid',
+        amount_kopeks=refreshed_payment.amount_kopeks,
+        currency=refreshed_payment.currency,
+        completed_at=completed_at,
+        transaction_id=refreshed_payment.transaction_id,
+        external_id=refreshed_payment.platega_transaction_id,
+        message=None,
+        extra=extra,
+    )
+
+
+async def _resolve_wata_payment_status(
+    payment_service: PaymentService,
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+) -> MiniAppPaymentStatusResult:
+    local_id = query.local_payment_id
+    payment_link_id = query.payment_link_id or query.payment_id or query.invoice_id
+    fallback_payment = None
+
+    if not local_id and payment_link_id:
+        fallback_payment = await get_wata_payment_by_link_id(db, payment_link_id)
+        if fallback_payment:
+            local_id = fallback_payment.id
+
+    if not local_id:
+        return MiniAppPaymentStatusResult(
+            method='wata',
+            status='pending',
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message='Missing payment identifier',
+            extra={
+                'local_payment_id': query.local_payment_id,
+                'payment_link_id': payment_link_id,
+                'payment_id': query.payment_id,
+                'invoice_id': query.invoice_id,
+                'payload': query.payload,
+                'started_at': query.started_at,
+            },
+        )
+
+    status_info = await payment_service.get_wata_payment_status(db, local_id)
+    payment = (status_info or {}).get('payment') or fallback_payment
+
+    if not payment or payment.user_id != user.id:
+        return MiniAppPaymentStatusResult(
+            method='wata',
+            status='pending',
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message='Payment not found',
+            extra={
+                'local_payment_id': local_id,
+                'payment_link_id': (payment_link_id or getattr(payment, 'payment_link_id', None)),
+                'payment_id': query.payment_id,
+                'invoice_id': query.invoice_id,
+                'payload': query.payload,
+                'started_at': query.started_at,
+            },
+        )
+
+    remote_link = (status_info or {}).get('remote_link') if status_info else None
+    transaction_payload = (status_info or {}).get('transaction') if status_info else None
+    status_raw = (status_info or {}).get('status') or getattr(payment, 'status', None)
+    is_paid_flag = bool((status_info or {}).get('is_paid') or getattr(payment, 'is_paid', False))
+    status_value = _classify_status(status_raw, is_paid_flag)
+    completed_at = (
+        getattr(payment, 'paid_at', None)
+        or getattr(payment, 'updated_at', None)
+        or getattr(payment, 'created_at', None)
+    )
+
+    message = None
+    if status_value == 'failed':
+        message = (
+            (transaction_payload or {}).get('errorDescription')
+            or (transaction_payload or {}).get('errorCode')
+            or (remote_link or {}).get('status')
+        )
+
+    extra: dict[str, Any] = {
+        'local_payment_id': payment.id,
+        'payment_link_id': payment.payment_link_id,
+        'payment_id': payment.payment_link_id,
+        'status': status_raw,
+        'is_paid': getattr(payment, 'is_paid', False),
+        'order_id': getattr(payment, 'order_id', None),
+        'payload': query.payload,
+        'started_at': query.started_at,
+    }
+    if remote_link:
+        extra['remote_link'] = remote_link
+    if transaction_payload:
+        extra['transaction'] = transaction_payload
+
+    return MiniAppPaymentStatusResult(
+        method='wata',
+        status=status_value,
+        is_paid=status_value == 'paid',
+        amount_kopeks=payment.amount_kopeks,
+        currency=payment.currency,
+        completed_at=completed_at,
+        transaction_id=payment.transaction_id,
+        external_id=payment.payment_link_id,
+        message=message,
+        extra=extra,
+    )
+
+
+async def _resolve_pal24_payment_status(
+    payment_service: PaymentService,
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+) -> MiniAppPaymentStatusResult:
+    from app.database.crud.pal24 import get_pal24_payment_by_bill_id
+
+    local_id = query.local_payment_id
+    if not local_id and query.invoice_id:
+        payment_by_bill = await get_pal24_payment_by_bill_id(db, query.invoice_id)
+        if payment_by_bill and payment_by_bill.user_id == user.id:
+            local_id = payment_by_bill.id
+
+    if not local_id:
+        return MiniAppPaymentStatusResult(
+            method='pal24',
+            status='pending',
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message='Missing payment identifier',
+            extra={
+                'local_payment_id': query.local_payment_id,
+                'bill_id': query.invoice_id,
+                'order_id': None,
+                'payload': query.payload,
+                'started_at': query.started_at,
+            },
+        )
+
+    status_info = await payment_service.get_pal24_payment_status(db, local_id)
+    payment = status_info.get('payment') if status_info else None
+
+    if not payment or payment.user_id != user.id:
+        return MiniAppPaymentStatusResult(
+            method='pal24',
+            status='pending',
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message='Payment not found',
+            extra={
+                'local_payment_id': local_id,
+                'bill_id': query.invoice_id,
+                'order_id': None,
+                'payload': query.payload,
+                'started_at': query.started_at,
+            },
+        )
+
+    status_raw = status_info.get('status') or payment.status
+    is_paid = bool(payment.is_paid)
+    status = _classify_status(status_raw, is_paid)
+    completed_at = payment.paid_at or payment.updated_at or payment.created_at
+    message = None
+    if status == 'failed':
+        remote_status = status_info.get('remote_status') or status_raw
+        if remote_status:
+            message = f'Status: {remote_status}'
+
+    links_info = status_info.get('links') if status_info else {}
+
+    return MiniAppPaymentStatusResult(
+        method='pal24',
+        status=status,
+        is_paid=status == 'paid',
+        amount_kopeks=payment.amount_kopeks,
+        currency=payment.currency,
+        completed_at=completed_at,
+        transaction_id=payment.transaction_id,
+        external_id=payment.bill_id,
+        message=message,
+        extra={
+            'status': payment.status,
+            'remote_status': status_info.get('remote_status'),
+            'local_payment_id': payment.id,
+            'bill_id': payment.bill_id,
+            'order_id': payment.order_id,
+            'payment_method': getattr(payment, 'payment_method', None),
+            'payload': query.payload,
+            'started_at': query.started_at,
+            'links': links_info or None,
+            'sbp_url': status_info.get('sbp_url') if status_info else None,
+            'card_url': status_info.get('card_url') if status_info else None,
+            'link_url': status_info.get('link_url') if status_info else None,
+            'link_page_url': status_info.get('link_page_url') if status_info else None,
+            'primary_url': status_info.get('primary_url') if status_info else None,
+            'secondary_url': status_info.get('secondary_url') if status_info else None,
+            'selected_method': status_info.get('selected_method') if status_info else None,
+        },
+    )
+
+
+async def _resolve_cryptobot_payment_status(
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+) -> MiniAppPaymentStatusResult:
+    from app.database.crud.cryptobot import (
+        get_cryptobot_payment_by_id,
+        get_cryptobot_payment_by_invoice_id,
+    )
+
+    payment = None
+    if query.local_payment_id:
+        payment = await get_cryptobot_payment_by_id(db, query.local_payment_id)
+    if not payment and query.invoice_id:
+        payment = await get_cryptobot_payment_by_invoice_id(db, query.invoice_id)
+
+    if not payment or payment.user_id != user.id:
+        return MiniAppPaymentStatusResult(
+            method='cryptobot',
+            status='pending',
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message='Payment not found',
+            extra={
+                'local_payment_id': query.local_payment_id,
+                'invoice_id': query.invoice_id,
+                'payment_id': query.payment_id,
+                'payload': query.payload,
+                'started_at': query.started_at,
+            },
+        )
+
+    status_raw = payment.status
+    is_paid = (status_raw or '').lower() == 'paid'
+    status = _classify_status(status_raw, is_paid)
+    completed_at = payment.paid_at or payment.updated_at or payment.created_at
+
+    amount_kopeks = None
+    try:
+        amount_kopeks = int(Decimal(payment.amount) * Decimal(100))
+    except (InvalidOperation, TypeError):
+        amount_kopeks = None
+
+    descriptor = decode_payment_payload(getattr(payment, 'payload', '') or '', expected_user_id=user.id)
+    purpose = 'subscription_renewal' if descriptor else 'balance_topup'
+
+    return MiniAppPaymentStatusResult(
+        method='cryptobot',
+        status=status,
+        is_paid=status == 'paid',
+        amount_kopeks=amount_kopeks,
+        currency=payment.asset,
+        completed_at=completed_at,
+        transaction_id=payment.transaction_id,
+        external_id=payment.invoice_id,
+        extra={
+            'status': payment.status,
+            'asset': payment.asset,
+            'local_payment_id': payment.id,
+            'invoice_id': payment.invoice_id,
+            'payload': query.payload,
+            'started_at': query.started_at,
+            'purpose': purpose,
+            'subscription_id': descriptor.subscription_id if descriptor else None,
+            'period_days': descriptor.period_days if descriptor else None,
+        },
+    )
+
+
+async def _resolve_heleket_payment_status(
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+) -> MiniAppPaymentStatusResult:
+    from app.database.crud.heleket import (
+        get_heleket_payment_by_id,
+        get_heleket_payment_by_order_id,
+        get_heleket_payment_by_uuid,
+    )
+
+    payment = None
+    if query.local_payment_id:
+        payment = await get_heleket_payment_by_id(db, query.local_payment_id)
+    if not payment and query.payment_id:
+        payment = await get_heleket_payment_by_uuid(db, query.payment_id)
+    if not payment and query.invoice_id:
+        payment = await get_heleket_payment_by_uuid(db, query.invoice_id)
+    if not payment and query.bill_id:
+        payment = await get_heleket_payment_by_order_id(db, query.bill_id)
+
+    if not payment or payment.user_id != user.id:
+        return MiniAppPaymentStatusResult(
+            method='heleket',
+            status='pending',
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message='Payment not found',
+            extra={
+                'local_payment_id': query.local_payment_id,
+                'uuid': query.payment_id or query.invoice_id,
+                'order_id': query.bill_id,
+                'payload': query.payload,
+                'started_at': query.started_at,
+            },
+        )
+
+    status_raw = payment.status
+    is_paid = bool(payment.is_paid)
+    status = _classify_status(status_raw, is_paid)
+    completed_at = payment.paid_at or payment.updated_at or payment.created_at
+
+    return MiniAppPaymentStatusResult(
+        method='heleket',
+        status=status,
+        is_paid=status == 'paid',
+        amount_kopeks=payment.amount_kopeks,
+        currency=payment.currency,
+        completed_at=completed_at,
+        transaction_id=payment.transaction_id,
+        external_id=payment.uuid,
+        message=None,
+        extra={
+            'status': payment.status,
+            'local_payment_id': payment.id,
+            'uuid': payment.uuid,
+            'order_id': payment.order_id,
+            'payer_amount': payment.payer_amount,
+            'payer_currency': payment.payer_currency,
+            'discount_percent': payment.discount_percent,
+            'exchange_rate': payment.exchange_rate,
+            'payment_url': payment.payment_url,
+            'payload': query.payload,
+            'started_at': query.started_at,
+        },
+    )
+
+
+async def _resolve_cloudpayments_payment_status(
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+) -> MiniAppPaymentStatusResult:
+    from app.database.crud.cloudpayments import (
+        get_cloudpayments_payment_by_id,
+        get_cloudpayments_payment_by_invoice_id,
+    )
+
+    payment = None
+    if query.local_payment_id:
+        payment = await get_cloudpayments_payment_by_id(db, query.local_payment_id)
+    if not payment and query.invoice_id:
+        payment = await get_cloudpayments_payment_by_invoice_id(db, query.invoice_id)
+    if not payment and query.payment_id:
+        payment = await get_cloudpayments_payment_by_invoice_id(db, query.payment_id)
+
+    if not payment or payment.user_id != user.id:
+        return MiniAppPaymentStatusResult(
+            method='cloudpayments',
+            status='pending',
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message='Payment not found',
+            extra={
+                'local_payment_id': query.local_payment_id,
+                'invoice_id': query.invoice_id,
+                'payload': query.payload,
+                'started_at': query.started_at,
+            },
+        )
+
+    status_raw = payment.status
+    is_paid = bool(payment.is_paid)
+    status = _classify_status(status_raw, is_paid)
+    completed_at = payment.paid_at or payment.updated_at or payment.created_at
+
+    return MiniAppPaymentStatusResult(
+        method='cloudpayments',
+        status=status,
+        is_paid=status == 'paid',
+        amount_kopeks=payment.amount_kopeks,
+        currency=payment.currency,
+        completed_at=completed_at,
+        transaction_id=payment.transaction_id,
+        external_id=payment.invoice_id,
+        message=None,
+        extra={
+            'status': payment.status,
+            'local_payment_id': payment.id,
+            'invoice_id': payment.invoice_id,
+            'transaction_id_cp': payment.transaction_id_cp,
+            'card_type': payment.card_type,
+            'card_last_four': payment.card_last_four,
+            'payment_url': payment.payment_url,
+            'payload': query.payload,
+            'started_at': query.started_at,
+        },
+    )
+
+
+async def _resolve_freekassa_payment_status(
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+) -> MiniAppPaymentStatusResult:
+    from app.database.crud.freekassa import (
+        get_freekassa_payment_by_id,
+        get_freekassa_payment_by_order_id,
+    )
+
+    payment = None
+    if query.local_payment_id:
+        payment = await get_freekassa_payment_by_id(db, query.local_payment_id)
+    if not payment and query.payment_id:
+        payment = await get_freekassa_payment_by_order_id(db, query.payment_id)
+
+    if not payment or payment.user_id != user.id:
+        return MiniAppPaymentStatusResult(
+            method='freekassa',
+            status='pending',
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message='Payment not found',
+            extra={
+                'local_payment_id': query.local_payment_id,
+                'order_id': query.payment_id,
+                'payload': query.payload,
+                'started_at': query.started_at,
+            },
+        )
+
+    status_raw = payment.status
+    is_paid = bool(payment.is_paid)
+    status = _classify_status(status_raw, is_paid)
+    completed_at = payment.paid_at or payment.updated_at or payment.created_at
+
+    return MiniAppPaymentStatusResult(
+        method='freekassa',
+        status=status,
+        is_paid=status == 'paid',
+        amount_kopeks=payment.amount_kopeks,
+        currency=payment.currency,
+        completed_at=completed_at,
+        transaction_id=payment.transaction_id,
+        external_id=payment.freekassa_order_id,
+        message=None,
+        extra={
+            'status': payment.status,
+            'local_payment_id': payment.id,
+            'order_id': payment.order_id,
+            'freekassa_order_id': payment.freekassa_order_id,
+            'payment_url': payment.payment_url,
+            'payload': query.payload,
+            'started_at': query.started_at,
+        },
+    )
+
+
+async def _resolve_stars_payment_status(
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+) -> MiniAppPaymentStatusResult:
+    started_at = _parse_client_timestamp(query.started_at)
+    transaction = await _find_recent_deposit(
+        db,
+        user_id=user.id,
+        payment_method=PaymentMethod.TELEGRAM_STARS,
+        amount_kopeks=query.amount_kopeks,
+        started_at=started_at,
+    )
+
+    if not transaction:
+        return MiniAppPaymentStatusResult(
+            method='stars',
+            status='pending',
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message='Waiting for confirmation',
+            extra={
+                'payload': query.payload,
+                'started_at': query.started_at,
+            },
+        )
+
+    return MiniAppPaymentStatusResult(
+        method='stars',
+        status='paid',
+        is_paid=True,
+        amount_kopeks=transaction.amount_kopeks,
+        currency='RUB',
+        completed_at=transaction.completed_at or transaction.created_at,
+        transaction_id=transaction.id,
+        external_id=transaction.external_id,
+        extra={
+            'payload': query.payload,
+            'started_at': query.started_at,
+        },
+    )
+
+
+async def _resolve_tribute_payment_status(
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+) -> MiniAppPaymentStatusResult:
+    started_at = _parse_client_timestamp(query.started_at)
+    transaction = await _find_recent_deposit(
+        db,
+        user_id=user.id,
+        payment_method=PaymentMethod.TRIBUTE,
+        amount_kopeks=query.amount_kopeks,
+        started_at=started_at,
+    )
+
+    if not transaction:
+        return MiniAppPaymentStatusResult(
+            method='tribute',
+            status='pending',
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message='Waiting for confirmation',
+            extra={
+                'payload': query.payload,
+                'started_at': query.started_at,
+            },
+        )
+
+    return MiniAppPaymentStatusResult(
+        method='tribute',
+        status='paid',
+        is_paid=True,
+        amount_kopeks=transaction.amount_kopeks,
+        currency='RUB',
+        completed_at=transaction.completed_at or transaction.created_at,
+        transaction_id=transaction.id,
+        external_id=transaction.external_id,
+        extra={
+            'payload': query.payload,
+            'started_at': query.started_at,
+        },
+    )
+
+
+_TEMPLATE_ID_PATTERN = re.compile(r'promo_template_(?P<template_id>\d+)$')
+_OFFER_TYPE_ICONS = {
+    'extend_discount': '💎',
+    'purchase_discount': '🎯',
+    'test_access': '🧪',
+}
+_EFFECT_TYPE_ICONS = {
+    'percent_discount': '🎁',
+    'test_access': '🧪',
+    'balance_bonus': '💰',
+}
+_DEFAULT_OFFER_ICON = '🎉'
+
+ActiveOfferContext = tuple[Any, int | None, datetime | None]
+
+
+def _extract_template_id(notification_type: str | None) -> int | None:
+    if not notification_type:
+        return None
+
+    match = _TEMPLATE_ID_PATTERN.match(notification_type)
+    if not match:
+        return None
+
+    try:
+        return int(match.group('template_id'))
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_offer_extra(offer: Any) -> dict[str, Any]:
+    extra = getattr(offer, 'extra_data', None)
+    return extra if isinstance(extra, dict) else {}
+
+
+def _extract_offer_type(offer: Any, template: PromoOfferTemplate | None) -> str | None:
+    extra = _extract_offer_extra(offer)
+    offer_type = extra.get('offer_type') if isinstance(extra.get('offer_type'), str) else None
+    if offer_type:
+        return offer_type
+    template_type = getattr(template, 'offer_type', None)
+    return template_type if isinstance(template_type, str) else None
+
+
+def _normalize_effect_type(effect_type: str | None) -> str:
+    normalized = (effect_type or 'percent_discount').strip().lower()
+    if normalized == 'balance_bonus':
+        return 'percent_discount'
+    return normalized or 'percent_discount'
+
+
+def _determine_offer_icon(offer_type: str | None, effect_type: str) -> str:
+    if offer_type and offer_type in _OFFER_TYPE_ICONS:
+        return _OFFER_TYPE_ICONS[offer_type]
+    if effect_type in _EFFECT_TYPE_ICONS:
+        return _EFFECT_TYPE_ICONS[effect_type]
+    return _DEFAULT_OFFER_ICON
+
+
+def _extract_offer_test_squad_uuids(offer: Any) -> list[str]:
+    extra = _extract_offer_extra(offer)
+    raw = extra.get('test_squad_uuids') or extra.get('squads') or []
+
+    if isinstance(raw, str):
+        raw = [raw]
+
+    uuids: list[str] = []
+    try:
+        for item in raw:
+            if not item:
+                continue
+            uuids.append(str(item))
+    except TypeError:
+        return []
+
+    return uuids
+
+
+def _format_offer_message(
+    template: PromoOfferTemplate | None,
+    offer: Any,
+    *,
+    server_name: str | None = None,
+) -> str | None:
+    message_template: str | None = None
+
+    if template and isinstance(template.message_text, str):
+        message_template = template.message_text
+    else:
+        extra = _extract_offer_extra(offer)
+        raw_message = extra.get('message_text') or extra.get('text')
+        if isinstance(raw_message, str):
+            message_template = raw_message
+
+    if not message_template:
+        return None
+
+    extra = _extract_offer_extra(offer)
+    discount_percent = getattr(offer, 'discount_percent', None)
+    try:
+        discount_percent = int(discount_percent)
+    except (TypeError, ValueError):
+        discount_percent = None
+
+    replacements: dict[str, Any] = {}
+    if discount_percent is not None:
+        replacements.setdefault('discount_percent', discount_percent)
+
+    for key in ('valid_hours', 'active_discount_hours', 'test_duration_hours'):
+        value = extra.get(key)
+        if value is None and template is not None:
+            template_value = getattr(template, key, None)
+        else:
+            template_value = None
+        replacements.setdefault(key, value if value is not None else template_value)
+
+    if replacements.get('active_discount_hours') is None and template:
+        replacements['active_discount_hours'] = getattr(template, 'valid_hours', None)
+
+    if replacements.get('test_duration_hours') is None and template:
+        replacements['test_duration_hours'] = getattr(template, 'test_duration_hours', None)
+
+    if server_name:
+        replacements.setdefault('server_name', server_name)
+
+    for key, value in extra.items():
+        if isinstance(key, str) and key not in replacements and isinstance(value, (str, int, float)):
+            replacements[key] = value
+
+    try:
+        return message_template.format(**replacements)
+    except Exception:  # pragma: no cover - fallback for malformed templates
+        return message_template
+
+
+def _extract_offer_duration_hours(
+    offer: Any,
+    template: PromoOfferTemplate | None,
+    effect_type: str,
+) -> int | None:
+    extra = _extract_offer_extra(offer)
+    if effect_type == 'test_access':
+        source = extra.get('test_duration_hours')
+        if source is None and template is not None:
+            source = getattr(template, 'test_duration_hours', None)
+    else:
+        source = extra.get('active_discount_hours')
+        if source is None and template is not None:
+            source = getattr(template, 'active_discount_hours', None)
+
+    try:
+        if source is None:
+            return None
+        hours = int(float(source))
+        return hours if hours > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _format_bonus_label(amount_kopeks: int) -> str | None:
+    if amount_kopeks <= 0:
+        return None
+    try:
+        return settings.format_price(amount_kopeks)
+    except Exception:  # pragma: no cover - defensive
+        return f'{amount_kopeks / 100:.2f}'
+
+
+async def _find_active_test_access_offers(
+    db: AsyncSession,
+    subscription: Subscription | None,
+) -> list[ActiveOfferContext]:
+    if not subscription or not getattr(subscription, 'id', None):
+        return []
+
+    now = datetime.now(UTC)
+    result = await db.execute(
+        select(SubscriptionTemporaryAccess)
+        .options(selectinload(SubscriptionTemporaryAccess.offer))
+        .where(
+            SubscriptionTemporaryAccess.subscription_id == subscription.id,
+            SubscriptionTemporaryAccess.is_active == True,
+            SubscriptionTemporaryAccess.expires_at > now,
+        )
+        .order_by(SubscriptionTemporaryAccess.expires_at.desc())
+    )
+
+    entries = list(result.scalars().all())
+    if not entries:
+        return []
+
+    offer_map: dict[int, tuple[Any, datetime | None]] = {}
+    for entry in entries:
+        offer = getattr(entry, 'offer', None)
+        if not offer:
+            continue
+
+        effect_type = _normalize_effect_type(getattr(offer, 'effect_type', None))
+        if effect_type != 'test_access':
+            continue
+
+        expires_at = getattr(entry, 'expires_at', None)
+        if not expires_at or expires_at <= now:
+            continue
+
+        offer_id = getattr(offer, 'id', None)
+        if not isinstance(offer_id, int):
+            continue
+
+        current = offer_map.get(offer_id)
+        if current is None:
+            offer_map[offer_id] = (offer, expires_at)
+        else:
+            _, current_expiry = current
+            if current_expiry is None or (expires_at and expires_at > current_expiry):
+                offer_map[offer_id] = (offer, expires_at)
+
+    contexts: list[ActiveOfferContext] = []
+    for offer_id, (offer, expires_at) in offer_map.items():
+        contexts.append((offer, None, expires_at))
+
+    contexts.sort(key=lambda item: item[2] or now, reverse=True)
+    return contexts
+
+
+async def _build_promo_offer_models(
+    db: AsyncSession,
+    available_offers: list[Any],
+    active_offers: list[ActiveOfferContext] | None,
+    *,
+    user: User,
+) -> list[MiniAppPromoOffer]:
+    promo_offers: list[MiniAppPromoOffer] = []
+    template_cache: dict[int, PromoOfferTemplate | None] = {}
+
+    candidates: list[Any] = [offer for offer in available_offers if offer]
+    active_offer_contexts: list[ActiveOfferContext] = []
+    if active_offers:
+        for offer, discount_override, expires_override in active_offers:
+            if not offer:
+                continue
+            active_offer_contexts.append((offer, discount_override, expires_override))
+            candidates.append(offer)
+
+    squad_map: dict[str, MiniAppConnectedServer] = {}
+    if candidates:
+        all_uuids: list[str] = []
+        for offer in candidates:
+            all_uuids.extend(_extract_offer_test_squad_uuids(offer))
+        if all_uuids:
+            unique = list(dict.fromkeys(all_uuids))
+            resolved = await _resolve_connected_servers(db, unique)
+            squad_map = {server.uuid: server for server in resolved}
+
+    async def get_template(template_id: int | None) -> PromoOfferTemplate | None:
+        if not template_id:
+            return None
+        if template_id not in template_cache:
+            template_cache[template_id] = await get_promo_offer_template_by_id(db, template_id)
+        return template_cache[template_id]
+
+    def build_test_squads(offer: Any) -> list[MiniAppConnectedServer]:
+        test_squads: list[MiniAppConnectedServer] = []
+        for uuid in _extract_offer_test_squad_uuids(offer):
+            resolved = squad_map.get(uuid)
+            if resolved:
+                test_squads.append(MiniAppConnectedServer(uuid=resolved.uuid, name=resolved.name))
+            else:
+                test_squads.append(MiniAppConnectedServer(uuid=uuid, name=uuid))
+        return test_squads
+
+    def resolve_title(
+        offer: Any,
+        template: PromoOfferTemplate | None,
+        offer_type: str | None,
+    ) -> str | None:
+        extra = _extract_offer_extra(offer)
+        if isinstance(extra.get('title'), str) and extra['title'].strip():
+            return extra['title'].strip()
+        if template and template.name:
+            return template.name
+        if offer_type:
+            return offer_type.replace('_', ' ').title()
+        return None
+
+    for offer in available_offers:
+        template_id = _extract_template_id(getattr(offer, 'notification_type', None))
+        template = await get_template(template_id)
+        effect_type = _normalize_effect_type(getattr(offer, 'effect_type', None))
+        offer_type = _extract_offer_type(offer, template)
+        test_squads = build_test_squads(offer)
+        server_name = test_squads[0].name if test_squads else None
+        message_text = _format_offer_message(template, offer, server_name=server_name)
+        bonus_label = _format_bonus_label(int(getattr(offer, 'bonus_amount_kopeks', 0) or 0))
+        discount_percent = getattr(offer, 'discount_percent', 0)
+        try:
+            discount_percent = int(discount_percent)
+        except (TypeError, ValueError):
+            discount_percent = 0
+
+        extra = _extract_offer_extra(offer)
+        button_text = None
+        if isinstance(extra.get('button_text'), str) and extra['button_text'].strip():
+            button_text = extra['button_text'].strip()
+        elif template and isinstance(template.button_text, str):
+            button_text = template.button_text
+
+        promo_offers.append(
+            MiniAppPromoOffer(
+                id=int(getattr(offer, 'id', 0) or 0),
+                status='pending',
+                notification_type=getattr(offer, 'notification_type', None),
+                offer_type=offer_type,
+                effect_type=effect_type,
+                discount_percent=max(0, discount_percent),
+                bonus_amount_kopeks=int(getattr(offer, 'bonus_amount_kopeks', 0) or 0),
+                bonus_amount_label=bonus_label,
+                expires_at=getattr(offer, 'expires_at', None),
+                claimed_at=getattr(offer, 'claimed_at', None),
+                is_active=bool(getattr(offer, 'is_active', False)),
+                template_id=template_id,
+                template_name=getattr(template, 'name', None),
+                button_text=button_text,
+                title=resolve_title(offer, template, offer_type),
+                message_text=message_text,
+                icon=_determine_offer_icon(offer_type, effect_type),
+                test_squads=test_squads,
+            )
+        )
+
+    if active_offer_contexts:
+        seen_active_ids: set[int] = set()
+        for active_offer_record, discount_override, expires_override in reversed(active_offer_contexts):
+            offer_id = int(getattr(active_offer_record, 'id', 0) or 0)
+            if offer_id and offer_id in seen_active_ids:
+                continue
+            if offer_id:
+                seen_active_ids.add(offer_id)
+
+            template_id = _extract_template_id(getattr(active_offer_record, 'notification_type', None))
+            template = await get_template(template_id)
+            effect_type = _normalize_effect_type(getattr(active_offer_record, 'effect_type', None))
+            offer_type = _extract_offer_type(active_offer_record, template)
+            show_active = False
+            discount_value = discount_override if discount_override is not None else 0
+            if (discount_value and discount_value > 0) or effect_type == 'test_access':
+                show_active = True
+            if not show_active:
+                continue
+
+            test_squads = build_test_squads(active_offer_record)
+            server_name = test_squads[0].name if test_squads else None
+            message_text = _format_offer_message(
+                template,
+                active_offer_record,
+                server_name=server_name,
+            )
+            bonus_label = _format_bonus_label(int(getattr(active_offer_record, 'bonus_amount_kopeks', 0) or 0))
+
+            started_at = getattr(active_offer_record, 'claimed_at', None)
+            expires_at = expires_override or getattr(active_offer_record, 'expires_at', None)
+            duration_seconds: int | None = None
+            duration_hours = _extract_offer_duration_hours(active_offer_record, template, effect_type)
+            if expires_at is None and duration_hours and started_at:
+                expires_at = started_at + timedelta(hours=duration_hours)
+            if expires_at and started_at:
+                try:
+                    duration_seconds = int((expires_at - started_at).total_seconds())
+                except Exception:  # pragma: no cover - defensive
+                    duration_seconds = None
+
+            if (discount_value is None or discount_value <= 0) and effect_type != 'test_access':
+                try:
+                    discount_value = int(getattr(active_offer_record, 'discount_percent', 0) or 0)
+                except (TypeError, ValueError):
+                    discount_value = 0
+            if discount_value is None:
+                discount_value = 0
+
+            extra = _extract_offer_extra(active_offer_record)
+            button_text = None
+            if isinstance(extra.get('button_text'), str) and extra['button_text'].strip():
+                button_text = extra['button_text'].strip()
+            elif template and isinstance(template.button_text, str):
+                button_text = template.button_text
+
+            promo_offers.insert(
+                0,
+                MiniAppPromoOffer(
+                    id=offer_id,
+                    status='active',
+                    notification_type=getattr(active_offer_record, 'notification_type', None),
+                    offer_type=offer_type,
+                    effect_type=effect_type,
+                    discount_percent=max(0, discount_value or 0),
+                    bonus_amount_kopeks=int(getattr(active_offer_record, 'bonus_amount_kopeks', 0) or 0),
+                    bonus_amount_label=bonus_label,
+                    expires_at=getattr(active_offer_record, 'expires_at', None),
+                    claimed_at=started_at,
+                    is_active=False,
+                    template_id=template_id,
+                    template_name=getattr(template, 'name', None),
+                    button_text=button_text,
+                    title=resolve_title(active_offer_record, template, offer_type),
+                    message_text=message_text,
+                    icon=_determine_offer_icon(offer_type, effect_type),
+                    test_squads=test_squads,
+                    active_discount_expires_at=expires_at,
+                    active_discount_started_at=started_at,
+                    active_discount_duration_seconds=duration_seconds,
+                ),
+            )
+
+    return promo_offers
+
+
+def _bytes_to_gb(bytes_value: int | None) -> float:
+    if not bytes_value:
+        return 0.0
+    return round(bytes_value / (1024**3), 2)
+
+
+def _status_label(status: str) -> str:
+    mapping = {
+        'active': 'Active',
+        'trial': 'Trial',
+        'expired': 'Expired',
+        'disabled': 'Disabled',
+    }
+    return mapping.get(status, status.title())
+
+
+def _parse_datetime_string(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    try:
+        cleaned = value.strip()
+        if cleaned.endswith('Z'):
+            cleaned = f'{cleaned[:-1]}+00:00'
+        # Normalize duplicated timezone suffixes like +00:00+00:00
+        if '+00:00+00:00' in cleaned:
+            cleaned = cleaned.replace('+00:00+00:00', '+00:00')
+
+        datetime.fromisoformat(cleaned)
+        return cleaned
+    except Exception:  # pragma: no cover - defensive
+        return value
+
+
+async def _resolve_connected_servers(
+    db: AsyncSession,
+    squad_uuids: list[str],
+) -> list[MiniAppConnectedServer]:
+    if not squad_uuids:
+        return []
+
+    resolved: dict[str, str] = {}
+    missing: list[str] = []
+
+    for squad_uuid in squad_uuids:
+        if squad_uuid in resolved:
+            continue
+        server = await get_server_squad_by_uuid(db, squad_uuid)
+        if server and server.display_name:
+            resolved[squad_uuid] = server.display_name
+        else:
+            missing.append(squad_uuid)
+
+    if missing:
+        try:
+            service = RemnaWaveService()
+            if service.is_configured:
+                squads = await service.get_all_squads()
+                for squad in squads:
+                    uuid = squad.get('uuid')
+                    name = squad.get('name')
+                    if uuid in missing and name:
+                        resolved[uuid] = name
+        except RemnaWaveConfigurationError:
+            logger.debug('RemnaWave is not configured; skipping server name enrichment')
+        except Exception as error:  # pragma: no cover - defensive logging
+            logger.warning('Failed to resolve server names from RemnaWave', error=error)
+
+    connected_servers: list[MiniAppConnectedServer] = []
+    for squad_uuid in squad_uuids:
+        name = resolved.get(squad_uuid, squad_uuid)
+        connected_servers.append(MiniAppConnectedServer(uuid=squad_uuid, name=name))
+
+    return connected_servers
+
+
+async def _load_devices_info(user: User) -> tuple[int, list[MiniAppDevice]]:
+    remnawave_uuid = getattr(user, 'remnawave_uuid', None)
+    if not remnawave_uuid:
+        return 0, []
+
+    try:
+        service = RemnaWaveService()
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.warning('Failed to initialise RemnaWave service', error=error)
+        return 0, []
+
+    if not service.is_configured:
+        return 0, []
+
+    try:
+        async with service.get_api_client() as api:
+            response = await api.get_user_devices(remnawave_uuid)
+    except RemnaWaveConfigurationError:
+        logger.debug('RemnaWave configuration missing while loading devices')
+        return 0, []
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.warning('Failed to load devices from RemnaWave', error=error)
+        return 0, []
+
+    total_devices = int(response.get('total') or 0)
+    devices_payload = response.get('devices') or []
+
+    devices: list[MiniAppDevice] = []
+    for device in devices_payload:
+        hwid = device.get('hwid') or device.get('deviceId') or device.get('id')
+        platform = device.get('platform') or device.get('platformType')
+        model = device.get('deviceModel') or device.get('model') or device.get('name')
+        app_version = device.get('appVersion') or device.get('version')
+        last_seen_raw = (
+            device.get('updatedAt') or device.get('lastSeen') or device.get('lastActiveAt') or device.get('createdAt')
+        )
+        last_ip = device.get('ip') or device.get('ipAddress')
+
+        devices.append(
+            MiniAppDevice(
+                hwid=hwid,
+                platform=platform,
+                device_model=model,
+                app_version=app_version,
+                last_seen=_parse_datetime_string(last_seen_raw),
+                last_ip=last_ip,
+            )
+        )
+
+    if total_devices == 0:
+        total_devices = len(devices)
+
+    return total_devices, devices
+
+
+def _resolve_display_name(user_data: dict[str, Any]) -> str:
+    username = user_data.get('username')
+    if username:
+        return username
+
+    first = user_data.get('first_name')
+    last = user_data.get('last_name')
+    parts = [part for part in [first, last] if part]
+    if parts:
+        return ' '.join(parts)
+
+    telegram_id = user_data.get('telegram_id')
+    return f'User {telegram_id}' if telegram_id else 'User'
+
+
+def _is_remnawave_configured() -> bool:
+    params = settings.get_remnawave_auth_params()
+    return bool(params.get('base_url') and params.get('api_key'))
+
+
+def _serialize_transaction(transaction: Transaction) -> MiniAppTransaction:
+    return MiniAppTransaction(
+        id=transaction.id,
+        type=transaction.type,
+        amount_kopeks=transaction.amount_kopeks,
+        amount_rubles=round(transaction.amount_kopeks / 100, 2),
+        description=transaction.description,
+        payment_method=transaction.payment_method,
+        external_id=transaction.external_id,
+        is_completed=transaction.is_completed,
+        created_at=transaction.created_at,
+        completed_at=transaction.completed_at,
+    )
+
+
+async def _load_subscription_links(
+    subscription: Subscription,
+) -> dict[str, Any]:
+    if not subscription.remnawave_short_uuid or not _is_remnawave_configured():
+        return {}
+
+    try:
+        service = SubscriptionService()
+        info = await service.get_subscription_info(subscription.remnawave_short_uuid)
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.warning('Failed to load subscription info from RemnaWave', error=error)
+        return {}
+
+    if not info:
+        return {}
+
+    payload: dict[str, Any] = {
+        'links': list(info.links or []),
+        'ss_conf_links': dict(info.ss_conf_links or {}),
+        'subscription_url': info.subscription_url,
+        'happ': info.happ,
+        'happ_link': getattr(info, 'happ_link', None),
+        'happ_crypto_link': getattr(info, 'happ_crypto_link', None),
+    }
+
+    return payload
+
+
+async def _build_referral_info(
+    db: AsyncSession,
+    user: User,
+) -> MiniAppReferralInfo | None:
+    referral_code = getattr(user, 'referral_code', None)
+    referral_settings = settings.get_referral_settings() or {}
+
+    referral_link = None
+    if referral_code:
+        referral_link = settings.get_referral_link(referral_code)
+
+    minimum_topup_kopeks = int(referral_settings.get('minimum_topup_kopeks') or 0)
+    first_topup_bonus_kopeks = int(referral_settings.get('first_topup_bonus_kopeks') or 0)
+    inviter_bonus_kopeks = int(referral_settings.get('inviter_bonus_kopeks') or 0)
+    commission_percent = float(
+        get_effective_referral_commission_percent(user) if user else referral_settings.get('commission_percent') or 0
+    )
+
+    terms = MiniAppReferralTerms(
+        minimum_topup_kopeks=minimum_topup_kopeks,
+        minimum_topup_label=settings.format_price(minimum_topup_kopeks),
+        first_topup_bonus_kopeks=first_topup_bonus_kopeks,
+        first_topup_bonus_label=settings.format_price(first_topup_bonus_kopeks),
+        inviter_bonus_kopeks=inviter_bonus_kopeks,
+        inviter_bonus_label=settings.format_price(inviter_bonus_kopeks),
+        commission_percent=commission_percent,
+    )
+
+    summary = await get_user_referral_summary(db, user.id)
+    stats: MiniAppReferralStats | None = None
+    recent_earnings: list[MiniAppReferralRecentEarning] = []
+
+    if summary:
+        total_earned_kopeks = int(summary.get('total_earned_kopeks') or 0)
+        month_earned_kopeks = int(summary.get('month_earned_kopeks') or 0)
+
+        stats = MiniAppReferralStats(
+            invited_count=int(summary.get('invited_count') or 0),
+            paid_referrals_count=int(summary.get('paid_referrals_count') or 0),
+            active_referrals_count=int(summary.get('active_referrals_count') or 0),
+            total_earned_kopeks=total_earned_kopeks,
+            total_earned_label=settings.format_price(total_earned_kopeks),
+            month_earned_kopeks=month_earned_kopeks,
+            month_earned_label=settings.format_price(month_earned_kopeks),
+            conversion_rate=float(summary.get('conversion_rate') or 0.0),
+        )
+
+        for earning in summary.get('recent_earnings', []) or []:
+            amount = int(earning.get('amount_kopeks') or 0)
+            recent_earnings.append(
+                MiniAppReferralRecentEarning(
+                    amount_kopeks=amount,
+                    amount_label=settings.format_price(amount),
+                    reason=earning.get('reason'),
+                    referral_name=earning.get('referral_name'),
+                    created_at=earning.get('created_at'),
+                )
+            )
+
+    detailed = await get_detailed_referral_list(db, user.id, limit=50, offset=0)
+    referral_items: list[MiniAppReferralItem] = []
+    if detailed:
+        for item in detailed.get('referrals', []) or []:
+            total_earned = int(item.get('total_earned_kopeks') or 0)
+            balance = int(item.get('balance_kopeks') or 0)
+            referral_items.append(
+                MiniAppReferralItem(
+                    id=int(item.get('id') or 0),
+                    telegram_id=item.get('telegram_id'),
+                    full_name=item.get('full_name'),
+                    username=item.get('username'),
+                    created_at=item.get('created_at'),
+                    last_activity=item.get('last_activity'),
+                    has_made_first_topup=bool(item.get('has_made_first_topup')),
+                    balance_kopeks=balance,
+                    balance_label=settings.format_price(balance),
+                    total_earned_kopeks=total_earned,
+                    total_earned_label=settings.format_price(total_earned),
+                    topups_count=int(item.get('topups_count') or 0),
+                    days_since_registration=item.get('days_since_registration'),
+                    days_since_activity=item.get('days_since_activity'),
+                    status=item.get('status'),
+                )
+            )
+
+    referral_list = MiniAppReferralList(
+        total_count=int(detailed.get('total_count') or 0) if detailed else 0,
+        has_next=bool(detailed.get('has_next')) if detailed else False,
+        has_prev=bool(detailed.get('has_prev')) if detailed else False,
+        current_page=int(detailed.get('current_page') or 1) if detailed else 1,
+        total_pages=int(detailed.get('total_pages') or 1) if detailed else 1,
+        items=referral_items,
+    )
+
+    if (
+        not referral_code
+        and not referral_link
+        and not referral_items
+        and not recent_earnings
+        and (not stats or (stats.invited_count == 0 and stats.total_earned_kopeks == 0))
+    ):
+        return None
+
+    return MiniAppReferralInfo(
+        referral_code=referral_code,
+        referral_link=referral_link,
+        terms=terms,
+        stats=stats,
+        recent_earnings=recent_earnings,
+        referrals=referral_list,
+    )
+
+
+def _is_trial_available_for_user(user: User) -> bool:
+    if settings.TRIAL_DURATION_DAYS <= 0:
+        return False
+
+    if settings.is_trial_disabled_for_user(getattr(user, 'auth_type', 'telegram')):
+        return False
+
+    if getattr(user, 'has_had_paid_subscription', False):
+        return False
+
+    subscription = getattr(user, 'subscription', None)
+    if subscription is not None:
+        return False
+
+    return True
+
+
 @router.post('/subscription', response_model=MiniAppSubscriptionResponse)
 async def get_subscription_details(
     payload: MiniAppSubscriptionRequest,
