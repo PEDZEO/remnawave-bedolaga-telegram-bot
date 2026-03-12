@@ -601,7 +601,6 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
 
             if trial_tariff:
                 trial_traffic = trial_tariff.traffic_limit_gb
-                trial_device_limit = trial_tariff.device_limit
                 tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
                 if tariff_trial_days:
                     trial_days = tariff_trial_days
@@ -832,7 +831,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
         # Проверяем, настроен ли триальный тариф для режима тарифов
         trial_tariff = None
         trial_traffic_limit = None
-        trial_device_limit = forced_devices
+        trial_device_limit = forced_devices if forced_devices is not None else settings.TRIAL_DEVICE_LIMIT
         trial_squads = None
         tariff_id_for_trial = None
         trial_duration = None  # None = использовать TRIAL_DURATION_DAYS
@@ -854,7 +853,6 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
 
                 if trial_tariff:
                     trial_traffic_limit = trial_tariff.traffic_limit_gb
-                    trial_device_limit = trial_tariff.device_limit
                     trial_squads = trial_tariff.allowed_squads or []
                     tariff_id_for_trial = trial_tariff.id
                     tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)

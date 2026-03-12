@@ -1029,7 +1029,6 @@ async def get_trial_info(
 
         if trial_tariff:
             traffic_limit_gb = trial_tariff.traffic_limit_gb
-            device_limit = trial_tariff.device_limit
             tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
             if tariff_trial_days:
                 duration_days = tariff_trial_days
@@ -1170,7 +1169,6 @@ async def activate_trial(
 
         if trial_tariff:
             trial_traffic_limit = trial_tariff.traffic_limit_gb
-            trial_device_limit = trial_tariff.device_limit
             trial_squads = trial_tariff.allowed_squads or []
             tariff_id_for_trial = trial_tariff.id
             tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)

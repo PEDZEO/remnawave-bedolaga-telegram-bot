@@ -1751,7 +1751,7 @@ async def activate_subscription_trial_endpoint(
 
     # Получаем параметры триала для режима тарифов
     trial_traffic_limit = None
-    trial_device_limit = forced_devices
+    trial_device_limit = forced_devices if forced_devices is not None else settings.TRIAL_DEVICE_LIMIT
     trial_squads = None
     tariff_id_for_trial = None
     trial_duration = None  # None = использовать TRIAL_DURATION_DAYS
@@ -1771,7 +1771,6 @@ async def activate_subscription_trial_endpoint(
 
             if trial_tariff:
                 trial_traffic_limit = trial_tariff.traffic_limit_gb
-                trial_device_limit = trial_tariff.device_limit
                 trial_squads = trial_tariff.allowed_squads or []
                 tariff_id_for_trial = trial_tariff.id
                 tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
