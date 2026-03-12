@@ -3962,10 +3962,9 @@ async def submit_subscription_renewal_endpoint(
     )
     if not tariff_pricing:
         ensure_classic_renewal_period_available(period_days)
-
     method = resolve_renewal_method(payload.method)
 
-    # Для тарифного режима используем упрощённый расчёт
+    pricing_model = None
     if tariff_pricing:
         final_total = tariff_pricing['final_total']
         pricing = tariff_pricing
@@ -3991,8 +3990,9 @@ async def submit_subscription_renewal_endpoint(
                 detail={'code': 'pricing_failed', 'message': 'Failed to calculate renewal pricing'},
             ) from error
 
+        final_total = pricing_model.final_total
         pricing = pricing_model.to_payload()
-        final_total = int(pricing_model.final_total)
+
     balance_kopeks = getattr(user, 'balance_kopeks', 0)
     missing_amount = calculate_missing_amount(balance_kopeks, final_total)
     description = f'Продление подписки на {period_days} дней'
@@ -4019,8 +4019,14 @@ async def submit_subscription_renewal_endpoint(
                 message=message,
                 balance_kopeks=user.balance_kopeks,
                 balance_label=settings.format_price(user.balance_kopeks),
-                subscription_id=updated_subscription.id,
-                renewed_until=new_end_date,
+                    subscription_id=updated_subscription.id,
+                    renewed_until=new_end_date,
+                )
+
+        if pricing_model is None:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={'code': 'pricing_missing', 'message': 'Failed to calculate renewal pricing'},
             )
         result = await execute_classic_renewal(
             db,
