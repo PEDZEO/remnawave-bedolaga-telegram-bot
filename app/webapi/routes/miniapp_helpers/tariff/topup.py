@@ -144,7 +144,10 @@ async def execute_topup_purchase(
     description: str,
     logger,
 ) -> None:
-    from app.database.crud.subscription import add_subscription_traffic
+    from app.database.crud.subscription import (
+        add_subscription_traffic,
+        reactivate_subscription,
+    )
     from app.database.crud.transaction import create_transaction
     from app.database.crud.user import subtract_user_balance
     from app.database.models import TransactionType
@@ -160,10 +163,14 @@ async def execute_topup_purchase(
         )
 
     await add_subscription_traffic(db, subscription, package_gb)
+    # Reactivate DISABLED/EXPIRED subscriptions after successful top-up.
+    await reactivate_subscription(db, subscription)
 
     try:
         service = SubscriptionService()
         await service.update_remnawave_user(db, subscription)
+        if getattr(user, 'remnawave_uuid', None) and subscription.status == 'active':
+            await service.enable_remnawave_user(user.remnawave_uuid)
     except Exception as error:
         logger.error('Ошибка синхронизации с RemnaWave при докупке трафика', error=error)
 

@@ -1308,13 +1308,16 @@ async def _auto_add_devices(
         await db.rollback()
         return False
 
-    # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+    # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
     await reactivate_subscription(db, subscription)
 
     # Синхронизация с RemnaWave
     try:
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
+        # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
+        if getattr(user, 'remnawave_uuid', None) and subscription.status == 'active':
+            await subscription_service.enable_remnawave_user(user.remnawave_uuid)
     except Exception as error:
         logger.warning(
             '⚠️ Автопокупка устройств: не удалось обновить Remnawave для пользователя',
@@ -1521,13 +1524,16 @@ async def _auto_add_traffic(
         await db.rollback()
         return False
 
-    # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+    # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
     await reactivate_subscription(db, subscription)
 
     # Sync with RemnaWave
     try:
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
+        # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
+        if getattr(user, 'remnawave_uuid', None) and subscription.status == 'active':
+            await subscription_service.enable_remnawave_user(user.remnawave_uuid)
     except Exception as error:
         logger.warning(
             '⚠️ Автопокупка трафика: не удалось обновить Remnawave для пользователя',
