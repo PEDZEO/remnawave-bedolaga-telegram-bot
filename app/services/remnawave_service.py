@@ -2427,7 +2427,6 @@ class RemnaWaveService:
                 from sqlalchemy import delete
 
                 from app.database.models import (
-                    PromoCodeUse,
                     ReferralEarning,
                     SubscriptionServer,
                     SubscriptionStatus,
@@ -2449,8 +2448,8 @@ class RemnaWaveService:
                 await db.execute(delete(ReferralEarning).where(ReferralEarning.referral_id == user.id))
                 logger.info('🗑️ Удалены реферальные доходы для', user_id_display=user_id_display)
 
-                await db.execute(delete(PromoCodeUse).where(PromoCodeUse.user_id == user.id))
-                logger.info('🗑️ Удалены использования промокодов для', user_id_display=user_id_display)
+                # PromoCodeUse НЕ удаляем — история промокодов постоянна,
+                # иначе пользователь может повторно активировать промокоды
 
             except Exception as records_error:
                 logger.error('❌ Ошибка удаления связанных записей', records_error=records_error)
@@ -2463,7 +2462,6 @@ class RemnaWaveService:
                         balance_kopeks=user.balance_kopeks,
                     )
                 user.remnawave_uuid = None
-                user.used_promocodes = 0
                 user.updated_at = self._now_utc()
 
                 if user.subscription:

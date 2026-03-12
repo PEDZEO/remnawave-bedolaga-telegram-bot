@@ -344,6 +344,7 @@ async def extend_subscription(
     traffic_limit_gb: int | None = None,
     device_limit: int | None = None,
     connected_squads: list[str] | None = None,
+    commit: bool = True,
 ) -> Subscription:
     """Продлевает подписку на указанное количество дней.
 
@@ -542,9 +543,13 @@ async def extend_subscription(
 
     subscription.updated_at = current_time
 
-    await db.commit()
-    await db.refresh(subscription)
-    await clear_notifications(db, subscription.id)
+    if commit:
+        await db.commit()
+        await db.refresh(subscription, ['tariff'])
+    else:
+        await db.flush()
+
+    await clear_notifications(db, subscription.id, commit=commit)
 
     logger.info('✅ Подписка продлена до', end_date=subscription.end_date)
     logger.info('📊 Новые параметры: статус=, окончание', status=subscription.status, end_date=subscription.end_date)
