@@ -355,6 +355,7 @@ async def create_gift_purchase(
     if body.payment_mode == 'gateway':
         from app.cabinet.routes.balance import create_topup
         from app.cabinet.schemas.balance import TopUpRequest
+        from app.services.payment_service import PaymentService
 
         gateway_purchase_kwargs: dict = (
             {
@@ -383,15 +384,43 @@ async def create_gift_purchase(
         except GuestPurchaseError as exc:
             raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
-        topup = await create_topup(
-            TopUpRequest(
-                amount_kopeks=price_kopeks,
-                payment_method=body.payment_method or '',
-            ),
-            user=user,
-            db=db,
-        )
-        purchase.payment_id = topup.payment_id
+        if body.payment_method == 'telegram_stars':
+            from aiogram import Bot
+
+            bot = Bot(token=settings.BOT_TOKEN)
+            try:
+                payment_service = PaymentService(bot=bot)
+                payment_result = await payment_service.create_guest_payment(
+                    db=db,
+                    amount_kopeks=price_kopeks,
+                    payment_method='telegram_stars',
+                    description=f'Gift: {tariff.name} ({body.period_days}d)',
+                    purchase_token=purchase.token,
+                    return_url=(settings.CABINET_URL or '').rstrip('/'),
+                )
+            finally:
+                await bot.session.close()
+
+            if payment_result is None or not payment_result.get('payment_url'):
+                await db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail='Payment provider is unavailable, please try again later',
+                )
+            purchase.payment_id = str(payment_result.get('payment_id') or '')
+            payment_url = str(payment_result.get('payment_url'))
+        else:
+            topup = await create_topup(
+                TopUpRequest(
+                    amount_kopeks=price_kopeks,
+                    payment_method=body.payment_method or '',
+                ),
+                user=user,
+                db=db,
+            )
+            purchase.payment_id = topup.payment_id
+            payment_url = topup.payment_url
+
         if promo_offer_discount_percent > 0 and getattr(user, 'promo_offer_discount_percent', 0):
             user.promo_offer_discount_percent = 0
             user.promo_offer_discount_source = None
@@ -401,7 +430,7 @@ async def create_gift_purchase(
         return GiftPurchaseResponse(
             status='created',
             purchase_token=purchase.token[:12],
-            payment_url=topup.payment_url,
+            payment_url=payment_url,
             warning=None,
         )
 
