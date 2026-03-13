@@ -550,12 +550,17 @@ async def subtract_user_balance(
     consume_promo_offer: bool = False,
     mark_as_paid_subscription: bool = False,
 ) -> bool:
-    user_id_display = user.telegram_id or user.email or f'#{user.id}'
-    logger.info('💸 ОТЛАДКА subtract_user_balance:')
-    logger.info('👤 User ID: (ID: )', user_id=user.id, user_id_display=user_id_display)
-    logger.info('💰 Баланс до списания: копеек', balance_kopeks=user.balance_kopeks)
-    logger.info('💸 Сумма к списанию: копеек', amount_kopeks=amount_kopeks)
-    logger.info('📝 Описание', description=description)
+    if amount_kopeks < 0:
+        logger.error('subtract_user_balance called with negative amount', amount_kopeks=amount_kopeks, user_id=user.id)
+        return False
+
+    logger.debug(
+        'subtract_user_balance called',
+        user_id=user.id,
+        balance_kopeks=user.balance_kopeks,
+        amount_kopeks=amount_kopeks,
+        description=description,
+    )
 
     # Lock the user row to prevent concurrent balance race conditions
     # Eagerly load key relationships to avoid MissingGreenlet in async context
