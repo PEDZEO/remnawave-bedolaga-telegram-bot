@@ -60,6 +60,7 @@ class PricingEngine:
         after_offer = PricingEngine.apply_discount(after_group, offer_percent)
         offer_discount_value = after_group - after_offer
         return after_offer, group_discount_value, offer_discount_value
+
     async def _calculate_servers_price(
         self,
         country_uuids: list[str],

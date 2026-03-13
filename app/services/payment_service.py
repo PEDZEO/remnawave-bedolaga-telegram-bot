@@ -179,6 +179,7 @@ class PaymentService(
             wata_service=bool(self.wata_service),
             cloudpayments_service=bool(self.cloudpayments_service),
         )
+
     # ------------------------------------------------------------------
     # Guest (landing page) payments
     # ------------------------------------------------------------------

@@ -89,7 +89,9 @@ async def _finalize_gateway_gift_via_balance(
             warning=purchase.recipient_warning,
         )
 
-    tx_description = f'Gift gateway settle: {purchase.tariff.name if purchase.tariff else "tariff"} ({purchase.period_days}d)'
+    tx_description = (
+        f'Gift gateway settle: {purchase.tariff.name if purchase.tariff else "tariff"} ({purchase.period_days}d)'
+    )
     if purchase.gift_recipient_value:
         tx_description += f' -> {purchase.gift_recipient_value}'
 
@@ -257,9 +259,7 @@ async def get_gift_config(
         promo_group_name=promo_group_name,
         active_discount_percent=promo_offer_discount_percent if promo_offer_discount_percent > 0 else None,
         active_discount_expires_at=(
-            getattr(user, 'promo_offer_discount_expires_at', None)
-            if promo_offer_discount_percent > 0
-            else None
+            getattr(user, 'promo_offer_discount_expires_at', None) if promo_offer_discount_percent > 0 else None
         ),
     )
 

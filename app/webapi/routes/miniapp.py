@@ -179,6 +179,9 @@ from .miniapp_helpers.payment.request import (
 from .miniapp_helpers.payment_status.base import (
     resolve_yookassa_payment_status as _resolve_yookassa_payment_status_impl,
 )
+from .miniapp_helpers.payment_status.common import (
+    classify_payment_status,
+)
 from .miniapp_helpers.payment_status.dispatcher import (
     resolve_payment_status_entry as _resolve_payment_status_entry_impl,
 )
@@ -335,6 +338,10 @@ async def _get_usd_to_rub_rate() -> float:
 
 def _compute_cryptobot_limits(rate: float) -> tuple[int, int]:
     return _compute_cryptobot_limits_impl(rate)
+
+
+def _classify_status(status: str | None, is_paid: bool) -> str:
+    return classify_payment_status(status, is_paid)
 
 
 async def _resolve_payment_status_entry(*, payment_service: PaymentService, db: AsyncSession, user, query):
@@ -4019,9 +4026,9 @@ async def submit_subscription_renewal_endpoint(
                 message=message,
                 balance_kopeks=user.balance_kopeks,
                 balance_label=settings.format_price(user.balance_kopeks),
-                    subscription_id=updated_subscription.id,
-                    renewed_until=new_end_date,
-                )
+                subscription_id=updated_subscription.id,
+                renewed_until=new_end_date,
+            )
 
         if pricing_model is None:
             raise HTTPException(

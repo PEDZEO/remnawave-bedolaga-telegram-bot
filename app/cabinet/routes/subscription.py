@@ -167,9 +167,7 @@ async def get_renewal_options(
         if pricing.final_total <= 0 and pricing.base_price <= 0:
             continue
 
-        original_price = (
-            pricing.base_price + pricing.servers_price + pricing.traffic_price + pricing.devices_price
-        )
+        original_price = pricing.base_price + pricing.servers_price + pricing.traffic_price + pricing.devices_price
         combined_discount = 0
         if original_price > 0 and original_price != pricing.final_total:
             combined_discount = int((original_price - pricing.final_total) * 100 / original_price)
@@ -239,9 +237,7 @@ async def renew_subscription(
         )
 
     # Combined discount percent for display
-    original_price_kopeks = (
-        pricing.base_price + pricing.servers_price + pricing.traffic_price + pricing.devices_price
-    )
+    original_price_kopeks = pricing.base_price + pricing.servers_price + pricing.traffic_price + pricing.devices_price
     discount_percent = 0
     if original_price_kopeks > 0 and original_price_kopeks != price_kopeks:
         discount_percent = int((original_price_kopeks - price_kopeks) * 100 / original_price_kopeks)

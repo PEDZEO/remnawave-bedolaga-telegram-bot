@@ -4184,7 +4184,10 @@ async def _calculate_subscription_period_price(
 
     pricing_engine = PricingEngine()
     pricing = await pricing_engine.calculate_renewal_price(
-        db, subscription, period_days, user=target_user,
+        db,
+        subscription,
+        period_days,
+        user=target_user,
     )
     return pricing.final_total
 
@@ -5311,7 +5314,9 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
 
         new_base = tariff.device_limit or 1
         new_total = new_base + extra_devices
-        effective_max = tariff.max_device_limit or (settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None)
+        effective_max = tariff.max_device_limit or (
+            settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+        )
         if effective_max and new_total > effective_max:
             new_total = effective_max
         subscription.device_limit = new_total
