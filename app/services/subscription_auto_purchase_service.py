@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 import structlog
 from aiogram import Bot
@@ -136,7 +137,7 @@ async def _prepare_auto_purchase(
 
 def _safe_int(value: object | None, default: int = 0) -> int:
     try:
-        return int(value)  # type: ignore[arg-type]
+        return int(cast('Any', value)) if value is not None else default
     except (TypeError, ValueError):
         return default
 
@@ -622,6 +623,7 @@ async def _auto_purchase_tariff(
     tariff_id = _safe_int(cart_data.get('tariff_id'))
     period_days = _safe_int(cart_data.get('period_days'))
     discount_percent = _safe_int(cart_data.get('discount_percent'))
+    promo_offer_percent = _safe_int(cart_data.get('promo_offer_percent'))
 
     if not tariff_id or period_days <= 0:
         logger.warning(
@@ -1175,6 +1177,7 @@ async def _auto_add_devices(
     """Auto-purchase devices from saved cart after balance topup."""
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+    from app.database.crud.subscription import reactivate_subscription
     from app.database.crud.user import subtract_user_balance
     from app.database.models import PaymentMethod
 
@@ -1651,6 +1654,7 @@ async def auto_purchase_saved_cart_after_topup(
     # Суточные тарифы тоже блокируем: try_resume_disabled_daily_after_topup уже отработал
     # выше по цепочке (common.py), и если он не возобновил — причина сохраняется.
     from app.database.crud.subscription import get_subscription_by_user_id as _get_sub
+    from app.database.models import SubscriptionStatus
 
     _existing_sub = await _get_sub(db, user.id)
     if _existing_sub and _existing_sub.status == SubscriptionStatus.DISABLED.value:

@@ -1,6 +1,7 @@
 """Admin routes for managing users in cabinet."""
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -2400,8 +2401,8 @@ async def sync_user_from_panel(
                 detail=service.configuration_error or 'Remnawave API not configured',
             )
 
-        changes = {}
-        errors = []
+        changes: dict[str, Any] = {}
+        errors: list[str] = []
         panel_info = None
 
         async with service.get_api_client() as api:
@@ -2627,8 +2628,8 @@ async def sync_user_to_panel(
             )
 
         sub = user.subscription
-        changes = {}
-        errors = []
+        changes: dict[str, Any] = {}
+        errors: list[str] = []
         action = 'no_changes'
         panel_uuid = user.remnawave_uuid
 
