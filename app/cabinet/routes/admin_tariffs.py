@@ -122,6 +122,7 @@ async def list_tariffs(
                 name=tariff.name,
                 description=tariff.description,
                 is_active=tariff.is_active,
+                show_in_gift=tariff.show_in_gift,
                 is_trial_available=tariff.is_trial_available,
                 is_daily=tariff.is_daily,
                 daily_price_kopeks=tariff.daily_price_kopeks,
@@ -206,6 +207,7 @@ async def get_tariff(
         name=tariff.name,
         description=tariff.description,
         is_active=tariff.is_active,
+        show_in_gift=tariff.show_in_gift,
         is_trial_available=tariff.is_trial_available,
         allow_traffic_topup=tariff.allow_traffic_topup,
         traffic_topup_enabled=tariff.traffic_topup_enabled,
@@ -264,6 +266,7 @@ async def create_new_tariff(
         name=request.name,
         description=request.description,
         is_active=request.is_active,
+        show_in_gift=request.show_in_gift,
         allow_traffic_topup=request.allow_traffic_topup,
         traffic_topup_enabled=request.traffic_topup_enabled,
         traffic_topup_packages=request.traffic_topup_packages,
@@ -326,6 +329,8 @@ async def update_existing_tariff(
         updates['description'] = request.description
     if request.is_active is not None:
         updates['is_active'] = request.is_active
+    if request.show_in_gift is not None:
+        updates['show_in_gift'] = request.show_in_gift
     if request.allow_traffic_topup is not None:
         updates['allow_traffic_topup'] = request.allow_traffic_topup
     if request.traffic_topup_enabled is not None:

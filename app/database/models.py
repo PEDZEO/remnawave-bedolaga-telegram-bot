@@ -128,6 +128,7 @@ class TransactionType(Enum):
     DEPOSIT = 'deposit'
     WITHDRAWAL = 'withdrawal'
     SUBSCRIPTION_PAYMENT = 'subscription_payment'
+    GIFT_PAYMENT = 'gift_payment'
     REFUND = 'refund'
     REFERRAL_REWARD = 'referral_reward'
     POLL_REWARD = 'poll_reward'
@@ -827,6 +828,7 @@ class Tariff(Base):
     description = Column(Text, nullable=True)
     display_order = Column(Integer, default=0, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    show_in_gift = Column(Boolean, default=True, nullable=False)
 
     # Параметры тарифа
     traffic_limit_gb = Column(Integer, nullable=False, default=100)  # 0 = безлимит
@@ -1377,6 +1379,63 @@ class TrafficPurchase(Base):
     def is_expired(self) -> bool:
         """Проверяет, истекла ли докупка."""
         return datetime.now(UTC) >= _aware(self.expires_at)
+
+
+class GuestPurchaseStatus(Enum):
+    PENDING = 'pending'
+    PAID = 'paid'
+    DELIVERED = 'delivered'
+    PENDING_ACTIVATION = 'pending_activation'
+    FAILED = 'failed'
+    EXPIRED = 'expired'
+
+
+class GuestPurchase(Base):
+    __tablename__ = 'guest_purchases'
+    __table_args__ = (
+        Index('ix_guest_purchases_token', 'token'),
+        Index('ix_guest_purchases_status', 'status'),
+        Index('ix_guest_purchases_user_id', 'user_id'),
+        Index('ix_guest_purchases_buyer_user_id', 'buyer_user_id'),
+        Index('ix_guest_purchases_user_gift_status', 'user_id', 'is_gift', 'status'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    token = Column(String(255), unique=True, nullable=False, index=True)
+    status = Column(String(50), nullable=False, default=GuestPurchaseStatus.PENDING.value, index=True)
+
+    tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='SET NULL'), nullable=True, index=True)
+    period_days = Column(Integer, nullable=False, default=30)
+    amount_kopeks = Column(Integer, nullable=False, default=0)
+
+    # buyer contact at purchase moment
+    contact_type = Column(String(20), nullable=True)  # email | telegram | id
+    contact_value = Column(String(255), nullable=True)
+
+    payment_method = Column(String(50), nullable=True)
+    payment_id = Column(String(255), nullable=True, index=True)
+
+    is_gift = Column(Boolean, nullable=False, default=False, index=True)
+    buyer_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    gift_recipient_type = Column(String(20), nullable=True)  # email | telegram
+    gift_recipient_value = Column(String(255), nullable=True)
+    gift_message = Column(Text, nullable=True)
+    recipient_warning = Column(String(50), nullable=True)
+
+    source = Column(String(50), nullable=False, default='cabinet')
+    subscription_url = Column(Text, nullable=True)
+    subscription_crypto_link = Column(Text, nullable=True)
+
+    paid_at = Column(AwareDateTime(), nullable=True)
+    delivered_at = Column(AwareDateTime(), nullable=True)
+    created_at = Column(AwareDateTime(), default=func.now(), nullable=False)
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now(), nullable=False)
+
+    user = relationship('User', foreign_keys=[user_id], lazy='selectin')
+    buyer = relationship('User', foreign_keys=[buyer_user_id], lazy='selectin')
+    tariff = relationship('Tariff', lazy='selectin')
 
 
 class Transaction(Base):

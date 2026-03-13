@@ -5,6 +5,7 @@ from aiogram import Bot, Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -19,7 +20,7 @@ from app.database.crud.user import (
     get_user_by_telegram_id,
 )
 from app.database.crud.user_message import get_random_active_message
-from app.database.models import PinnedMessage, SubscriptionStatus, UserStatus
+from app.database.models import GuestPurchase, GuestPurchaseStatus, PinnedMessage, SubscriptionStatus, UserStatus
 from app.keyboards.inline import (
     get_back_keyboard,
     get_language_selection_keyboard,
@@ -37,6 +38,7 @@ from app.middlewares.channel_checker import (
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.channel_subscription_service import channel_subscription_service
+from app.services.guest_purchase_service import GuestPurchaseError, activate_purchase as activate_guest_purchase
 from app.services.main_menu_button_service import MainMenuButtonService
 from app.services.pinned_message_service import (
     deliver_pinned_message_to_user,
@@ -526,6 +528,43 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
 
     if user and user.status != UserStatus.DELETED.value:
         logger.info('✅ Активный пользователь найден', telegram_id=user.telegram_id)
+
+        # Gift deep-link activation: /start GIFT_<code>
+        if start_parameter and start_parameter.upper().startswith('GIFT_'):
+            gift_code = start_parameter[5:].strip()
+            if len(gift_code) >= 8:
+                token_filter = (
+                    GuestPurchase.token == gift_code
+                    if len(gift_code) >= 64
+                    else GuestPurchase.token.startswith(gift_code)
+                )
+                result = await db.execute(
+                    select(GuestPurchase).where(token_filter, GuestPurchase.is_gift.is_(True)).with_for_update()
+                )
+                purchase = result.scalars().first()
+                if purchase and (purchase.user_id is None or purchase.user_id == user.id):
+                    if purchase.buyer_user_id == user.id:
+                        await message.answer('❌ Нельзя активировать собственный подарок.')
+                    elif purchase.status == GuestPurchaseStatus.DELIVERED.value:
+                        await message.answer('✅ Подарок уже активирован.')
+                    elif purchase.status in (
+                        GuestPurchaseStatus.PAID.value,
+                        GuestPurchaseStatus.PENDING_ACTIVATION.value,
+                    ):
+                        if purchase.user_id is None:
+                            purchase.user_id = user.id
+                        if purchase.status == GuestPurchaseStatus.PAID.value:
+                            purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
+                        await db.commit()
+                        try:
+                            await activate_guest_purchase(db, purchase.token, skip_notification=False)
+                            await message.answer('🎁 Подарок активирован! Подписка обновлена.')
+                        except GuestPurchaseError as error:
+                            await message.answer(f'❌ Не удалось активировать подарок: {error.message}')
+                    else:
+                        await message.answer('❌ Этот подарок нельзя активировать.')
+                else:
+                    await message.answer('❌ Подарок не найден.')
 
         profile_updated = False
 

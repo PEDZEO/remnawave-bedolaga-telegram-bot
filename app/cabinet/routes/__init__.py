@@ -39,6 +39,7 @@ from .auth import router as auth_router
 from .balance import router as balance_router
 from .branding import router as branding_router
 from .contests import router as contests_router
+from .gift import router as gift_router
 from .info import router as info_router
 from .media import router as media_router
 from .notifications import router as notifications_router
@@ -81,6 +82,7 @@ router.include_router(promo_router)
 router.include_router(notifications_router)
 router.include_router(info_router)
 router.include_router(branding_router)
+router.include_router(gift_router)
 router.include_router(media_router)
 
 # Wheel routes

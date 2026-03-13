@@ -40,6 +40,7 @@ GOOGLE_ADS_ID_KEY = 'CABINET_GOOGLE_ADS_ID'  # Stores conversion ID (e.g. "AW-12
 GOOGLE_ADS_LABEL_KEY = 'CABINET_GOOGLE_ADS_LABEL'  # Stores conversion label (alphanumeric)
 LITE_MODE_ENABLED_KEY = 'CABINET_LITE_MODE_ENABLED'  # Stores "true" or "false"
 ULTIMA_MODE_ENABLED_KEY = 'CABINET_ULTIMA_MODE_ENABLED'  # Stores "true" or "false"
+GIFT_ENABLED_KEY = 'CABINET_GIFT_ENABLED'  # Stores "true" or "false"
 ANIMATION_CONFIG_KEY = 'CABINET_ANIMATION_CONFIG'  # Stores JSON with animation config
 
 # Default animation config
@@ -269,6 +270,18 @@ class UltimaModeEnabledResponse(BaseModel):
 
 class UltimaModeEnabledUpdate(BaseModel):
     """Request to update ultima mode setting."""
+
+    enabled: bool
+
+
+class GiftEnabledResponse(BaseModel):
+    """Gift mode enabled setting."""
+
+    enabled: bool = False
+
+
+class GiftEnabledUpdate(BaseModel):
+    """Request to update gift mode setting."""
 
     enabled: bool
 
@@ -983,3 +996,29 @@ async def update_ultima_mode_enabled(
     logger.info('Admin set ultima mode enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
 
     return UltimaModeEnabledResponse(enabled=payload.enabled)
+
+
+# ============ Gift Mode Routes ============
+
+
+@router.get('/gift-enabled', response_model=GiftEnabledResponse)
+async def get_gift_enabled(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get gift mode enabled setting (public)."""
+    gift_value = await get_setting_value(db, GIFT_ENABLED_KEY)
+    if gift_value is not None:
+        return GiftEnabledResponse(enabled=gift_value.lower() == 'true')
+    return GiftEnabledResponse(enabled=False)
+
+
+@router.patch('/gift-enabled', response_model=GiftEnabledResponse)
+async def update_gift_enabled(
+    payload: GiftEnabledUpdate,
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update gift mode enabled setting. Admin only."""
+    await set_setting_value(db, GIFT_ENABLED_KEY, str(payload.enabled).lower())
+    logger.info('Admin set gift mode enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
+    return GiftEnabledResponse(enabled=payload.enabled)

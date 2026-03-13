@@ -50,6 +50,7 @@ class TariffListItem(BaseModel):
     name: str
     description: str | None = None
     is_active: bool
+    show_in_gift: bool = True
     is_trial_available: bool
     is_daily: bool = False
     daily_price_kopeks: int = 0
@@ -79,6 +80,7 @@ class TariffDetailResponse(BaseModel):
     name: str
     description: str | None = None
     is_active: bool
+    show_in_gift: bool = True
     is_trial_available: bool
     allow_traffic_topup: bool = True
     traffic_topup_enabled: bool = False
@@ -123,6 +125,7 @@ class TariffCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
     is_active: bool = True
+    show_in_gift: bool = True
     allow_traffic_topup: bool = True
     traffic_topup_enabled: bool = False
     traffic_topup_packages: dict[str, int] = Field(default_factory=dict)
@@ -161,6 +164,7 @@ class TariffUpdateRequest(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
     is_active: bool | None = None
+    show_in_gift: bool | None = None
     allow_traffic_topup: bool | None = None
     traffic_topup_enabled: bool | None = None
     traffic_topup_packages: dict[str, int] | None = None

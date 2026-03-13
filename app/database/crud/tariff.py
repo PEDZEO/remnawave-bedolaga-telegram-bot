@@ -159,6 +159,7 @@ async def create_tariff(
     description: str | None = None,
     display_order: int = 0,
     is_active: bool = True,
+    show_in_gift: bool = True,
     traffic_limit_gb: int = 100,
     device_limit: int = 1,
     device_price_kopeks: int | None = None,
@@ -196,6 +197,7 @@ async def create_tariff(
         description=description.strip() if description else None,
         display_order=max(0, display_order),
         is_active=is_active,
+        show_in_gift=show_in_gift,
         traffic_limit_gb=max(0, traffic_limit_gb),
         device_limit=max(1, device_limit),
         device_price_kopeks=device_price_kopeks,
@@ -260,6 +262,7 @@ async def update_tariff(
     description: str | None = None,
     display_order: int | None = None,
     is_active: bool | None = None,
+    show_in_gift: bool | None = None,
     traffic_limit_gb: int | None = None,
     device_limit: int | None = None,
     device_price_kopeks: int | None = ...,  # ... = не передан, None = сбросить
@@ -298,6 +301,8 @@ async def update_tariff(
         tariff.display_order = max(0, display_order)
     if is_active is not None:
         tariff.is_active = is_active
+    if show_in_gift is not None:
+        tariff.show_in_gift = show_in_gift
     if traffic_limit_gb is not None:
         tariff.traffic_limit_gb = max(0, traffic_limit_gb)
     if device_limit is not None:
