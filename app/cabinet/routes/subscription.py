@@ -384,7 +384,7 @@ async def renew_subscription(
 
     # Add discount info to response
     if promo_offer_discount_value > 0:
-        response['promo_discount_percent'] = promo_offer_discount_percent
+        response['promo_discount_percent'] = discount_percent
         response['promo_discount_amount_kopeks'] = promo_offer_discount_value
         response['original_price_kopeks'] = original_price_kopeks
 
