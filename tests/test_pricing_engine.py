@@ -1,5 +1,6 @@
 import pytest
-from app.services.pricing_engine import RenewalPricing, PricingEngine
+
+from app.services.pricing_engine import PricingEngine, RenewalPricing
 
 
 def test_renewal_pricing_is_frozen():
