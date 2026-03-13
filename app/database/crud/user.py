@@ -550,6 +550,7 @@ async def subtract_user_balance(
     logger.info('📝 Описание', description=description)
 
     # Lock the user row to prevent concurrent balance race conditions
+    # Eagerly load key relationships to avoid MissingGreenlet in async context
     locked_result = await db.execute(
         select(User)
         .where(User.id == user.id)
