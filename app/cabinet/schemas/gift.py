@@ -83,6 +83,10 @@ class GiftExtendResponse(BaseModel):
     recipient_username: str | None = None
 
 
+class GiftExtendRequest(BaseModel):
+    period_days: int | None = Field(default=None, gt=0, le=3650)
+
+
 class GiftPurchaseStatusResponse(BaseModel):
     status: str
     is_gift: bool = True
@@ -106,6 +110,7 @@ class PendingGiftResponse(BaseModel):
 
 class SentGiftResponse(BaseModel):
     token: str
+    tariff_id: int | None = None
     tariff_name: str | None = None
     period_days: int
     device_limit: int = 1

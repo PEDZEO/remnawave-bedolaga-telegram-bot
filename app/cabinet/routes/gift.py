@@ -46,6 +46,7 @@ from ..schemas.gift import (
     GiftConfigSubOption,
     GiftConfigTariff,
     GiftConfigTariffPeriod,
+    GiftExtendRequest,
     GiftExtendResponse,
     GiftPurchaseRequest,
     GiftPurchaseResponse,
@@ -548,6 +549,7 @@ async def create_gift_purchase(
 @router.post('/sent/{token}/extend', response_model=GiftExtendResponse)
 async def extend_sent_gift(
     token: str,
+    body: GiftExtendRequest | None = None,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -580,7 +582,8 @@ async def extend_sent_gift(
     if tariff is None or not tariff.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Gift tariff is unavailable')
 
-    period_days = int(purchase.period_days or 0)
+    requested_period_days = body.period_days if body else None
+    period_days = int(requested_period_days or purchase.period_days or 0)
     if period_days <= 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Gift period is invalid')
 
@@ -770,6 +773,7 @@ async def get_sent_gifts(
     return [
         SentGiftResponse(
             token=p.token[:12],
+            tariff_id=p.tariff_id,
             tariff_name=p.tariff.name if p.tariff else None,
             period_days=p.period_days,
             device_limit=p.tariff.device_limit if p.tariff else 1,
