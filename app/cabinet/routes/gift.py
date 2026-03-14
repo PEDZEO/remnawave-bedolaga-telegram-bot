@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -169,6 +169,13 @@ async def _is_gift_enabled(db: AsyncSession) -> bool:
     return bool(value and value.lower() == 'true')
 
 
+async def _has_explicit_gift_tariffs(db: AsyncSession) -> bool:
+    result = await db.execute(
+        select(func.count(Tariff.id)).where(Tariff.is_active.is_(True), Tariff.show_in_gift.is_(True))
+    )
+    return (result.scalar_one() or 0) > 0
+
+
 @router.get('/config', response_model=GiftConfigResponse)
 async def get_gift_config(
     user: User = Depends(get_current_cabinet_user),
@@ -178,11 +185,12 @@ async def get_gift_config(
     if not enabled:
         return GiftConfigResponse(is_enabled=False, balance_kopeks=user.balance_kopeks)
 
-    result = await db.execute(
-        select(Tariff)
-        .where(Tariff.is_active.is_(True), Tariff.show_in_gift.is_(True))
-        .order_by(Tariff.display_order, Tariff.id)
-    )
+    has_explicit_gift_tariffs = await _has_explicit_gift_tariffs(db)
+    tariff_query = select(Tariff).where(Tariff.is_active.is_(True))
+    if has_explicit_gift_tariffs:
+        tariff_query = tariff_query.where(Tariff.show_in_gift.is_(True))
+
+    result = await db.execute(tariff_query.order_by(Tariff.display_order, Tariff.id))
     tariffs_db = result.scalars().all()
 
     promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
@@ -299,7 +307,9 @@ async def create_gift_purchase(
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Cannot gift to yourself')
 
     tariff = await get_tariff_by_id(db, body.tariff_id)
-    if tariff is None or not tariff.is_active or not tariff.show_in_gift:
+    has_explicit_gift_tariffs = await _has_explicit_gift_tariffs(db)
+    is_allowed_for_gift = bool(tariff and tariff.is_active and (tariff.show_in_gift or not has_explicit_gift_tariffs))
+    if not is_allowed_for_gift:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Tariff not found or inactive')
 
     price_kopeks = tariff.get_price_for_period(body.period_days)
