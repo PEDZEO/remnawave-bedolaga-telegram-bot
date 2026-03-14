@@ -604,6 +604,18 @@ async def extend_sent_gift(
         price_kopeks = price_kopeks - price_kopeks * promo_offer_discount_percent // 100
     price_kopeks = max(1, int(price_kopeks))
 
+    if user.balance_kopeks < price_kopeks:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                'code': 'INSUFFICIENT_BALANCE',
+                'message': 'Insufficient balance',
+                'required_amount': int(price_kopeks),
+                'balance': int(user.balance_kopeks),
+                'missing_amount': int(max(0, price_kopeks - user.balance_kopeks)),
+            },
+        )
+
     charged = await subtract_user_balance(
         db,
         user,
