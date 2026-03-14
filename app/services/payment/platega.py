@@ -13,6 +13,7 @@ from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
 from app.services.platega_service import PlategaService
 from app.utils.payment_logger import payment_logger as logger
+from app.utils.ultima_notifications import strip_bot_menu_buttons_for_ultima
 from app.utils.user_utils import format_referrer_info
 
 
@@ -461,7 +462,7 @@ class PlategaPaymentMixin:
                         'Баланс пополнен автоматически!'
                     ),
                     parse_mode='HTML',
-                    reply_markup=keyboard,
+                    reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard),
                 )
             except Exception as error:
                 logger.error('Ошибка отправки уведомления пользователю Platega', error=error)

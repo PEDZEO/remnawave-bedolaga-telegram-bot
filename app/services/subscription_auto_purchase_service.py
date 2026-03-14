@@ -1910,7 +1910,7 @@ async def try_auto_extend_expired_after_topup(
             await bot.send_message(
                 chat_id=user.telegram_id,
                 text=full_message,
-                reply_markup=keyboard,
+                reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard),
                 parse_mode='HTML',
             )
         except Exception as error:
@@ -2178,7 +2178,7 @@ async def try_resume_disabled_daily_after_topup(
             await bot.send_message(
                 chat_id=user.telegram_id,
                 text=message,
-                reply_markup=keyboard,
+                reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard),
                 parse_mode='HTML',
             )
         except Exception as error:

@@ -14,6 +14,7 @@ from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
 from app.services.kassa_ai_service import kassa_ai_service
 from app.utils.payment_logger import payment_logger as logger
+from app.utils.ultima_notifications import strip_bot_menu_buttons_for_ultima
 from app.utils.user_utils import format_referrer_info
 
 
@@ -365,7 +366,7 @@ class KassaAiPaymentMixin:
                     user.telegram_id,
                     message,
                     parse_mode='HTML',
-                    reply_markup=keyboard,
+                    reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard),
                 )
             except Exception as error:
                 logger.error('Ошибка отправки уведомления пользователю KassaAI', error=error)

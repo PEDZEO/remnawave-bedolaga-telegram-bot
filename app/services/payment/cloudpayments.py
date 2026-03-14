@@ -12,6 +12,7 @@ from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
 from app.services.cloudpayments_service import CloudPaymentsAPIError
 from app.utils.payment_logger import payment_logger as logger
+from app.utils.ultima_notifications import strip_bot_menu_buttons_for_ultima
 from app.utils.user_utils import format_referrer_info
 
 
@@ -424,7 +425,7 @@ class CloudPaymentsPaymentMixin:
                 chat_id=user.telegram_id,
                 text=message,
                 parse_mode='HTML',
-                reply_markup=keyboard,
+                reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard),
             )
         except Exception as error:
             logger.warning('Не удалось отправить уведомление пользователю', telegram_id=user.telegram_id, error=error)

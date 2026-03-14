@@ -24,6 +24,7 @@ from app.services.subscription_renewal_service import (
 )
 from app.utils.currency_converter import currency_converter
 from app.utils.payment_logger import payment_logger as logger
+from app.utils.ultima_notifications import strip_bot_menu_buttons_for_ultima
 from app.utils.user_utils import format_referrer_info
 
 
@@ -580,7 +581,7 @@ class CryptoBotPaymentMixin:
                 payload.telegram_id,
                 payload.text,
                 parse_mode=payload.parse_mode,
-                reply_markup=payload.reply_markup,
+                reply_markup=await strip_bot_menu_buttons_for_ultima(payload.reply_markup),
             )
             logger.info(
                 '✅ Отправлено уведомление пользователю %s о пополнении на %s₽ (%s)',
