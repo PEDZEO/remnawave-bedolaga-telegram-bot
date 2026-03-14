@@ -1,5 +1,102 @@
 # Changelog
 
+## [3.24.0](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.23.0...v3.24.0) (2026-03-14)
+
+
+### New Features
+
+* add CLASSIC_PERIOD_PRICES to config ([ad79130](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/ad7913078b823f5b2dcfc0e865f7fcfb0dbe7363))
+* add gifts section to admin user detail API ([e0561f0](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/e0561f08f0378d192b6adf294df37089f98ffb6f))
+* add LIMITED subscription status and preserve extra devices on tariff switch ([06dd0f8](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/06dd0f8a49fa281f5ee2ab0fc20ae04331c85cca))
+* add promo group and promo offer discounts to gift subscriptions ([4ab64fb](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/4ab64fb241902cfbc44c766d03b5fbc585208f08))
+* add RenewalPricing dataclass and PricingEngine discount methods ([0a24db7](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/0a24db7bb94258db127b51ee5a4d115685b1f7d8))
+* add show_in_gift toggle for tariffs in admin panel ([74258b2](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/74258b245193acf64a2954dac730848a218186eb))
+* add sync-squads endpoint for bulk updating subscription squads in Remnawave ([dabd1f1](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/dabd1f1cc9b864160954087b382ee1f3228ef2f7))
+* auto-sync squads to Remnawave when admin updates tariff ([e1ee6bf](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/e1ee6bf911d7adbc6d1de68f2fbf69f5adbd275e))
+* **cabinet:** add default subscription payment method flag and tariff max devices ([f7976c9](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/f7976c9479c020946010395c66d9803930ded8aa))
+* **cabinet:** add ultima mode branding endpoints ([42e1b3d](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/42e1b3dce553a29bc71c751b85aaed43d3e1fc8d))
+* **cabinet:** support device_limit in tariff purchase pricing and activation ([38932d9](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/38932d9cb637426490dd24ad20b5168eb0e021ca))
+* **gift:** allow extending gifts with selected period ([b8b8186](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/b8b81865f1837220443c21a25dffe06d04dc9c9a))
+* **gift:** sync upstream gift subscription backend flows ([83c4d10](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/83c4d1036b6150f1c73941c942574f7acf51448e))
+* **promocode:** return gift sender in activation response ([1c59e31](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/1c59e318b5342baec5a0a4b90f495680473bddb5))
+* referral links now point to web cabinet instead of bot ([b4cd176](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/b4cd176b04667e462fe0dc4ca31e67573b82566e))
+* return detailed insufficient balance for gift extension ([ae14fa3](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/ae14fa388c3fb84cdf5114a9674a8daea95d3376))
+* support extending existing gift tokens ([b6d15ee](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/b6d15eecba559fc9b2283813d7a8a346d883d34a))
+* **ultima:** add standalone agreement endpoints for user and admin ([cec96e6](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/cec96e6d7283b3c0f1e2b12bafe4e2ac673b7cbd))
+* **ultima:** separate start flow with configurable app message ([7da6101](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/7da6101012a7f4f6db47e5e3f3fdb5977f5a838d))
+* **ultima:** support gift promo flow with partial top-up ([f4ffc98](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/f4ffc98f50e3a3c18ebaa417bcb3c5951f824328))
+
+
+### Bug Fixes
+
+* add missing settings import in admin_users tariff switch ([b849ad1](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/b849ad1594c71476bf7c1d3e738b44198230757d))
+* add nested selectinload and referrer eager loading to prevent MissingGreenlet ([9d80077](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/9d8007788a7d82fe1f8c182a5b2c3638c05ed12a))
+* add per-category discounts and months multiplier to classic mode ([254a412](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/254a412978082e16a5198b786cf5dbeacf8cc836))
+* add period_days whitelist validation and type annotations ([3c35022](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/3c35022cd5104c2eb5e459a2baeac81962c16edf))
+* add post_update=True to User.referrals self-referential relationship ([5d52d24](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/5d52d24dbe52155e27c2b0325b45d2edbff31637))
+* add selectinload to user lock queries to prevent MissingGreenlet ([529c3f1](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/529c3f1ccd21456d895a3320b82c77f77ae0e3c8))
+* add Telegram Stars payment support for gift subscriptions ([dfdec12](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/dfdec12cc2a52b47863dae72c34a3367f38332a3))
+* align guest purchase service with fork architecture ([7241663](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/7241663f5419843bb865d7082d074147b4ee1c88))
+* append cache buster to generated miniapp urls ([c869559](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/c8695597575f640535d21aed95e575b404e68bfd))
+* atomicity refactor, review fixes, and DELETED recovery logging ([dc86d18](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/dc86d188fb84a81754de5eb61b4707c0ea7cfbe0))
+* **auth:** make refresh JWT unique with jti ([38f9f6c](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/38f9f6c190bab01d9f4e20f17f2e5775884347ca))
+* change None assignment to [] + add "or []" guards at all 5 call sites. ([e1886c5](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/e1886c57404ea902ea2e333320327add41750e39))
+* correct skipped_count in sync-squads circuit breaker and simplify ternary ([475bf6f](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/475bf6f490e630e6fa6172c461b414115872551a))
+* define UUID pattern in tariff schemas for external squad ([45ee3f2](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/45ee3f2b23008d8ae92eba7d4507f854b27bbdf8))
+* downgrade known-harmless RemnaWave 400s to warning level ([2a2ddf5](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/2a2ddf57fbb6079a5f5e7c4be30c72d4c1bc67c5))
+* fallback balance lock for mocked sessions ([06f8fa2](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/06f8fa2e293d4600bcb6a56399245d484ab11639))
+* **gift:** enable gift flow automatically in ultima mode ([4b56687](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/4b56687e4de482e81bc5d6eaad8d0e058f26cddc))
+* **gift:** fallback to active tariffs when show_in_gift is not configured ([2baa1c9](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/2baa1c97d9b1929d44c00e603c46943d5f336d7d))
+* **gift:** respect gift toggle and restore settings import ([ed8352f](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/ed8352f3f21ce6aec687e2b7dd3c67121fa9fecc))
+* guard rollback on commit flag, add flush to promo_offer_log ([59d99bd](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/59d99bdd42a99862ababeeb5e3397f44c03a9c4e))
+* handle legacy telegram_id in YooKassa webhook recovery metadata ([5c3204e](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/5c3204e84727aad158e3170154ca21f00cc4e82e))
+* harden remnawave API error handling and YooKassa user cross-validation ([2156784](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/21567846a5581000ab80c3d9f4bf3e16376c08ad))
+* harden YooKassa webhook recovery user lookup ([e7342b5](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/e7342b5495d47f7e7f98bdadaadebedf31d7db15))
+* invalid ISO date format in node usage stats API call ([93aedaf](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/93aedaf277f745f15baf0bb4b1b14219a576a7a4))
+* keep payment lock flow compatible with mocked sessions ([e1ad616](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/e1ad6162245e0b38f82f148a716e94daec5b8cfe))
+* **migrations:** add 0037 compatibility placeholder revision ([c13e79d](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/c13e79df5f01ab21ad5e19cff53c62ab6401240a))
+* **migrations:** make 0019 gift migration idempotent ([8361467](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/8361467ae2f6665507c3ad5b9dbbf24e38a1118f))
+* **migrations:** make unique constraints idempotent for 0015 and 0017 ([fffc122](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/fffc1223e82986969bd9ba120377c4ff94f10e2e))
+* payment providers — lock_user_for_update + commit=False atomicity ([709e0a6](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/709e0a6c6e2b21eaa51468e8bd259c44e29b01d7))
+* platega webhook ID fallback for SBP and card payments ([8c53fb5](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/8c53fb5f9d1e00fc6b3d0a7044f8aefe937319a0))
+* preserve purchased devices when admin changes user tariff ([6bef3f3](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/6bef3f39bb224ef76dd58b3280d83ebbc227eb11))
+* prevent account takeover via auto_login_token, ensure promo group on all purchase paths ([ef6a129](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/ef6a12911d2d3a6e54a7fc199421cad2347fd81c))
+* prevent balance loss on auto-purchase for DISABLED subscriptions and fix WATA expiration ([8d70fa3](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/8d70fa383d9d4dd4aead10b6ab44239069a7ae78))
+* reactivate subscription after traffic top-up when status is EXPIRED ([4ab9f4b](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/4ab9f4b15e373882ca00e9e482695dc7178c7d9b))
+* record transactions for free tariff switches and admin tariff changes ([ca028b8](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/ca028b831d1050e0b80ae9d669b5c2da3c247781))
+* remove unused settings import in admin users route ([841d528](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/841d528e49023b4eb93d54881fdcb4e7cac14aea))
+* reset subscription for paid users, trial-to-paid tariff conversion, gift purchase MissingGreenlet ([abf2882](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/abf288232d383be202b0d0f8c96cbabdaabcebda))
+* resolve MissingGreenlet in switch_tariff endpoint ([f610df3](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/f610df3a997c411669b63f1d4d118070688d6ec0))
+* resolve post-sync renewal response and typing issues ([931027e](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/931027e0b8ad70395b1af579b92a41c38f4280dc))
+* resolve post-sync typing and runtime issues in auto-purchase ([3fbc8fe](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/3fbc8fec80f434e17b9547a22b81d58b14a605f2))
+* restore miniapp payment status classification and stabilize auto-purchase tests ([7aa464f](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/7aa464f225ecdff614a197dc4d4f6f7feccd5cd6))
+* **settings:** allow admin trial overrides over env ([e4cc0ed](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/e4cc0ed582d550b323da3532c296e434d4902159))
+* silence PARTICIPANT_ID_INVALID error in channel subscription check ([4ef8599](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/4ef8599a9c370e1e82c5082f733b4ea7e5824b0c))
+* **trial:** enforce global device limit over tariff ([d543122](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/d54312242fde5a5dac99d9201cff5022505ace9d))
+* **ultima:** bypass onboarding flow on start for new users ([8526817](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/8526817716d010fefe95a3c44cab02244492ce13))
+* **ultima:** remove bot-menu buttons from user notifications ([f199804](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/f199804bf807c0f5b04e79a840ee41b1c8ec817a))
+* update promo group via M2M table so admin changes persist ([7d3c809](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/7d3c809ab3c1a6d02802acebe53483c66131ce3d))
+* user deletion FK error + connected_squads None TypeError ([e1886c5](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/e1886c57404ea902ea2e333320327add41750e39))
+
+
+### Refactoring
+
+* make finalize() accept both old and new pricing types ([bd018e1](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/bd018e164d39727b6d8291b8db26fc7165e47088))
+* migrate admin user price calculation to PricingEngine ([eb76cb2](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/eb76cb2a6c960fffe1609d3e3de42f33375cc03c))
+* migrate bot renewal display to PricingEngine ([486f8b8](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/486f8b8931be83a1f77aa605ad1db6113a1a8716))
+* migrate bot renewal execute to PricingEngine ([7399f0e](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/7399f0efd3a9ca1ebc05ecbde73dd6309c186437))
+* migrate cabinet renewal display + execute to PricingEngine ([ae91ecb](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/ae91ecba63a1b6457093be24050dd3eded55794e))
+* migrate cart auto-purchase to PricingEngine (fresh calc) ([5de288d](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/5de288df452dfc7d932f1b5417f9e36e6c239c06))
+* migrate menu.py renewal pricing to PricingEngine ([ce149dc](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/ce149dc36626c59cc4001f8f2927c332640c50ca))
+* migrate miniapp renewal display + execute to PricingEngine ([3c6dff0](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/3c6dff029660e487f1931f269ce5a469b3901a2f))
+* remove estimated price from balance, simplify server sync, fix HTML injection ([53c80e7](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/53c80e7bcac3b9eb2e09a49098c4a0b92efc9ceb))
+* unify first-purchase discount algorithm with PricingEngine ([7a7a51c](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/7a7a51c1ce5c377897503dbc45bb821665f87c1d))
+
+
+### Documentation
+
+* update chat invite link ([6b5ff7b](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/6b5ff7be919a47b6c3c50aabf0483be20c84a721))
+
 ## [3.23.0](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.22.4...v3.23.0) (2026-03-06)
 
 
