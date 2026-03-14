@@ -21,6 +21,7 @@ from app.utils.pricing_utils import (
 from app.utils.promo_offer import (
     build_promo_offer_hint,
 )
+from app.utils.ultima_notifications import strip_bot_menu_buttons_for_ultima
 
 from .common import _format_text_with_placeholders
 
@@ -211,7 +212,10 @@ async def claim_discount_offer(
                 ]
             ]
         )
-        await callback.message.answer(success_message, reply_markup=back_keyboard)
+        await callback.message.answer(
+            success_message,
+            reply_markup=await strip_bot_menu_buttons_for_ultima(back_keyboard),
+        )
         return
 
     discount_percent = int(offer.discount_percent or 0)
@@ -372,7 +376,10 @@ async def claim_discount_offer(
             ]
         ]
     )
-    await callback.message.answer(success_message, reply_markup=buy_keyboard)
+    await callback.message.answer(
+        success_message,
+        reply_markup=await strip_bot_menu_buttons_for_ultima(buy_keyboard),
+    )
 
 
 async def handle_promo_offer_close(
