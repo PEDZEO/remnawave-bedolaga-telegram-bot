@@ -1,4 +1,5 @@
 import html
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -35,6 +36,10 @@ class AdminNotificationService:
         self.ticket_topic_id = getattr(settings, 'ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID', None)
         self.enabled = getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
 
+    @staticmethod
+    def _escape_html(value: Any) -> str:
+        return html.escape(str(value), quote=False)
+
     async def _get_referrer_info(self, db: AsyncSession, referred_by_id: int | None) -> str:
         if not referred_by_id:
             return 'Нет'
@@ -42,19 +47,19 @@ class AdminNotificationService:
         try:
             referrer = await get_user_by_id(db, referred_by_id)
             if not referrer:
-                return f'ID {referred_by_id} (не найден)'
+                return self._escape_html(f'ID {referred_by_id} (не найден)')
 
             if referrer.username:
-                return f'@{referrer.username} (ID: {referred_by_id})'
+                return self._escape_html(f'@{referrer.username} (ID: {referred_by_id})')
             if referrer.telegram_id:
-                return f'ID {referrer.telegram_id}'
+                return self._escape_html(f'ID {referrer.telegram_id}')
             if referrer.email:
-                return f'📧 {referrer.email}'
-            return f'User#{referred_by_id}'
+                return self._escape_html(f'📧 {referrer.email}')
+            return self._escape_html(f'User#{referred_by_id}')
 
         except Exception as e:
             logger.error('Ошибка получения данных рефера', referred_by_id=referred_by_id, error=e)
-            return f'ID {referred_by_id}'
+            return self._escape_html(f'ID {referred_by_id}')
 
     async def _get_user_promo_group(self, db: AsyncSession, user: User) -> PromoGroup | None:
         if getattr(user, 'promo_group', None):
@@ -86,31 +91,31 @@ class AdminNotificationService:
     def _get_user_display(self, user: User) -> str:
         first_name = getattr(user, 'first_name', '') or ''
         if first_name:
-            return first_name
+            return self._escape_html(first_name)
 
         username = getattr(user, 'username', '') or ''
         if username:
-            return username
+            return self._escape_html(username)
 
         telegram_id = getattr(user, 'telegram_id', None)
         if telegram_id is None:
             email = getattr(user, 'email', None)
             if email:
-                return email
-            return f'User#{getattr(user, "id", "Unknown")}'
-        return f'ID{telegram_id}'
+                return self._escape_html(email)
+            return self._escape_html(f'User#{getattr(user, "id", "Unknown")}')
+        return self._escape_html(f'ID{telegram_id}')
 
     def _get_user_identifier_display(self, user: User) -> str:
         """Get user identifier for display in notifications (telegram_id or email)."""
         telegram_id = getattr(user, 'telegram_id', None)
         if telegram_id:
-            return f'<code>{telegram_id}</code>'
+            return f'<code>{self._escape_html(telegram_id)}</code>'
 
         email = getattr(user, 'email', None)
         if email:
-            return f'📧 {email}'
+            return self._escape_html(f'📧 {email}')
 
-        return f'User#{getattr(user, "id", "Unknown")}'
+        return self._escape_html(f'User#{getattr(user, "id", "Unknown")}')
 
     def _get_user_identifier_label(self, user: User) -> str:
         """Get label for user identifier (Telegram ID or Email)."""
@@ -217,7 +222,7 @@ class AdminNotificationService:
         if not promo_group:
             return f'{icon} <b>{title}:</b> —'
 
-        lines = [f'{icon} <b>{title}:</b> {promo_group.name}']
+        lines = [f'{icon} <b>{title}:</b> {self._escape_html(promo_group.name)}']
 
         discount_lines = self._format_promo_group_discounts(promo_group)
         if discount_lines:
@@ -1223,6 +1228,33 @@ class AdminNotificationService:
             return False
         except TelegramBadRequest as e:
             logger.error('Ошибка отправки уведомления', error=e)
+            error_text = str(e).lower()
+            if 'parse entities' in error_text or 'message is too long' in error_text:
+                try:
+                    fallback_text = re.sub(r'</?[^>]+>', '', text)
+                    if len(fallback_text) > 3900:
+                        fallback_text = f'{fallback_text[:3900]}…'
+
+                    retry_kwargs = {
+                        'chat_id': self.chat_id,
+                        'text': fallback_text,
+                        'disable_web_page_preview': True,
+                    }
+                    if reply_markup is not None:
+                        retry_kwargs['reply_markup'] = reply_markup
+                    thread_id = None
+                    if ticket_event and self.ticket_topic_id:
+                        thread_id = self.ticket_topic_id
+                    elif self.topic_id:
+                        thread_id = self.topic_id
+                    if thread_id:
+                        retry_kwargs['message_thread_id'] = thread_id
+
+                    await self.bot.send_message(**retry_kwargs)
+                    logger.warning('Уведомление отправлено fallback-режимом (plain text)', chat_id=self.chat_id)
+                    return True
+                except Exception as retry_error:
+                    logger.error('Fallback отправка уведомления не удалась', error=retry_error)
             return False
         except Exception as e:
             logger.error('Неожиданная ошибка при отправке уведомления', error=e)
@@ -1298,7 +1330,7 @@ class AdminNotificationService:
             from app.handlers.subscription import get_servers_display_names
 
             servers_names = await get_servers_display_names(squad_uuids)
-            return f'{len(squad_uuids)} шт. ({servers_names})'
+            return f'{len(squad_uuids)} шт. ({self._escape_html(servers_names)})'
         except Exception as e:
             logger.warning('Не удалось получить названия серверов', error=e)
             return f'{len(squad_uuids)} шт.'
