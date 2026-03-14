@@ -240,19 +240,10 @@ class CloudPaymentsPaymentMixin:
         for user_promo_group in getattr(user, 'user_promo_groups', []):
             await db.refresh(user_promo_group, attribute_names=['promo_group'])
 
-        from app.utils.user_utils import format_referrer_info
-
-        promo_group = user.get_primary_promo_group()
-        subscription = getattr(user, 'subscription', None)
-        referrer_info = format_referrer_info(user)
-
         # Lock user row to prevent concurrent balance race conditions
         from app.database.crud.user import lock_user_for_update
 
         user = await lock_user_for_update(db, user)
-
-        old_balance = user.balance_kopeks
-        was_first_topup = not user.has_made_first_topup
         # Credit balance directly (not via add_user_balance which commits)
         user.balance_kopeks += amount_kopeks
         user.updated_at = datetime.now(UTC)

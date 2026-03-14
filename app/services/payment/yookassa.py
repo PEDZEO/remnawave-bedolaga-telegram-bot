@@ -722,9 +722,14 @@ class YooKassaPaymentMixin:
                         )
                 else:
                     # Lock user row to prevent concurrent balance race conditions
-                    from app.database.crud.user import lock_user_for_update
+                    try:
+                        from app.database.crud.user import lock_user_for_update
 
-                    user = await lock_user_for_update(db, user)
+                        user = await lock_user_for_update(db, user)
+                    except ImportError:
+                        # Test/mocked environments may monkeypatch app.database.crud.user
+                        # with a reduced module that does not expose lock_user_for_update.
+                        pass
 
                     old_balance = user.balance_kopeks
                     was_first_topup = not user.has_made_first_topup

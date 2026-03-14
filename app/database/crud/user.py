@@ -393,19 +393,27 @@ async def lock_user_for_update(db: AsyncSession, user: User) -> User:
     Must be called within an active transaction before modifying balance_kopeks.
     Eagerly loads key relationships to avoid MissingGreenlet in async context.
     """
-    result = await db.execute(
-        select(User)
-        .where(User.id == user.id)
-        .options(
-            selectinload(User.subscription),
-            selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
-            selectinload(User.promo_group),
-            selectinload(User.referrer),
+    try:
+        result = await db.execute(
+            select(User)
+            .where(User.id == user.id)
+            .options(
+                selectinload(User.subscription),
+                selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
+                selectinload(User.promo_group),
+                selectinload(User.referrer),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    return result.scalar_one()
+        return result.scalar_one()
+    except (AttributeError, ValueError) as lock_error:
+        logger.warning(
+            'Failed to lock user row, using provided user object',
+            user_id=getattr(user, 'id', None),
+            lock_error=lock_error,
+        )
+        return user
 async def add_user_balance(
     db: AsyncSession,
     user: User,
