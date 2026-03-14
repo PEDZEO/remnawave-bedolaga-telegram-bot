@@ -3,6 +3,7 @@ from aiogram.types import InlineKeyboardButton
 
 from app.config import settings
 from app.utils.button_styles_cache import CALLBACK_TO_SECTION, get_cached_button_styles
+from app.utils.miniapp_url import add_miniapp_cache_buster
 
 
 # Mapping from callback_data to cabinet frontend paths.
@@ -90,10 +91,10 @@ def build_cabinet_url(path: str = '') -> str:
     if not path:
         return ''
     if path == '/':
-        return base
+        return add_miniapp_cache_buster(base)
     if not path.startswith('/'):
         path = f'/{path}'
-    return f'{base}{path}'
+    return add_miniapp_cache_buster(f'{base}{path}')
 
 
 def build_miniapp_or_callback_button(

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import SystemSetting
+from app.utils.miniapp_url import add_miniapp_cache_buster
 
 
 ULTIMA_MODE_ENABLED_KEY = 'CABINET_ULTIMA_MODE_ENABLED'
@@ -108,11 +109,11 @@ def build_ultima_start_keyboard(config: UltimaStartConfig) -> types.InlineKeyboa
 def _normalize_button_url(value: object) -> str:
     raw = str(value or '').strip()
     if raw.startswith('http://') or raw.startswith('https://'):
-        return raw
+        return add_miniapp_cache_buster(raw)
 
     miniapp_url = (settings.MINIAPP_CUSTOM_URL or '').strip()
     if miniapp_url.startswith('http://') or miniapp_url.startswith('https://'):
-        return miniapp_url
+        return add_miniapp_cache_buster(miniapp_url)
 
     bot_username = (settings.BOT_USERNAME or '').strip().lstrip('@')
     if bot_username:
