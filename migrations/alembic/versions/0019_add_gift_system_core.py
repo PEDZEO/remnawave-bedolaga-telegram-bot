@@ -16,11 +16,18 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _has_column(table: str, column: str) -> bool:
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    return column in [c['name'] for c in inspector.get_columns(table)]
+
+
 def upgrade() -> None:
-    op.add_column(
-        'tariffs',
-        sa.Column('show_in_gift', sa.Boolean(), nullable=False, server_default=sa.text('true')),
-    )
+    if not _has_column('tariffs', 'show_in_gift'):
+        op.add_column(
+            'tariffs',
+            sa.Column('show_in_gift', sa.Boolean(), nullable=False, server_default=sa.text('true')),
+        )
 
     op.create_table(
         'guest_purchases',
@@ -66,7 +73,8 @@ def upgrade() -> None:
         ['user_id', 'is_gift', 'status'],
     )
 
-    op.alter_column('tariffs', 'show_in_gift', server_default=None)
+    if _has_column('tariffs', 'show_in_gift'):
+        op.alter_column('tariffs', 'show_in_gift', server_default=None)
 
 
 def downgrade() -> None:
@@ -77,4 +85,5 @@ def downgrade() -> None:
     op.drop_index('ix_guest_purchases_status', table_name='guest_purchases')
     op.drop_index('ix_guest_purchases_token', table_name='guest_purchases')
     op.drop_table('guest_purchases')
-    op.drop_column('tariffs', 'show_in_gift')
+    if _has_column('tariffs', 'show_in_gift'):
+        op.drop_column('tariffs', 'show_in_gift')
