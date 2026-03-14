@@ -46,6 +46,7 @@ from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_duration
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.subscription_utils import get_display_subscription_link
+from app.utils.ultima_notifications import strip_bot_menu_buttons_for_ultima
 
 
 logger = structlog.get_logger(__name__)
@@ -1979,7 +1980,7 @@ async def _send_offer_to_users(
                     await bot.send_message(
                         chat_id=user.telegram_id,
                         text=message_text,
-                        reply_markup=keyboard,
+                        reply_markup=await strip_bot_menu_buttons_for_ultima(keyboard),
                         parse_mode='HTML',
                     )
                     return True

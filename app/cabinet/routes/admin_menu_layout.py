@@ -16,7 +16,11 @@ from app.services.menu_layout_service import MenuLayoutService
 from app.services.ultima_start_service import (
     DEFAULT_BUTTON_TEXT,
     DEFAULT_MESSAGE_TEXT,
+    DEFAULT_NOTIFICATION_BUTTONS,
+    UltimaNotificationButton,
+    get_ultima_notification_config,
     get_ultima_start_config,
+    set_ultima_notification_config,
     set_ultima_start_config,
 )
 from app.webapi.schemas.menu_layout import (
@@ -56,6 +60,25 @@ class UltimaStartConfigUpdate(BaseModel):
     message_text: str = Field(default=DEFAULT_MESSAGE_TEXT, min_length=1, max_length=4096)
     button_text: str = Field(default=DEFAULT_BUTTON_TEXT, min_length=1, max_length=64)
     button_url: str = Field(default='', max_length=1024)
+
+
+class UltimaNotificationButtonItem(BaseModel):
+    text: str = Field(min_length=1, max_length=64)
+    path: str = Field(min_length=1, max_length=256)
+
+
+class UltimaNotificationConfigResponse(BaseModel):
+    enabled: bool
+    buttons: list[UltimaNotificationButtonItem]
+
+
+class UltimaNotificationConfigUpdate(BaseModel):
+    enabled: bool = True
+    buttons: list[UltimaNotificationButtonItem] = Field(
+        default_factory=lambda: [
+            UltimaNotificationButtonItem(text=text, path=path) for text, path in DEFAULT_NOTIFICATION_BUTTONS
+        ]
+    )
 
 
 def _serialize_config(config: dict[str, Any], is_enabled: bool, updated_at: Any) -> MenuLayoutResponse:
@@ -174,6 +197,38 @@ async def update_ultima_start_settings(
         message_text=config.message_text,
         button_text=config.button_text,
         button_url=config.button_url,
+    )
+
+
+@router.get('/ultima-notification-buttons', response_model=UltimaNotificationConfigResponse)
+async def get_ultima_notification_buttons_settings(
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> UltimaNotificationConfigResponse:
+    _ = admin
+    config = await get_ultima_notification_config(db)
+    return UltimaNotificationConfigResponse(
+        enabled=config.enabled,
+        buttons=[UltimaNotificationButtonItem(text=button.text, path=button.path) for button in config.buttons],
+    )
+
+
+@router.put('/ultima-notification-buttons', response_model=UltimaNotificationConfigResponse)
+async def update_ultima_notification_buttons_settings(
+    payload: UltimaNotificationConfigUpdate,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> UltimaNotificationConfigResponse:
+    _ = admin
+    config = await set_ultima_notification_config(
+        db,
+        enabled=payload.enabled,
+        buttons=[UltimaNotificationButton(text=button.text, path=button.path) for button in payload.buttons],
+    )
+    await db.commit()
+    return UltimaNotificationConfigResponse(
+        enabled=config.enabled,
+        buttons=[UltimaNotificationButtonItem(text=button.text, path=button.path) for button in config.buttons],
     )
 
 

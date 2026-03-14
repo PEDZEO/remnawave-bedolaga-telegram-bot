@@ -9,11 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import SystemSetting
+from app.utils.miniapp_buttons import build_cabinet_url
 from app.utils.miniapp_url import add_miniapp_cache_buster
 
 
 ULTIMA_MODE_ENABLED_KEY = 'CABINET_ULTIMA_MODE_ENABLED'
 ULTIMA_START_CONFIG_KEY = 'ULTIMA_START_BOT_CONFIG'
+ULTIMA_NOTIFICATION_BUTTONS_CONFIG_KEY = 'ULTIMA_NOTIFICATION_BUTTONS_CONFIG'
 
 DEFAULT_MESSAGE_TEXT = (
     '🙌 <b>Первые 3 дня бесплатно для всех пользователей:</b>\n\n'
@@ -23,6 +25,24 @@ DEFAULT_MESSAGE_TEXT = (
     'Возникли вопросы или сложности? Напишите в службу поддержки, мы обязательно вам поможем 👨🏻‍💻'
 )
 DEFAULT_BUTTON_TEXT = '📱 Приложение'
+DEFAULT_NOTIFICATION_BUTTONS: tuple[tuple[str, str], ...] = (
+    ('💳 Купить подписку', '/subscription/purchase'),
+    ('💰 Пополнить баланс', '/balance/top-up'),
+    ('🛠 Установка и настройка', '/connection'),
+    ('💬 Поддержка', '/support'),
+)
+ULTIMA_NOTIFICATION_ALLOWED_PATHS: frozenset[str] = frozenset(
+    {
+        '/',
+        '/subscription',
+        '/subscription/purchase',
+        '/connection',
+        '/support',
+        '/profile',
+        '/balance/top-up',
+        '/ultima/gift',
+    }
+)
 
 
 @dataclass(slots=True)
@@ -30,6 +50,18 @@ class UltimaStartConfig:
     message_text: str
     button_text: str
     button_url: str
+
+
+@dataclass(slots=True)
+class UltimaNotificationButton:
+    text: str
+    path: str
+
+
+@dataclass(slots=True)
+class UltimaNotificationConfig:
+    enabled: bool
+    buttons: list[UltimaNotificationButton]
 
 
 async def is_ultima_mode_enabled(db: AsyncSession) -> bool:
@@ -104,6 +136,130 @@ def build_ultima_start_keyboard(config: UltimaStartConfig) -> types.InlineKeyboa
             ]
         ]
     )
+
+
+async def get_ultima_notification_config(db: AsyncSession) -> UltimaNotificationConfig:
+    result = await db.execute(
+        select(SystemSetting.value).where(SystemSetting.key == ULTIMA_NOTIFICATION_BUTTONS_CONFIG_KEY)
+    )
+    raw = result.scalar_one_or_none()
+
+    payload: dict[str, object] = {}
+    if raw:
+        try:
+            loaded = json.loads(raw)
+            if isinstance(loaded, dict):
+                payload = loaded
+        except (TypeError, json.JSONDecodeError):
+            payload = {}
+
+    enabled = _coerce_bool(payload.get('enabled'), default=True)
+    buttons = _normalize_notification_buttons(payload.get('buttons'))
+    return UltimaNotificationConfig(enabled=enabled, buttons=buttons)
+
+
+async def set_ultima_notification_config(
+    db: AsyncSession,
+    *,
+    enabled: bool,
+    buttons: list[UltimaNotificationButton],
+) -> UltimaNotificationConfig:
+    normalized_buttons = _normalize_notification_buttons(
+        [{'text': button.text, 'path': button.path} for button in buttons]
+    )
+    config = UltimaNotificationConfig(enabled=enabled, buttons=normalized_buttons)
+
+    payload = {
+        'enabled': config.enabled,
+        'buttons': [{'text': button.text, 'path': button.path} for button in config.buttons],
+    }
+
+    result = await db.execute(select(SystemSetting).where(SystemSetting.key == ULTIMA_NOTIFICATION_BUTTONS_CONFIG_KEY))
+    setting = result.scalar_one_or_none()
+    if setting is None:
+        setting = SystemSetting(
+            key=ULTIMA_NOTIFICATION_BUTTONS_CONFIG_KEY, value=json.dumps(payload, ensure_ascii=False)
+        )
+        db.add(setting)
+    else:
+        setting.value = json.dumps(payload, ensure_ascii=False)
+
+    await db.flush()
+    return config
+
+
+def build_ultima_notification_keyboard(config: UltimaNotificationConfig) -> types.InlineKeyboardMarkup | None:
+    if not config.enabled or not config.buttons:
+        return None
+
+    rows: list[list[types.InlineKeyboardButton]] = []
+    row: list[types.InlineKeyboardButton] = []
+    for button in config.buttons:
+        url = build_cabinet_url(button.path) or _normalize_button_url('')
+        row.append(
+            types.InlineKeyboardButton(
+                text=button.text,
+                web_app=types.WebAppInfo(url=url),
+            )
+        )
+        if len(row) >= 2:
+            rows.append(row)
+            row = []
+
+    if row:
+        rows.append(row)
+
+    if not rows:
+        return None
+
+    return types.InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _normalize_notification_buttons(value: object) -> list[UltimaNotificationButton]:
+    default_buttons = [UltimaNotificationButton(text=text, path=path) for text, path in DEFAULT_NOTIFICATION_BUTTONS]
+    if not isinstance(value, list):
+        return default_buttons
+
+    buttons: list[UltimaNotificationButton] = []
+    for entry in value:
+        if not isinstance(entry, dict):
+            continue
+
+        text = str(entry.get('text') or '').strip()
+        path = _normalize_notification_path(entry.get('path'))
+        if not text or not path:
+            continue
+
+        buttons.append(UltimaNotificationButton(text=text[:64], path=path))
+        if len(buttons) >= 6:
+            break
+
+    return buttons or default_buttons
+
+
+def _normalize_notification_path(value: object) -> str:
+    path = str(value or '').strip()
+    if not path:
+        return ''
+    if not path.startswith('/'):
+        path = f'/{path}'
+    if path.endswith('/') and path != '/':
+        path = path[:-1]
+    if path not in ULTIMA_NOTIFICATION_ALLOWED_PATHS:
+        return ''
+    return path
+
+
+def _coerce_bool(value: object, *, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {'true', '1', 'yes', 'on'}:
+            return True
+        if normalized in {'false', '0', 'no', 'off'}:
+            return False
+    return default
 
 
 def _normalize_button_url(value: object) -> str:
