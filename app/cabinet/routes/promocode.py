@@ -98,7 +98,10 @@ async def activate_promocode(
 
         activatable = {GuestPurchaseStatus.PENDING_ACTIVATION.value, GuestPurchaseStatus.PAID.value}
         if purchase.status not in activatable:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='This gift cannot be activated')
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='This gift code has already been activated',
+            )
 
         if purchase.user_id is None:
             purchase.user_id = user.id
