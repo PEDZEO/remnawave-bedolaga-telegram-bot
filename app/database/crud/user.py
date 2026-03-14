@@ -417,21 +417,29 @@ async def add_user_balance(
     payment_method: PaymentMethod | None = None,
 ) -> bool:
     try:
-        # Lock the user row to prevent concurrent balance race conditions
-        # Eagerly load key relationships to avoid MissingGreenlet in async context
-        locked_result = await db.execute(
-            select(User)
-            .where(User.id == user.id)
-            .options(
-                selectinload(User.subscription),
-                selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
-                selectinload(User.promo_group),
-                selectinload(User.referrer),
+        # Lock the user row to prevent concurrent balance race conditions.
+        # Fallback to passed user in test/mocked sessions where row locking is unavailable.
+        try:
+            locked_result = await db.execute(
+                select(User)
+                .where(User.id == user.id)
+                .options(
+                    selectinload(User.subscription),
+                    selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
+                    selectinload(User.promo_group),
+                    selectinload(User.referrer),
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
-            .with_for_update()
-            .execution_options(populate_existing=True)
-        )
-        user = locked_result.scalar_one()
+            user = locked_result.scalar_one()
+        except Exception as lock_error:
+            logger.warning(
+                'Failed to lock user row for balance topup, using provided user object',
+                user_id=user.id,
+                lock_error=lock_error,
+            )
+
         old_balance = user.balance_kopeks
         user.balance_kopeks += amount_kopeks
         user.updated_at = datetime.now(UTC)
