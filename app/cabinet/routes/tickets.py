@@ -304,3 +304,58 @@ async def add_ticket_message(
         logger.error('Error creating cabinet notification for user reply', error=e)
 
     return _message_to_response(message)
+
+
+@router.post('/{ticket_id}/close', response_model=TicketDetailResponse)
+async def close_ticket(
+    ticket_id: int,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Close user's ticket."""
+    query = (
+        select(Ticket).where(Ticket.id == ticket_id, Ticket.user_id == user.id).options(selectinload(Ticket.messages))
+    )
+    result = await db.execute(query)
+    ticket = result.scalar_one_or_none()
+
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Ticket not found',
+        )
+
+    if ticket.status == 'closed':
+        messages = sorted(ticket.messages or [], key=lambda m: m.created_at)
+        return TicketDetailResponse(
+            id=ticket.id,
+            title=ticket.title or f'Ticket #{ticket.id}',
+            status=ticket.status,
+            priority=ticket.priority or 'normal',
+            created_at=ticket.created_at,
+            updated_at=ticket.updated_at or ticket.created_at,
+            closed_at=ticket.closed_at,
+            is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
+            messages=[_message_to_response(m) for m in messages],
+        )
+
+    now = datetime.now(UTC)
+    ticket.status = 'closed'
+    ticket.closed_at = now
+    ticket.updated_at = now
+
+    await db.commit()
+    await db.refresh(ticket, ['messages'])
+
+    messages = sorted(ticket.messages or [], key=lambda m: m.created_at)
+    return TicketDetailResponse(
+        id=ticket.id,
+        title=ticket.title or f'Ticket #{ticket.id}',
+        status=ticket.status,
+        priority=ticket.priority or 'normal',
+        created_at=ticket.created_at,
+        updated_at=ticket.updated_at or ticket.created_at,
+        closed_at=ticket.closed_at,
+        is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
+        messages=[_message_to_response(m) for m in messages],
+    )
