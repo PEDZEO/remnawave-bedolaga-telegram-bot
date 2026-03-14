@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.24.1](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.24.0...v3.24.1) (2026-03-14)
+
+
+### Bug Fixes
+
+* **build:** refresh uv lock for release 3.24.0 ([6f0cd89](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/6f0cd89101df5d2e514b22d7808a921a6e8f9587))
+
 ## [3.24.0](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.23.0...v3.24.0) (2026-03-14)
 
 
