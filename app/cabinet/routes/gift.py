@@ -420,8 +420,9 @@ async def create_gift_purchase(
         else:
             topup = await create_topup(
                 TopUpRequest(
-                    amount_kopeks=price_kopeks,
+                    amount_kopeks=body.topup_amount_kopeks or price_kopeks,
                     payment_method=body.payment_method or '',
+                    payment_option=body.payment_option,
                 ),
                 user=user,
                 db=db,

@@ -3,9 +3,12 @@
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.database.models import User
+from app.database.models import GuestPurchase, GuestPurchaseStatus, User
+from app.services.guest_purchase_service import GuestPurchaseError, activate_purchase as activate_gift_purchase
 from app.services.promocode_service import PromoCodeService
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
@@ -30,6 +33,9 @@ class PromocodeActivateResponse(BaseModel):
     balance_before: float = 0
     balance_after: float = 0
     bonus_description: str | None = None
+    activated_gift: bool = False
+    gift_tariff_name: str | None = None
+    gift_period_days: int | None = None
 
 
 class PromocodeDeactivateResponse(BaseModel):
@@ -48,9 +54,74 @@ async def activate_promocode(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Activate a promo code for the current user."""
+    raw_code = request.code.strip()
+    normalized_code = raw_code
+    if normalized_code.upper().startswith('GIFT-'):
+        normalized_code = normalized_code[5:]
+
+    # Ultima flow: allow activating gift-code directly via promocode input.
+    # We require explicit GIFT- prefix to avoid collisions with regular promo codes.
+    if raw_code.upper().startswith('GIFT-'):
+        if len(normalized_code) < 8:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Code too short')
+
+        token_filter = (
+            GuestPurchase.token == normalized_code
+            if len(normalized_code) >= 64
+            else GuestPurchase.token.startswith(normalized_code)
+        )
+        gift_query = await db.execute(
+            select(GuestPurchase)
+            .options(selectinload(GuestPurchase.tariff))
+            .where(token_filter, GuestPurchase.is_gift.is_(True))
+            .with_for_update()
+        )
+        purchase = gift_query.scalars().first()
+        if purchase is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Gift not found')
+        if purchase.buyer_user_id is not None and purchase.buyer_user_id == user.id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Cannot activate your own gift')
+
+        if purchase.status == GuestPurchaseStatus.DELIVERED.value:
+            return PromocodeActivateResponse(
+                success=True,
+                message='Gift already activated',
+                bonus_description='Gift activated successfully',
+                activated_gift=True,
+                gift_tariff_name=purchase.tariff.name if purchase.tariff else None,
+                gift_period_days=purchase.period_days,
+            )
+
+        activatable = {GuestPurchaseStatus.PENDING_ACTIVATION.value, GuestPurchaseStatus.PAID.value}
+        if purchase.status not in activatable:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='This gift cannot be activated')
+
+        if purchase.user_id is None:
+            purchase.user_id = user.id
+        elif purchase.user_id != user.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Gift not found')
+
+        if purchase.status == GuestPurchaseStatus.PAID.value:
+            purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
+        await db.flush()
+
+        try:
+            await activate_gift_purchase(db, purchase.token, skip_notification=True)
+        except GuestPurchaseError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+        return PromocodeActivateResponse(
+            success=True,
+            message='Gift activated successfully',
+            bonus_description='Gift activated successfully',
+            activated_gift=True,
+            gift_tariff_name=purchase.tariff.name if purchase.tariff else None,
+            gift_period_days=purchase.period_days,
+        )
+
     promocode_service = PromoCodeService()
 
-    result = await promocode_service.activate_promocode(db=db, user_id=user.id, code=request.code.strip())
+    result = await promocode_service.activate_promocode(db=db, user_id=user.id, code=normalized_code)
 
     if result['success']:
         balance_before_rubles = result.get('balance_before_kopeks', 0) / 100
