@@ -53,6 +53,7 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix='/gift', tags=['Cabinet Gift'])
 
 GIFT_ENABLED_KEY = 'CABINET_GIFT_ENABLED'
+ULTIMA_MODE_ENABLED_KEY = 'CABINET_ULTIMA_MODE_ENABLED'
 _EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
 _TELEGRAM_RE = re.compile(r'^@?[a-zA-Z][a-zA-Z0-9_]{4,31}$')
 
@@ -166,7 +167,13 @@ async def _get_setting_value(db: AsyncSession, key: str) -> str | None:
 
 async def _is_gift_enabled(db: AsyncSession) -> bool:
     value = await _get_setting_value(db, GIFT_ENABLED_KEY)
-    return bool(value and value.lower() == 'true')
+    if value and value.lower() == 'true':
+        return True
+
+    # In Ultima mode gifts are part of the primary flow, allow them even if
+    # generic gift toggle is disabled.
+    ultima_value = await _get_setting_value(db, ULTIMA_MODE_ENABLED_KEY)
+    return bool(ultima_value and ultima_value.lower() == 'true')
 
 
 async def _has_explicit_gift_tariffs(db: AsyncSession) -> bool:
