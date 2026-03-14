@@ -8,6 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
+from app.database.crud.subscription import (
+    create_paid_subscription,
+    extend_subscription,
+    get_subscription_by_user_id,
+)
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.transaction import create_transaction, emit_transaction_side_effects
 from app.database.crud.user import subtract_user_balance
@@ -28,6 +33,7 @@ from app.services.guest_purchase_service import (
     fulfill_purchase,
 )
 from app.services.payment_method_config_service import get_enabled_methods_for_user
+from app.services.subscription_service import SubscriptionService
 from app.utils.cache import RateLimitCache
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 
@@ -40,6 +46,7 @@ from ..schemas.gift import (
     GiftConfigSubOption,
     GiftConfigTariff,
     GiftConfigTariffPeriod,
+    GiftExtendResponse,
     GiftPurchaseRequest,
     GiftPurchaseResponse,
     GiftPurchaseStatusResponse,
@@ -56,6 +63,10 @@ router = APIRouter(prefix='/gift', tags=['Cabinet Gift'])
 GIFT_ENABLED_KEY = 'CABINET_GIFT_ENABLED'
 _EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
 _TELEGRAM_RE = re.compile(r'^@?[a-zA-Z][a-zA-Z0-9_]{4,31}$')
+
+
+def _gift_token_filter(token: str):
+    return GuestPurchase.token == token if len(token) >= 64 else GuestPurchase.token.startswith(token)
 
 
 async def _finalize_gateway_gift_via_balance(
@@ -534,6 +545,140 @@ async def create_gift_purchase(
     return GiftPurchaseResponse(status='ok', purchase_token=purchase_token[:12], warning=None)
 
 
+@router.post('/sent/{token}/extend', response_model=GiftExtendResponse)
+async def extend_sent_gift(
+    token: str,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    enabled = await _is_gift_enabled(db)
+    if not enabled:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Gift feature is not enabled')
+
+    is_limited = await RateLimitCache.is_rate_limited(user.id, 'gift_extend', limit=8, window=60)
+    if is_limited:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+
+    result = await db.execute(
+        select(GuestPurchase)
+        .options(selectinload(GuestPurchase.tariff), selectinload(GuestPurchase.user))
+        .where(_gift_token_filter(token), GuestPurchase.is_gift.is_(True))
+        .with_for_update()
+    )
+    purchase = result.scalars().first()
+    if purchase is None or purchase.buyer_user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Gift purchase not found')
+
+    if purchase.status in (GuestPurchaseStatus.FAILED.value, GuestPurchaseStatus.EXPIRED.value):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Gift is inactive')
+    if purchase.status == GuestPurchaseStatus.PENDING.value:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Gift is waiting for payment')
+
+    tariff = purchase.tariff
+    if tariff is None:
+        tariff = await get_tariff_by_id(db, purchase.tariff_id)
+    if tariff is None or not tariff.is_active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Gift tariff is unavailable')
+
+    period_days = int(purchase.period_days or 0)
+    if period_days <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Gift period is invalid')
+
+    price_kopeks = tariff.get_price_for_period(period_days)
+    if price_kopeks is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Gift tariff price for this period is unavailable',
+        )
+
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
+    if promo_group is None:
+        promo_group = getattr(user, 'promo_group', None)
+    if promo_group:
+        discount_percent = promo_group.get_discount_percent('period', period_days)
+        if discount_percent > 0:
+            price_kopeks = int(price_kopeks * (100 - discount_percent) / 100)
+
+    promo_offer_discount_percent = get_user_active_promo_discount_percent(user)
+    if promo_offer_discount_percent > 0:
+        price_kopeks = price_kopeks - price_kopeks * promo_offer_discount_percent // 100
+    price_kopeks = max(1, int(price_kopeks))
+
+    charged = await subtract_user_balance(
+        db,
+        user,
+        price_kopeks,
+        description=f'Gift extension: {tariff.name} ({period_days}d) [{purchase.token[:12]}]',
+        create_transaction=False,
+        consume_promo_offer=promo_offer_discount_percent > 0,
+    )
+    if not charged:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Insufficient balance')
+
+    transaction = await create_transaction(
+        db,
+        user_id=user.id,
+        type=TransactionType.GIFT_PAYMENT,
+        amount_kopeks=price_kopeks,
+        description=f'Gift extension: {tariff.name} ({period_days}d) [{purchase.token[:12]}]',
+        payment_method=PaymentMethod.BALANCE,
+        commit=False,
+    )
+
+    purchase.period_days += period_days
+
+    recipient_user = purchase.user
+    recipient_username = f'@{recipient_user.username}' if recipient_user and recipient_user.username else None
+    if purchase.status == GuestPurchaseStatus.DELIVERED.value and purchase.user_id:
+        recipient_subscription = await get_subscription_by_user_id(db, purchase.user_id)
+        if recipient_subscription:
+            recipient_subscription = await extend_subscription(db, recipient_subscription, period_days)
+        else:
+            recipient_subscription = await create_paid_subscription(
+                db=db,
+                user_id=purchase.user_id,
+                duration_days=period_days,
+                traffic_limit_gb=tariff.traffic_limit_gb,
+                device_limit=tariff.device_limit,
+                connected_squads=tariff.allowed_squads or [],
+                tariff_id=tariff.id,
+            )
+        try:
+            service = SubscriptionService()
+            if getattr(recipient_user, 'remnawave_uuid', None):
+                await service.update_remnawave_user(db, recipient_subscription)
+            else:
+                await service.create_remnawave_user(db, recipient_subscription)
+        except Exception:
+            logger.exception(
+                'Failed to sync remnawave after gift extension',
+                purchase_id=purchase.id,
+                recipient_user_id=purchase.user_id,
+            )
+
+    await db.commit()
+
+    await emit_transaction_side_effects(
+        db,
+        transaction,
+        amount_kopeks=price_kopeks,
+        user_id=user.id,
+        type=TransactionType.GIFT_PAYMENT,
+        payment_method=PaymentMethod.BALANCE,
+        description=f'Gift extension: {tariff.name} ({period_days}d) [{purchase.token[:12]}]',
+    )
+
+    return GiftExtendResponse(
+        status='extended',
+        token=purchase.token[:12],
+        added_days=period_days,
+        total_period_days=purchase.period_days,
+        charged_amount_kopeks=price_kopeks,
+        charged_amount_label=settings.format_price(price_kopeks),
+        recipient_username=recipient_username,
+    )
+
+
 @router.get('/pending', response_model=list[PendingGiftResponse])
 async def get_pending_gifts(
     user: User = Depends(get_current_cabinet_user),
@@ -570,9 +715,11 @@ async def get_gift_purchase_status(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    token_filter = GuestPurchase.token == token if len(token) >= 64 else GuestPurchase.token.startswith(token)
     result = await db.execute(
-        select(GuestPurchase).options(selectinload(GuestPurchase.tariff)).where(token_filter).with_for_update()
+        select(GuestPurchase)
+        .options(selectinload(GuestPurchase.tariff))
+        .where(_gift_token_filter(token))
+        .with_for_update()
     )
     purchase = result.scalars().first()
     if purchase is None or purchase.buyer_user_id != user.id:

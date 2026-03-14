@@ -73,6 +73,16 @@ class GiftPurchaseResponse(BaseModel):
     warning: str | None = None
 
 
+class GiftExtendResponse(BaseModel):
+    status: str
+    token: str
+    added_days: int
+    total_period_days: int
+    charged_amount_kopeks: int
+    charged_amount_label: str
+    recipient_username: str | None = None
+
+
 class GiftPurchaseStatusResponse(BaseModel):
     status: str
     is_gift: bool = True
