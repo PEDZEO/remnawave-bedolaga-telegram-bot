@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
+import structlog
 from aiogram import types
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +12,9 @@ from app.config import settings
 from app.database.models import SystemSetting
 from app.utils.miniapp_buttons import build_cabinet_url
 from app.utils.miniapp_url import add_miniapp_cache_buster
+
+
+logger = structlog.get_logger(__name__)
 
 
 ULTIMA_MODE_ENABLED_KEY = 'CABINET_ULTIMA_MODE_ENABLED'
@@ -195,7 +199,13 @@ def build_ultima_notification_keyboard(config: UltimaNotificationConfig) -> type
     rows: list[list[types.InlineKeyboardButton]] = []
     row: list[types.InlineKeyboardButton] = []
     for button in config.buttons:
-        url = build_cabinet_url(button.path) or _normalize_button_url('')
+        url = build_cabinet_url(button.path)
+        if not url:
+            logger.warning(
+                'Skip Ultima notification button because MINIAPP_CUSTOM_URL is not configured',
+                path=button.path,
+            )
+            continue
         row.append(
             types.InlineKeyboardButton(
                 text=button.text,
