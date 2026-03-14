@@ -42,6 +42,7 @@ LITE_MODE_ENABLED_KEY = 'CABINET_LITE_MODE_ENABLED'  # Stores "true" or "false"
 ULTIMA_MODE_ENABLED_KEY = 'CABINET_ULTIMA_MODE_ENABLED'  # Stores "true" or "false"
 GIFT_ENABLED_KEY = 'CABINET_GIFT_ENABLED'  # Stores "true" or "false"
 ANIMATION_CONFIG_KEY = 'CABINET_ANIMATION_CONFIG'  # Stores JSON with animation config
+ULTIMA_THEME_CONFIG_KEY = 'CABINET_ULTIMA_THEME_CONFIG'  # Stores JSON with Ultima visual config
 
 # Default animation config
 DEFAULT_ANIMATION_CONFIG = {
@@ -51,6 +52,31 @@ DEFAULT_ANIMATION_CONFIG = {
     'opacity': 1.0,
     'blur': 0,
     'reducedOnMobile': True,
+}
+
+DEFAULT_ULTIMA_THEME_CONFIG = {
+    'primaryColor': '#1bd29f',
+    'primaryTextColor': '#ffffff',
+    'secondaryColor': '#0c2d2a',
+    'secondaryTextColor': '#f7fffc',
+    'navBackgroundColor': '#0f3a38',
+    'navActiveColor': '#1bd29f',
+    'navTextColor': '#d6f6ee',
+    'backgroundTopColor': '#031824',
+    'backgroundBottomColor': '#06232b',
+    'auraColor': '#21d09a',
+    'ringColor': '#b8ffec',
+    'surfaceColor': '#0c2d2a',
+    'surfaceBorderColor': '#92f4d8',
+    'scrollbarThumbColor': '#49e9b3',
+    'scrollbarTrackColor': '#0c262a',
+    'contentEnterMs': 320,
+    'tapRingMs': 780,
+    'ringWaveSec': 18.0,
+    'sliderGlowSec': 2.6,
+    'stepRingSec': 5.8,
+    'successWaveMs': 1050,
+    'itemEnterMs': 280,
 }
 
 # Allowed image types
@@ -300,6 +326,60 @@ class AnalyticsCountersUpdate(BaseModel):
     yandex_metrika_id: str | None = None
     google_ads_id: str | None = None
     google_ads_label: str | None = None
+
+
+class UltimaThemeConfigResponse(BaseModel):
+    """Ultima visual and animation config."""
+
+    primaryColor: str = '#1bd29f'
+    primaryTextColor: str = '#ffffff'
+    secondaryColor: str = '#0c2d2a'
+    secondaryTextColor: str = '#f7fffc'
+    navBackgroundColor: str = '#0f3a38'
+    navActiveColor: str = '#1bd29f'
+    navTextColor: str = '#d6f6ee'
+    backgroundTopColor: str = '#031824'
+    backgroundBottomColor: str = '#06232b'
+    auraColor: str = '#21d09a'
+    ringColor: str = '#b8ffec'
+    surfaceColor: str = '#0c2d2a'
+    surfaceBorderColor: str = '#92f4d8'
+    scrollbarThumbColor: str = '#49e9b3'
+    scrollbarTrackColor: str = '#0c262a'
+    contentEnterMs: int = Field(default=320, ge=120, le=2000)
+    tapRingMs: int = Field(default=780, ge=160, le=2600)
+    ringWaveSec: float = Field(default=18.0, ge=2.0, le=60.0)
+    sliderGlowSec: float = Field(default=2.6, ge=0.4, le=12.0)
+    stepRingSec: float = Field(default=5.8, ge=1.0, le=20.0)
+    successWaveMs: int = Field(default=1050, ge=180, le=3200)
+    itemEnterMs: int = Field(default=280, ge=100, le=1200)
+
+
+class UltimaThemeConfigUpdate(BaseModel):
+    """Partial update for Ultima visual config."""
+
+    primaryColor: str | None = None
+    primaryTextColor: str | None = None
+    secondaryColor: str | None = None
+    secondaryTextColor: str | None = None
+    navBackgroundColor: str | None = None
+    navActiveColor: str | None = None
+    navTextColor: str | None = None
+    backgroundTopColor: str | None = None
+    backgroundBottomColor: str | None = None
+    auraColor: str | None = None
+    ringColor: str | None = None
+    surfaceColor: str | None = None
+    surfaceBorderColor: str | None = None
+    scrollbarThumbColor: str | None = None
+    scrollbarTrackColor: str | None = None
+    contentEnterMs: int | None = Field(default=None, ge=120, le=2000)
+    tapRingMs: int | None = Field(default=None, ge=160, le=2600)
+    ringWaveSec: float | None = Field(default=None, ge=2.0, le=60.0)
+    sliderGlowSec: float | None = Field(default=None, ge=0.4, le=12.0)
+    stepRingSec: float | None = Field(default=None, ge=1.0, le=20.0)
+    successWaveMs: int | None = Field(default=None, ge=180, le=3200)
+    itemEnterMs: int | None = Field(default=None, ge=100, le=1200)
 
 
 # Default theme colors
@@ -563,6 +643,25 @@ def validate_hex_color(color: str) -> bool:
         return True
     except ValueError:
         return False
+
+
+ULTIMA_THEME_COLOR_KEYS = {
+    'primaryColor',
+    'primaryTextColor',
+    'secondaryColor',
+    'secondaryTextColor',
+    'navBackgroundColor',
+    'navActiveColor',
+    'navTextColor',
+    'backgroundTopColor',
+    'backgroundBottomColor',
+    'auraColor',
+    'ringColor',
+    'surfaceColor',
+    'surfaceBorderColor',
+    'scrollbarThumbColor',
+    'scrollbarTrackColor',
+}
 
 
 @router.get('/colors', response_model=ThemeColorsResponse)
@@ -1022,3 +1121,60 @@ async def update_gift_enabled(
     await set_setting_value(db, GIFT_ENABLED_KEY, str(payload.enabled).lower())
     logger.info('Admin set gift mode enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
     return GiftEnabledResponse(enabled=payload.enabled)
+
+
+# ============ Ultima Theme Config Routes ============
+
+
+@router.get('/ultima-theme-config', response_model=UltimaThemeConfigResponse)
+async def get_ultima_theme_config(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get Ultima visual config. Public endpoint."""
+    value = await get_setting_value(db, ULTIMA_THEME_CONFIG_KEY)
+    if value:
+        try:
+            parsed = json.loads(value)
+            merged = {**DEFAULT_ULTIMA_THEME_CONFIG, **parsed}
+            return UltimaThemeConfigResponse(**merged)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return UltimaThemeConfigResponse(**DEFAULT_ULTIMA_THEME_CONFIG)
+
+
+@router.patch('/ultima-theme-config', response_model=UltimaThemeConfigResponse)
+async def update_ultima_theme_config(
+    payload: UltimaThemeConfigUpdate,
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update Ultima visual config. Admin only. Partial update supported."""
+    current_value = await get_setting_value(db, ULTIMA_THEME_CONFIG_KEY)
+    current = dict(DEFAULT_ULTIMA_THEME_CONFIG)
+    if current_value:
+        try:
+            current.update(json.loads(current_value))
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    update_data = payload.model_dump(exclude_none=True)
+    for key, value in update_data.items():
+        if key in ULTIMA_THEME_COLOR_KEYS and not validate_hex_color(value):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'Invalid hex color for {key}: {value}')
+
+    current.update(update_data)
+    await set_setting_value(db, ULTIMA_THEME_CONFIG_KEY, json.dumps(current))
+
+    logger.info('Admin updated ultima theme config', telegram_id=admin.telegram_id, keys=list(update_data.keys()))
+    return UltimaThemeConfigResponse(**current)
+
+
+@router.post('/ultima-theme-config/reset', response_model=UltimaThemeConfigResponse)
+async def reset_ultima_theme_config(
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Reset Ultima visual config to defaults. Admin only."""
+    await set_setting_value(db, ULTIMA_THEME_CONFIG_KEY, json.dumps(DEFAULT_ULTIMA_THEME_CONFIG))
+    logger.info('Admin reset ultima theme config', telegram_id=admin.telegram_id)
+    return UltimaThemeConfigResponse(**DEFAULT_ULTIMA_THEME_CONFIG)
