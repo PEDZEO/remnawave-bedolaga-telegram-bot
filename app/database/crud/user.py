@@ -414,6 +414,8 @@ async def lock_user_for_update(db: AsyncSession, user: User) -> User:
             lock_error=lock_error,
         )
         return user
+
+
 async def add_user_balance(
     db: AsyncSession,
     user: User,

@@ -85,6 +85,30 @@ def create_refresh_token(user_id: int) -> str:
     return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
 
 
+def create_auto_login_token(user_id: int) -> str:
+    """
+    Create a short-lived token for one-click cabinet auto-login links.
+
+    Args:
+        user_id: Database user ID
+
+    Returns:
+        Encoded JWT auto-login token
+    """
+    expire_minutes = settings.get_cabinet_access_token_expire_minutes()
+    expires = datetime.now(UTC) + timedelta(minutes=expire_minutes)
+
+    payload = {
+        'sub': str(user_id),
+        'type': 'auto_login',
+        'exp': expires,
+        'iat': datetime.now(UTC),
+    }
+
+    secret = settings.get_cabinet_jwt_secret()
+    return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
+
+
 def decode_token(token: str) -> dict[str, Any] | None:
     """
     Decode and validate a JWT token.
