@@ -276,9 +276,9 @@ class PromoCodeService:
                     code=promocode.code,
                 )
 
-            await extend_subscription(db, subscription, promocode.subscription_days)
+            await extend_subscription(db, subscription, promocode.subscription_days, commit=False)
 
-            await self.subscription_service.update_remnawave_user(db, subscription)
+            await self.subscription_service.update_remnawave_user(db, subscription, commit=False)
 
             effects.append(f'⏰ Подписка продлена на {promocode.subscription_days} дней')
             logger.info(

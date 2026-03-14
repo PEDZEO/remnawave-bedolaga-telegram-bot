@@ -184,6 +184,7 @@ class SubscriptionService:
         *,
         reset_traffic: bool = False,
         reset_reason: str | None = None,
+        commit: bool = True,
     ) -> RemnaWaveUser | None:
         try:
             user = await get_user_by_id(db, subscription.user_id)
@@ -326,7 +327,10 @@ class SubscriptionService:
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link
                 user.remnawave_uuid = updated_user.uuid
 
-                await db.commit()
+                if commit:
+                    await db.commit()
+                else:
+                    await db.flush()
 
                 logger.info('✅ Создан/обновлен RemnaWave пользователь для подписки', subscription_id=subscription.id)
                 logger.info('🔗 Ссылка на подписку', subscription_url=updated_user.subscription_url)
@@ -348,6 +352,7 @@ class SubscriptionService:
         *,
         reset_traffic: bool = False,
         reset_reason: str | None = None,
+        commit: bool = True,
     ) -> RemnaWaveUser | None:
         try:
             user = await get_user_by_id(db, subscription.user_id)
@@ -419,7 +424,10 @@ class SubscriptionService:
 
                 subscription.subscription_url = updated_user.subscription_url
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link
-                await db.commit()
+                if commit:
+                    await db.commit()
+                else:
+                    await db.flush()
 
                 status_text = 'активным' if is_actually_active else 'отключенным'
                 logger.info(

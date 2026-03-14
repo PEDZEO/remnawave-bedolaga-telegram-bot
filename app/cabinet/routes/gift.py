@@ -848,11 +848,7 @@ async def activate_gift_by_code(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Cannot activate your own gift')
 
     if purchase.status == GuestPurchaseStatus.DELIVERED.value:
-        return ActivateGiftResponse(
-            status='activated',
-            tariff_name=purchase.tariff.name if purchase.tariff else None,
-            period_days=purchase.period_days,
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Gift code already activated')
 
     activatable = {GuestPurchaseStatus.PENDING_ACTIVATION.value, GuestPurchaseStatus.PAID.value}
     if purchase.status not in activatable:
@@ -868,6 +864,19 @@ async def activate_gift_by_code(
         await svc_activate(db, purchase.token, skip_notification=True)
     except GuestPurchaseError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+    await db.refresh(purchase)
+    if purchase.status != GuestPurchaseStatus.DELIVERED.value:
+        logger.warning(
+            'Gift activation finished without delivered status',
+            purchase_id=purchase.id,
+            status=purchase.status,
+            user_id=user.id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Gift activation is not completed yet',
+        )
 
     return ActivateGiftResponse(
         status='activated',
