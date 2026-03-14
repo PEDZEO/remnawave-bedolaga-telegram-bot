@@ -36,6 +36,7 @@ class PromocodeActivateResponse(BaseModel):
     activated_gift: bool = False
     gift_tariff_name: str | None = None
     gift_period_days: int | None = None
+    gift_sender_display: str | None = None
 
 
 class PromocodeDeactivateResponse(BaseModel):
@@ -72,7 +73,7 @@ async def activate_promocode(
         )
         gift_query = await db.execute(
             select(GuestPurchase)
-            .options(selectinload(GuestPurchase.tariff))
+            .options(selectinload(GuestPurchase.tariff), selectinload(GuestPurchase.buyer))
             .where(token_filter, GuestPurchase.is_gift.is_(True))
             .with_for_update()
         )
@@ -83,6 +84,9 @@ async def activate_promocode(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Cannot activate your own gift')
 
         if purchase.status == GuestPurchaseStatus.DELIVERED.value:
+            gift_sender_display = (
+                f'@{purchase.buyer.username}' if purchase.buyer and purchase.buyer.username else purchase.contact_value
+            )
             return PromocodeActivateResponse(
                 success=True,
                 message='Gift already activated',
@@ -90,6 +94,7 @@ async def activate_promocode(
                 activated_gift=True,
                 gift_tariff_name=purchase.tariff.name if purchase.tariff else None,
                 gift_period_days=purchase.period_days,
+                gift_sender_display=gift_sender_display,
             )
 
         activatable = {GuestPurchaseStatus.PENDING_ACTIVATION.value, GuestPurchaseStatus.PAID.value}
@@ -110,6 +115,9 @@ async def activate_promocode(
         except GuestPurchaseError as exc:
             raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
+        gift_sender_display = (
+            f'@{purchase.buyer.username}' if purchase.buyer and purchase.buyer.username else purchase.contact_value
+        )
         return PromocodeActivateResponse(
             success=True,
             message='Gift activated successfully',
@@ -117,6 +125,7 @@ async def activate_promocode(
             activated_gift=True,
             gift_tariff_name=purchase.tariff.name if purchase.tariff else None,
             gift_period_days=purchase.period_days,
+            gift_sender_display=gift_sender_display,
         )
 
     promocode_service = PromoCodeService()
