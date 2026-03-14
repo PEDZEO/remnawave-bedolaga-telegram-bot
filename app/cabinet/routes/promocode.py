@@ -81,7 +81,7 @@ async def activate_promocode(
         if purchase is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Gift not found')
         if purchase.buyer_user_id is not None and purchase.buyer_user_id == user.id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Cannot activate your own gift')
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='already_used_by_user')
 
         if purchase.status == GuestPurchaseStatus.DELIVERED.value:
             # Gift code is one-time. Never report success for already delivered gift,
@@ -89,24 +89,24 @@ async def activate_promocode(
             if purchase.user_id == user.id:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='You have already activated this gift code',
+                    detail='already_used_by_user',
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='This gift code has already been activated',
+                detail='already_used_by_user',
             )
 
         activatable = {GuestPurchaseStatus.PENDING_ACTIVATION.value, GuestPurchaseStatus.PAID.value}
         if purchase.status not in activatable:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='This gift code has already been activated',
+                detail='already_used_by_user',
             )
 
         if purchase.user_id is None:
             purchase.user_id = user.id
         elif purchase.user_id != user.id:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Gift not found')
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='already_used_by_user')
 
         if purchase.status == GuestPurchaseStatus.PAID.value:
             purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
