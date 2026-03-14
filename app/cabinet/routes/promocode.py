@@ -84,17 +84,16 @@ async def activate_promocode(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Cannot activate your own gift')
 
         if purchase.status == GuestPurchaseStatus.DELIVERED.value:
-            gift_sender_display = (
-                f'@{purchase.buyer.username}' if purchase.buyer and purchase.buyer.username else purchase.contact_value
-            )
-            return PromocodeActivateResponse(
-                success=True,
-                message='Gift already activated',
-                bonus_description='Gift activated successfully',
-                activated_gift=True,
-                gift_tariff_name=purchase.tariff.name if purchase.tariff else None,
-                gift_period_days=purchase.period_days,
-                gift_sender_display=gift_sender_display,
+            # Gift code is one-time. Never report success for already delivered gift,
+            # otherwise UI shows false-positive activation with no actual changes.
+            if purchase.user_id == user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='You have already activated this gift code',
+                )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='This gift code has already been activated',
             )
 
         activatable = {GuestPurchaseStatus.PENDING_ACTIVATION.value, GuestPurchaseStatus.PAID.value}

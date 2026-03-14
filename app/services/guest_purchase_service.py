@@ -6,7 +6,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.guest_purchase import create_guest_purchase
-from app.database.crud.subscription import create_paid_subscription, get_subscription_by_user_id, replace_subscription
+from app.database.crud.subscription import (
+    create_paid_subscription,
+    extend_subscription,
+    get_subscription_by_user_id,
+)
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.models import GuestPurchase, GuestPurchaseStatus, Tariff, User
 from app.services.subscription_service import SubscriptionService
@@ -93,18 +97,17 @@ async def _apply_purchase_subscription(
 ) -> None:
     existing_subscription = await get_subscription_by_user_id(db, user.id)
     if existing_subscription is not None:
-        subscription = await replace_subscription(
+        # Gift should extend user access instead of hard-replacing current period.
+        subscription = await extend_subscription(
             db,
             existing_subscription,
-            duration_days=purchase.period_days,
+            days=purchase.period_days,
+            tariff_id=tariff.id,
             traffic_limit_gb=tariff.traffic_limit_gb,
             device_limit=tariff.device_limit,
             connected_squads=tariff.allowed_squads or [],
-            is_trial=False,
-            update_server_counters=True,
+            commit=True,
         )
-        subscription.tariff_id = tariff.id
-        await db.commit()
         await db.refresh(subscription)
     else:
         subscription = await create_paid_subscription(
