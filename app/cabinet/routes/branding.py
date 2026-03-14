@@ -77,6 +77,7 @@ DEFAULT_ULTIMA_THEME_CONFIG = {
     'stepRingSec': 5.8,
     'successWaveMs': 1050,
     'itemEnterMs': 280,
+    'framesEnabled': False,
 }
 
 # Allowed image types
@@ -353,6 +354,7 @@ class UltimaThemeConfigResponse(BaseModel):
     stepRingSec: float = Field(default=5.8, ge=1.0, le=20.0)
     successWaveMs: int = Field(default=1050, ge=180, le=3200)
     itemEnterMs: int = Field(default=280, ge=100, le=1200)
+    framesEnabled: bool = False
 
 
 class UltimaThemeConfigUpdate(BaseModel):
@@ -380,6 +382,7 @@ class UltimaThemeConfigUpdate(BaseModel):
     stepRingSec: float | None = Field(default=None, ge=1.0, le=20.0)
     successWaveMs: int | None = Field(default=None, ge=180, le=3200)
     itemEnterMs: int | None = Field(default=None, ge=100, le=1200)
+    framesEnabled: bool | None = None
 
 
 # Default theme colors
