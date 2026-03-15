@@ -137,17 +137,21 @@ async def get_tariffs_for_user(
     result = await db.execute(query)
     tariffs = result.scalars().all()
 
-    # Фильтруем по промогруппе
+    # Фильтруем по промогруппе.
+    # Legacy-поведение: если у пользователя еще нет промогруппы, тарифы не должны скрываться.
+    # Это синхронизировано с Tariff.is_available_for_promo_group(None) -> True.
     available_tariffs = []
     for tariff in tariffs:
         if not tariff.allowed_promo_groups:
             # Нет ограничений - доступен всем
             available_tariffs.append(tariff)
+        elif promo_group_id is None:
+            # Пользователь без промогруппы (legacy-аккаунт) — не скрываем тарифы.
+            available_tariffs.append(tariff)
         elif promo_group_id is not None:
             # Проверяем, есть ли промогруппа пользователя в списке разрешенных
             if any(pg.id == promo_group_id for pg in tariff.allowed_promo_groups):
                 available_tariffs.append(tariff)
-        # else: пользователь без промогруппы, а у тарифа есть ограничения - пропускаем
 
     return available_tariffs
 
