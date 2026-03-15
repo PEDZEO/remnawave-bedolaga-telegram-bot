@@ -193,6 +193,8 @@ async def create_tariff(
     show_in_gift: bool = True,
     # Режим сброса трафика
     traffic_reset_mode: str | None = None,  # DAY, WEEK, MONTH, NO_RESET, None = глобальная настройка
+    # Внешний сквад RemnaWave
+    external_squad_uuid: str | None = None,
 ) -> Tariff:
     """Создает новый тариф."""
     normalized_prices = _normalize_period_prices(period_prices)
@@ -230,6 +232,8 @@ async def create_tariff(
         max_traffic_gb=max(1, max_traffic_gb),
         # Режим сброса трафика
         traffic_reset_mode=traffic_reset_mode,
+        # Внешний сквад RemnaWave
+        external_squad_uuid=external_squad_uuid,
     )
 
     db.add(tariff)
@@ -297,6 +301,8 @@ async def update_tariff(
     show_in_gift: bool | None = None,
     # Режим сброса трафика
     traffic_reset_mode: str | None = ...,  # ... = не передан, None = сбросить к глобальной настройке
+    # Внешний сквад RemnaWave
+    external_squad_uuid: str | None = ...,  # ... = не передан, None = сбросить
 ) -> Tariff:
     """Обновляет существующий тариф."""
     if name is not None:
@@ -362,6 +368,9 @@ async def update_tariff(
     # Режим сброса трафика
     if traffic_reset_mode is not ...:
         tariff.traffic_reset_mode = traffic_reset_mode
+    # Внешний сквад RemnaWave
+    if external_squad_uuid is not ...:
+        tariff.external_squad_uuid = external_squad_uuid
 
     # Обновляем промогруппы если указаны
     if promo_group_ids is not None:
