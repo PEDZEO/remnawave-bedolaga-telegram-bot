@@ -1,7 +1,5 @@
 """Promo code routes for cabinet."""
 
-from html import escape
-
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -9,9 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.config import settings
 from app.database.models import GuestPurchase, GuestPurchaseStatus, User
-from app.services.admin_notification_service import AdminNotificationService
 from app.services.guest_purchase_service import GuestPurchaseError, activate_purchase as activate_gift_purchase
 from app.services.promocode_service import PromoCodeService
 
@@ -21,53 +17,6 @@ from ..dependencies import get_cabinet_db, get_current_cabinet_user
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/promocode', tags=['Cabinet Promocode'])
-
-
-async def _send_admin_gift_activation_fallback(
-    db: AsyncSession,
-    *,
-    recipient: User,
-    purchase: GuestPurchase,
-) -> None:
-    try:
-        from aiogram import Bot
-
-        buyer = purchase.buyer
-        if buyer is None and purchase.buyer_user_id:
-            buyer_result = await db.execute(select(User).where(User.id == purchase.buyer_user_id))
-            buyer = buyer_result.scalars().first()
-
-        bot = Bot(token=settings.BOT_TOKEN)
-        try:
-            notification_service = AdminNotificationService(bot)
-            buyer_display = escape(f'@{buyer.username}') if buyer and getattr(buyer, 'username', None) else 'Неизвестно'
-            recipient_display = (
-                escape(f'@{recipient.username}') if getattr(recipient, 'username', None) else f'ID {recipient.id}'
-            )
-            tariff_name = purchase.tariff.name if purchase.tariff else 'Неизвестный'
-            text = (
-                '✅ <b>АКТИВАЦИЯ ПОДАРОЧНОЙ ПОДПИСКИ</b>\n\n'
-                f'👤 Получатель: {recipient_display}\n'
-                f'🎁 Отправитель: {buyer_display}\n'
-                f'🧾 Тариф: {escape(tariff_name)}\n'
-                f'📅 Период: {int(getattr(purchase, "period_days", 0) or 0)} дн.\n'
-                f'🔑 Код: <code>{escape((getattr(purchase, "token", "") or "")[:12])}</code>'
-            )
-            sent = await notification_service.send_admin_notification(text)
-            if not sent:
-                logger.warning(
-                    'Promocode gift activation admin notification fallback returned false',
-                    recipient_user_id=recipient.id,
-                    purchase_id=getattr(purchase, 'id', None),
-                )
-        finally:
-            await bot.session.close()
-    except Exception:
-        logger.exception(
-            'Promocode gift activation admin notification fallback failed',
-            recipient_user_id=recipient.id,
-            purchase_id=getattr(purchase, 'id', None),
-        )
 
 
 class PromocodeActivateRequest(BaseModel):
@@ -167,7 +116,6 @@ async def activate_promocode(
             await activate_gift_purchase(db, purchase.token, skip_notification=False)
         except GuestPurchaseError as exc:
             raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
-        await _send_admin_gift_activation_fallback(db, recipient=user, purchase=purchase)
 
         gift_sender_display = (
             f'@{purchase.buyer.username}' if purchase.buyer and purchase.buyer.username else purchase.contact_value
