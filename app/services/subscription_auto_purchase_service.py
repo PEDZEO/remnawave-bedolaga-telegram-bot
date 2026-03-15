@@ -705,6 +705,7 @@ async def _auto_purchase_tariff(
 
     try:
         if existing_subscription:
+            was_trial_conversion = bool(existing_subscription.is_trial)
             # Продлеваем существующую подписку
             # Сохраняем докупленные устройства при продлении того же тарифа
             if existing_subscription.tariff_id == tariff.id:
@@ -720,11 +721,6 @@ async def _auto_purchase_tariff(
                 device_limit=effective_device_limit,
                 connected_squads=squads,
             )
-            was_trial_conversion = existing_subscription.is_trial
-            if was_trial_conversion:
-                subscription.is_trial = False
-                subscription.status = 'active'
-                await db.commit()
         else:
             # Создаём новую подписку
             subscription = await create_paid_subscription(
@@ -768,12 +764,20 @@ async def _auto_purchase_tariff(
     # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
     try:
         subscription_service = SubscriptionService()
-        await subscription_service.create_remnawave_user(
-            db,
-            subscription,
-            reset_traffic=True,
-            reset_reason='покупка тарифа',
-        )
+        if getattr(user, 'remnawave_uuid', None):
+            await subscription_service.update_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=True,
+                reset_reason='покупка тарифа',
+            )
+        else:
+            await subscription_service.create_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=True,
+                reset_reason='покупка тарифа',
+            )
     except Exception as error:
         logger.warning(
             '⚠️ Автопокупка тарифа: не удалось обновить Remnawave для пользователя',
