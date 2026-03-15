@@ -70,6 +70,83 @@ def _gift_token_filter(token: str):
     return GuestPurchase.token == token if len(token) >= 64 else GuestPurchase.token.startswith(token)
 
 
+async def _send_admin_gift_purchase_fallback(
+    db: AsyncSession,
+    *,
+    buyer: User,
+    purchase: GuestPurchase,
+    tariff: Tariff | None,
+) -> None:
+    try:
+        from aiogram import Bot
+
+        from app.services.admin_notification_service import AdminNotificationService
+
+        bot = Bot(token=settings.BOT_TOKEN)
+        try:
+            notification_service = AdminNotificationService(bot)
+            sent = await notification_service.send_gift_purchase_notification(
+                db,
+                buyer=buyer,
+                purchase=purchase,
+                tariff_name=getattr(tariff, 'name', None),
+                payment_method=getattr(purchase, 'payment_method', None),
+            )
+            if not sent:
+                logger.warning(
+                    'Gift purchase admin notification fallback returned false',
+                    buyer_user_id=buyer.id,
+                    purchase_id=getattr(purchase, 'id', None),
+                )
+        finally:
+            await bot.session.close()
+    except Exception:
+        logger.exception(
+            'Gift purchase admin notification fallback failed',
+            buyer_user_id=buyer.id,
+            purchase_id=getattr(purchase, 'id', None),
+        )
+
+
+async def _send_admin_gift_activation_fallback(
+    db: AsyncSession,
+    *,
+    recipient: User,
+    buyer: User | None,
+    purchase: GuestPurchase,
+    tariff: Tariff | None,
+) -> None:
+    try:
+        from aiogram import Bot
+
+        from app.services.admin_notification_service import AdminNotificationService
+
+        bot = Bot(token=settings.BOT_TOKEN)
+        try:
+            notification_service = AdminNotificationService(bot)
+            sent = await notification_service.send_gift_activation_notification(
+                db,
+                recipient=recipient,
+                buyer=buyer,
+                purchase=purchase,
+                tariff_name=getattr(tariff, 'name', None),
+            )
+            if not sent:
+                logger.warning(
+                    'Gift activation admin notification fallback returned false',
+                    recipient_user_id=recipient.id,
+                    purchase_id=getattr(purchase, 'id', None),
+                )
+        finally:
+            await bot.session.close()
+    except Exception:
+        logger.exception(
+            'Gift activation admin notification fallback failed',
+            recipient_user_id=recipient.id,
+            purchase_id=getattr(purchase, 'id', None),
+        )
+
+
 async def _finalize_gateway_gift_via_balance(
     *,
     db: AsyncSession,
@@ -541,6 +618,8 @@ async def create_gift_purchase(
         await fulfill_purchase(db, purchase_token)
     except Exception:
         logger.exception('Gift purchase fulfillment failed (purchase is paid, user can activate by code)')
+    else:
+        await _send_admin_gift_purchase_fallback(db, buyer=user, purchase=purchase, tariff=tariff)
 
     return GiftPurchaseResponse(status='ok', purchase_token=purchase_token[:12], warning=None)
 
@@ -876,6 +955,18 @@ async def activate_gift_by_code(
             status_code=status.HTTP_409_CONFLICT,
             detail='Gift activation is not completed yet',
         )
+
+    buyer: User | None = None
+    if purchase.buyer_user_id:
+        buyer_result = await db.execute(select(User).where(User.id == purchase.buyer_user_id))
+        buyer = buyer_result.scalars().first()
+    await _send_admin_gift_activation_fallback(
+        db,
+        recipient=user,
+        buyer=buyer,
+        purchase=purchase,
+        tariff=purchase.tariff if isinstance(purchase.tariff, Tariff) else None,
+    )
 
     return ActivateGiftResponse(
         status='activated',
