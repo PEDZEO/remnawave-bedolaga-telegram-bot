@@ -113,7 +113,7 @@ async def activate_promocode(
         await db.flush()
 
         try:
-            await activate_gift_purchase(db, purchase.token, skip_notification=True)
+            await activate_gift_purchase(db, purchase.token, skip_notification=False)
         except GuestPurchaseError as exc:
             raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 

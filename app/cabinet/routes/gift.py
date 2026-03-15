@@ -537,11 +537,10 @@ async def create_gift_purchase(
     )
 
     purchase_token = purchase.token
-    if has_recipient:
-        try:
-            await fulfill_purchase(db, purchase_token)
-        except Exception:
-            logger.exception('Gift purchase fulfillment failed (purchase is paid, user can activate by code)')
+    try:
+        await fulfill_purchase(db, purchase_token)
+    except Exception:
+        logger.exception('Gift purchase fulfillment failed (purchase is paid, user can activate by code)')
 
     return GiftPurchaseResponse(status='ok', purchase_token=purchase_token[:12], warning=None)
 
@@ -861,7 +860,7 @@ async def activate_gift_by_code(
     await db.flush()
 
     try:
-        await svc_activate(db, purchase.token, skip_notification=True)
+        await svc_activate(db, purchase.token, skip_notification=False)
     except GuestPurchaseError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
