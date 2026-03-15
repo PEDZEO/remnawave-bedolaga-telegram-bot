@@ -1014,6 +1014,154 @@ class AdminNotificationService:
             logger.error('Ошибка отправки уведомления об активации промокода', error=e)
             return False
 
+    async def send_gift_purchase_notification(
+        self,
+        db: AsyncSession,
+        *,
+        buyer: User,
+        purchase: Any,
+        tariff_name: str | None,
+        payment_method: str | None,
+    ) -> bool:
+        try:
+            await self._record_subscription_event(
+                db,
+                event_type='gift_purchase',
+                user=buyer,
+                subscription=None,
+                transaction=None,
+                amount_kopeks=int(getattr(purchase, 'amount_kopeks', 0) or 0),
+                message='Gift purchase',
+                occurred_at=datetime.now(UTC),
+                extra={
+                    'purchase_id': getattr(purchase, 'id', None),
+                    'purchase_token': (getattr(purchase, 'token', '') or '')[:12],
+                    'recipient_type': getattr(purchase, 'gift_recipient_type', None),
+                    'recipient_value': getattr(purchase, 'gift_recipient_value', None),
+                    'period_days': getattr(purchase, 'period_days', None),
+                    'status': getattr(purchase, 'status', None),
+                    'payment_method': payment_method,
+                    'tariff_name': tariff_name,
+                    'is_code_only': not bool(getattr(purchase, 'gift_recipient_type', None)),
+                },
+            )
+        except Exception:
+            logger.error(
+                'Не удалось сохранить событие покупки подарка',
+                buyer_id=getattr(buyer, 'id', 'unknown'),
+                exc_info=True,
+            )
+
+        if not self._is_enabled():
+            return False
+
+        try:
+            buyer_display = self._get_user_display(buyer)
+            buyer_id_label = self._get_user_identifier_label(buyer)
+            buyer_id_display = self._get_user_identifier_display(buyer)
+            recipient_type = getattr(purchase, 'gift_recipient_type', None)
+            recipient_value = getattr(purchase, 'gift_recipient_value', None)
+            recipient_display = (
+                self._escape_html(recipient_value) if recipient_type and recipient_value else 'Код (без получателя)'
+            )
+            payment_display = self._get_payment_method_display(payment_method)
+            amount_kopeks = int(getattr(purchase, 'amount_kopeks', 0) or 0)
+            period_days = int(getattr(purchase, 'period_days', 0) or 0)
+            token_short = self._escape_html((getattr(purchase, 'token', '') or '')[:12])
+
+            message_lines = [
+                '🎁 <b>ПОКУПКА ПОДАРОЧНОЙ ПОДПИСКИ</b>',
+                '',
+                f'👤 <b>Покупатель:</b> {buyer_display}',
+                f'🆔 <b>{buyer_id_label}:</b> {buyer_id_display}',
+            ]
+            username = getattr(buyer, 'username', None)
+            if username:
+                message_lines.append(f'📱 <b>Username:</b> @{self._escape_html(username)}')
+
+            message_lines.extend(
+                [
+                    '',
+                    f'🏷️ <b>Тариф:</b> {self._escape_html(tariff_name or "Неизвестный")}',
+                    f'📅 <b>Период:</b> {period_days} дн.',
+                    f'💵 <b>Сумма:</b> {settings.format_price(amount_kopeks)}',
+                    f'💳 <b>Оплата:</b> {payment_display}',
+                    f'🎯 <b>Получатель:</b> {recipient_display}',
+                    f'🔑 <b>Код:</b> <code>{token_short}</code>',
+                    '',
+                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+                ]
+            )
+            return await self._send_message('\n'.join(message_lines))
+        except Exception as error:
+            logger.error('Ошибка отправки уведомления о покупке подарка', error=error, exc_info=True)
+            return False
+
+    async def send_gift_activation_notification(
+        self,
+        db: AsyncSession,
+        *,
+        recipient: User,
+        buyer: User | None,
+        purchase: Any,
+        tariff_name: str | None,
+    ) -> bool:
+        try:
+            await self._record_subscription_event(
+                db,
+                event_type='gift_activation',
+                user=recipient,
+                subscription=None,
+                transaction=None,
+                amount_kopeks=int(getattr(purchase, 'amount_kopeks', 0) or 0),
+                message='Gift activation',
+                occurred_at=datetime.now(UTC),
+                extra={
+                    'purchase_id': getattr(purchase, 'id', None),
+                    'purchase_token': (getattr(purchase, 'token', '') or '')[:12],
+                    'buyer_user_id': getattr(purchase, 'buyer_user_id', None),
+                    'recipient_user_id': getattr(purchase, 'user_id', None),
+                    'period_days': getattr(purchase, 'period_days', None),
+                    'status': getattr(purchase, 'status', None),
+                    'tariff_name': tariff_name,
+                },
+            )
+        except Exception:
+            logger.error(
+                'Не удалось сохранить событие активации подарка',
+                recipient_id=getattr(recipient, 'id', 'unknown'),
+                exc_info=True,
+            )
+
+        if not self._is_enabled():
+            return False
+
+        try:
+            recipient_display = self._get_user_display(recipient)
+            recipient_id_label = self._get_user_identifier_label(recipient)
+            recipient_id_display = self._get_user_identifier_display(recipient)
+            buyer_display = self._get_user_display(buyer) if buyer else 'Неизвестно'
+            token_short = self._escape_html((getattr(purchase, 'token', '') or '')[:12])
+            period_days = int(getattr(purchase, 'period_days', 0) or 0)
+
+            message_lines = [
+                '✅ <b>АКТИВАЦИЯ ПОДАРОЧНОЙ ПОДПИСКИ</b>',
+                '',
+                f'👤 <b>Получатель:</b> {recipient_display}',
+                f'🆔 <b>{recipient_id_label}:</b> {recipient_id_display}',
+                f'🎁 <b>Отправитель:</b> {buyer_display}',
+                '',
+                f'🏷️ <b>Тариф:</b> {self._escape_html(tariff_name or "Неизвестный")}',
+                f'📅 <b>Период:</b> {period_days} дн.',
+                f'🔑 <b>Код:</b> <code>{token_short}</code>',
+                '',
+                f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+            ]
+            return await self._send_message('\n'.join(message_lines))
+        except Exception as error:
+            logger.error('Ошибка отправки уведомления об активации подарка', error=error, exc_info=True)
+            return False
+
     async def send_campaign_link_visit_notification(
         self,
         db: AsyncSession,

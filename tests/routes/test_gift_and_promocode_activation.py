@@ -60,7 +60,9 @@ def _build_purchase(
 async def test_gift_activate_returns_existing_purchase_when_already_delivered(monkeypatch):
     user = _build_user()
     purchase = _build_purchase(status=GuestPurchaseStatus.DELIVERED.value, user_id=user.id)
-    db = SimpleNamespace(execute=AsyncMock(return_value=_ExecuteResult(purchase)), commit=AsyncMock(), refresh=AsyncMock())
+    db = SimpleNamespace(
+        execute=AsyncMock(return_value=_ExecuteResult(purchase)), commit=AsyncMock(), refresh=AsyncMock()
+    )
 
     monkeypatch.setattr(gift_service, 'get_tariff_by_id', AsyncMock(return_value=SimpleNamespace(id=1, is_active=True)))
     monkeypatch.setattr(gift_service, '_apply_purchase_subscription', AsyncMock())
@@ -85,6 +87,8 @@ async def test_gift_activate_marks_delivered(monkeypatch):
         '_apply_purchase_subscription',
         AsyncMock(),
     )
+    activation_notify_mock = AsyncMock()
+    monkeypatch.setattr(gift_service, '_send_gift_activation_admin_notification', activation_notify_mock)
 
     async def _fake_execute(query):
         _ = query
@@ -96,6 +100,64 @@ async def test_gift_activate_marks_delivered(monkeypatch):
 
     assert response.status == GuestPurchaseStatus.DELIVERED.value
     assert purchase.delivered_at is not None
+    db.commit.assert_awaited()
+    activation_notify_mock.assert_awaited_once()
+
+
+async def test_fulfill_paid_gift_sends_admin_purchase_notification(monkeypatch):
+    purchase = _build_purchase(
+        status=GuestPurchaseStatus.PAID.value,
+        user_id=None,
+        token='gift_token_abcdef123456',
+    )
+    purchase.gift_recipient_type = None
+    purchase.gift_recipient_value = None
+    purchase.payment_method = 'balance'
+    purchase.amount_kopeks = 14900
+    db = SimpleNamespace(
+        execute=AsyncMock(return_value=_ExecuteResult(purchase)),
+        commit=AsyncMock(),
+        refresh=AsyncMock(),
+    )
+
+    monkeypatch.setattr(
+        gift_service,
+        'get_tariff_by_id',
+        AsyncMock(return_value=SimpleNamespace(id=1, is_active=True, name='Обычный')),
+    )
+    purchase_notify_mock = AsyncMock()
+    monkeypatch.setattr(gift_service, '_send_gift_purchase_admin_notification', purchase_notify_mock)
+    monkeypatch.setattr(gift_service, '_find_user_by_gift_recipient', AsyncMock(return_value=None))
+
+    result = await gift_service.fulfill_purchase(db, purchase.token)
+
+    assert result is purchase
+    assert purchase.status == GuestPurchaseStatus.PAID.value
+    purchase_notify_mock.assert_awaited_once()
+    db.commit.assert_not_awaited()
+
+
+async def test_gift_activate_continues_when_admin_notification_fails(monkeypatch):
+    user = _build_user()
+    purchase = _build_purchase(status=GuestPurchaseStatus.PENDING_ACTIVATION.value, user_id=user.id)
+    db = SimpleNamespace(
+        execute=AsyncMock(side_effect=[_ExecuteResult(purchase), _ExecuteResult(user)]),
+        commit=AsyncMock(),
+        refresh=AsyncMock(),
+    )
+
+    monkeypatch.setattr(gift_service, 'get_tariff_by_id', AsyncMock(return_value=SimpleNamespace(id=1, is_active=True)))
+    monkeypatch.setattr(gift_service, '_apply_purchase_subscription', AsyncMock())
+
+    async def _fail_notify(*args, **kwargs):
+        _ = args, kwargs
+        raise RuntimeError('notify failed')
+
+    monkeypatch.setattr(gift_service, '_send_gift_activation_admin_notification', _fail_notify)
+
+    response = await gift_service.activate_purchase(db, purchase.token, skip_notification=True)
+
+    assert response.status == GuestPurchaseStatus.DELIVERED.value
     db.commit.assert_awaited()
 
 

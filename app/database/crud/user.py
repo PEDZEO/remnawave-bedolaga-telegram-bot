@@ -348,6 +348,7 @@ async def create_user(
 
         except IntegrityError as exc:
             await db.rollback()
+            exc_text = str(getattr(exc, 'orig', exc)).lower()
 
             if (
                 isinstance(getattr(exc, 'orig', None), Exception)
@@ -362,6 +363,25 @@ async def create_user(
                 )
                 await _sync_users_sequence(db)
                 continue
+
+            # Race-safe path: another concurrent request already created this telegram user.
+            if (
+                'ix_users_telegram_id' in exc_text or 'users_telegram_id_key' in exc_text or '(telegram_id)' in exc_text
+            ) and telegram_id is not None:
+                existing_user = await get_user_by_telegram_id(db, telegram_id)
+                if existing_user:
+                    # Preserve referral attribution for first touch if it was provided in this request.
+                    if referred_by_id and not existing_user.referred_by_id and referred_by_id != existing_user.id:
+                        existing_user.referred_by_id = referred_by_id
+                        await db.commit()
+                        await db.refresh(existing_user)
+
+                    logger.warning(
+                        '⚠️ create_user race resolved by returning existing user',
+                        telegram_id=telegram_id,
+                        existing_user_id=existing_user.id,
+                    )
+                    return existing_user
 
             raise
 

@@ -1203,18 +1203,29 @@ class UserService:
                 logger.error('❌ Ошибка удаления подписки', error=e)
 
             try:
-                from app.database.models import (
-                    AccessPolicy,
-                    AdminAuditLog,
-                    AdminRole,
-                    RioPayPayment,
-                    SavedPaymentMethod,
-                    UserRole,
-                    WithdrawalRequest,
+                from app.database import models as db_models
+                from app.database.models import AccessPolicy, AdminAuditLog, AdminRole, UserRole, WithdrawalRequest
+
+                payment_model_names = (
+                    'SavedPaymentMethod',
+                    'RioPayPayment',
+                    'YooKassaPayment',
+                    'CryptoBotPayment',
+                    'HeleketPayment',
+                    'MulenPayPayment',
+                    'Pal24Payment',
+                    'WataPayment',
+                    'PlategaPayment',
+                    'CloudPaymentsPayment',
+                    'FreekassaPayment',
+                    'KassaAiPayment',
                 )
 
-                await db.execute(delete(SavedPaymentMethod).where(SavedPaymentMethod.user_id == user_id))
-                await db.execute(delete(RioPayPayment).where(RioPayPayment.user_id == user_id))
+                for model_name in payment_model_names:
+                    payment_model = getattr(db_models, model_name, None)
+                    if payment_model is not None and hasattr(payment_model, 'user_id'):
+                        await db.execute(delete(payment_model).where(payment_model.user_id == user_id))
+
                 await db.execute(delete(AdminAuditLog).where(AdminAuditLog.user_id == user_id))
                 await db.execute(delete(WithdrawalRequest).where(WithdrawalRequest.user_id == user_id))
                 await db.execute(

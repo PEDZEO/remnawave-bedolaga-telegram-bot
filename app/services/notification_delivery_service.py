@@ -149,48 +149,60 @@ class NotificationDeliveryService:
         Returns:
             True if notification was sent successfully through at least one channel
         """
-        if user.status in (UserStatus.BLOCKED.value, UserStatus.DELETED.value):
-            logger.debug('Пропускаем уведомление для неактивного пользователя', user_id=user.id, status=user.status)
-            return False
+        try:
+            if user.status in (UserStatus.BLOCKED.value, UserStatus.DELETED.value):
+                logger.debug('Пропускаем уведомление для неактивного пользователя', user_id=user.id, status=user.status)
+                return False
 
-        if user.telegram_id:
-            # User has Telegram - send via bot
-            return await self._send_telegram_notification(
-                user=user,
-                notification_type=notification_type,
-                context=context,
-                bot=bot,
-                message=telegram_message,
-                markup=telegram_markup,
-            )
-        if user.email and user.email_verified:
-            # Email-only user - send via email and WebSocket
-            results = await asyncio.gather(
-                self._send_email_notification(user, notification_type, context),
-                self._send_websocket_notification(user, notification_type, context),
-                return_exceptions=True,
-            )
+            if user.telegram_id:
+                # User has Telegram - send via bot
+                return await self._send_telegram_notification(
+                    user=user,
+                    notification_type=notification_type,
+                    context=context,
+                    bot=bot,
+                    message=telegram_message,
+                    markup=telegram_markup,
+                )
+            if user.email and user.email_verified:
+                # Email-only user - send via email and WebSocket
+                results = await asyncio.gather(
+                    self._send_email_notification(user, notification_type, context),
+                    self._send_websocket_notification(user, notification_type, context),
+                    return_exceptions=True,
+                )
 
-            email_sent = results[0] is True
-            ws_sent = results[1] is True
+                email_sent = results[0] is True
+                ws_sent = results[1] is True
 
-            if email_sent or ws_sent:
-                logger.info(
-                    'Уведомление отправлено email-пользователю (email ws=)',
+                if email_sent or ws_sent:
+                    logger.info(
+                        'Уведомление отправлено email-пользователю (email ws=)',
+                        notification_type_value=notification_type.value,
+                        user_id=user.id,
+                        email_sent=email_sent,
+                        ws_sent=ws_sent,
+                    )
+                    return True
+                logger.warning(
+                    'Не удалось отправить уведомление email-пользователю',
                     notification_type_value=notification_type.value,
                     user_id=user.id,
-                    email_sent=email_sent,
-                    ws_sent=ws_sent,
                 )
-                return True
-            logger.warning(
-                'Не удалось отправить уведомление email-пользователю',
-                notification_type_value=notification_type.value,
-                user_id=user.id,
+                return False
+            logger.debug(
+                'Пользователь не имеет telegram_id или verified email, пропускаем уведомление', user_id=user.id
             )
             return False
-        logger.debug('Пользователь не имеет telegram_id или verified email, пропускаем уведомление', user_id=user.id)
-        return False
+        except Exception as error:
+            logger.error(
+                'Unexpected error during notification delivery (suppressed to protect business flow)',
+                user_id=getattr(user, 'id', None),
+                notification_type_value=getattr(notification_type, 'value', str(notification_type)),
+                error=error,
+                exc_info=True,
+            )
+            return False
 
     async def _send_telegram_notification(
         self,
