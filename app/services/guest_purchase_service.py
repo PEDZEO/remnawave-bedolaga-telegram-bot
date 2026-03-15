@@ -1,10 +1,13 @@
 import re
 from datetime import UTC, datetime
+from html import escape
 
 import structlog
+from aiogram import Bot
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.crud.guest_purchase import create_guest_purchase
 from app.database.crud.subscription import (
     create_paid_subscription,
@@ -13,6 +16,7 @@ from app.database.crud.subscription import (
 )
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.models import GuestPurchase, GuestPurchaseStatus, Tariff, User
+from app.services.admin_notification_service import AdminNotificationService
 from app.services.subscription_service import SubscriptionService
 
 
@@ -134,6 +138,84 @@ async def _apply_purchase_subscription(
     purchase.subscription_crypto_link = subscription.subscription_crypto_link
 
 
+async def _send_gift_purchase_admin_notification(
+    db: AsyncSession,
+    *,
+    purchase: GuestPurchase,
+    tariff: Tariff,
+) -> None:
+    buyer_user_id = getattr(purchase, 'buyer_user_id', None)
+    if not buyer_user_id:
+        return
+
+    try:
+        buyer_result = await db.execute(select(User).where(User.id == buyer_user_id))
+        buyer = buyer_result.scalars().first()
+        if buyer is None:
+            return
+
+        bot = Bot(token=settings.BOT_TOKEN)
+        try:
+            notification_service = AdminNotificationService(bot)
+            text = (
+                '🎁 <b>ПОКУПКА ПОДАРОЧНОЙ ПОДПИСКИ</b>\n\n'
+                f'👤 Покупатель: {escape("@" + buyer.username) if buyer.username else f"ID {buyer.id}"}\n'
+                f'🧾 Тариф: {escape(getattr(tariff, "name", "Неизвестный") or "Неизвестный")}\n'
+                f'📅 Период: {int(getattr(purchase, "period_days", 0) or 0)} дн.\n'
+                f'💵 Сумма: {settings.format_price(int(getattr(purchase, "amount_kopeks", 0) or 0))}\n'
+                f'🎯 Получатель: {escape(getattr(purchase, "gift_recipient_value", "") or "Код (без получателя)")}\n'
+                f'🔑 Код: <code>{escape((getattr(purchase, "token", "") or "")[:12])}</code>'
+            )
+            await notification_service.send_admin_notification(text)
+        finally:
+            await bot.session.close()
+    except Exception:
+        logger.exception(
+            'Failed to send admin notification for gift purchase',
+            purchase_id=getattr(purchase, 'id', None),
+            buyer_user_id=buyer_user_id,
+        )
+
+
+async def _send_gift_activation_admin_notification(
+    db: AsyncSession,
+    *,
+    purchase: GuestPurchase,
+    recipient: User,
+    tariff: Tariff,
+) -> None:
+    try:
+        buyer = None
+        if getattr(purchase, 'buyer_user_id', None):
+            buyer_result = await db.execute(select(User).where(User.id == purchase.buyer_user_id))
+            buyer = buyer_result.scalars().first()
+
+        bot = Bot(token=settings.BOT_TOKEN)
+        try:
+            notification_service = AdminNotificationService(bot)
+            buyer_display = escape(f'@{buyer.username}') if buyer and getattr(buyer, 'username', None) else 'Неизвестно'
+            recipient_display = (
+                escape(f'@{recipient.username}') if getattr(recipient, 'username', None) else f'ID {recipient.id}'
+            )
+            text = (
+                '✅ <b>АКТИВАЦИЯ ПОДАРОЧНОЙ ПОДПИСКИ</b>\n\n'
+                f'👤 Получатель: {recipient_display}\n'
+                f'🎁 Отправитель: {buyer_display}\n'
+                f'🧾 Тариф: {escape(getattr(tariff, "name", "Неизвестный") or "Неизвестный")}\n'
+                f'📅 Период: {int(getattr(purchase, "period_days", 0) or 0)} дн.\n'
+                f'🔑 Код: <code>{escape((getattr(purchase, "token", "") or "")[:12])}</code>'
+            )
+            await notification_service.send_admin_notification(text)
+        finally:
+            await bot.session.close()
+    except Exception:
+        logger.exception(
+            'Failed to send admin notification for gift activation',
+            purchase_id=getattr(purchase, 'id', None),
+            recipient_user_id=getattr(recipient, 'id', None),
+        )
+
+
 async def fulfill_purchase(
     db: AsyncSession,
     purchase_token: str,
@@ -152,6 +234,11 @@ async def fulfill_purchase(
     tariff = await get_tariff_by_id(db, purchase.tariff_id)
     if tariff is None:
         raise GuestPurchaseError('Tariff not found', status_code=500)
+
+    try:
+        await _send_gift_purchase_admin_notification(db, purchase=purchase, tariff=tariff)
+    except Exception:
+        logger.exception('Gift purchase admin notification wrapper failed', purchase_id=getattr(purchase, 'id', None))
 
     recipient_user = await _find_user_by_gift_recipient(
         db,
@@ -207,4 +294,14 @@ async def activate_purchase(
     purchase.delivered_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(purchase)
+
+    try:
+        await _send_gift_activation_admin_notification(db, purchase=purchase, recipient=user, tariff=tariff)
+    except Exception:
+        logger.exception(
+            'Gift activation admin notification wrapper failed',
+            purchase_id=getattr(purchase, 'id', None),
+            user_id=getattr(user, 'id', None),
+        )
+
     return purchase

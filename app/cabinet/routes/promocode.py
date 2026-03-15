@@ -1,5 +1,7 @@
 """Promo code routes for cabinet."""
 
+from html import escape
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -38,13 +40,20 @@ async def _send_admin_gift_activation_fallback(
         bot = Bot(token=settings.BOT_TOKEN)
         try:
             notification_service = AdminNotificationService(bot)
-            sent = await notification_service.send_gift_activation_notification(
-                db,
-                recipient=recipient,
-                buyer=buyer,
-                purchase=purchase,
-                tariff_name=purchase.tariff.name if purchase.tariff else None,
+            buyer_display = escape(f'@{buyer.username}') if buyer and getattr(buyer, 'username', None) else 'Неизвестно'
+            recipient_display = (
+                escape(f'@{recipient.username}') if getattr(recipient, 'username', None) else f'ID {recipient.id}'
             )
+            tariff_name = purchase.tariff.name if purchase.tariff else 'Неизвестный'
+            text = (
+                '✅ <b>АКТИВАЦИЯ ПОДАРОЧНОЙ ПОДПИСКИ</b>\n\n'
+                f'👤 Получатель: {recipient_display}\n'
+                f'🎁 Отправитель: {buyer_display}\n'
+                f'🧾 Тариф: {escape(tariff_name)}\n'
+                f'📅 Период: {int(getattr(purchase, "period_days", 0) or 0)} дн.\n'
+                f'🔑 Код: <code>{escape((getattr(purchase, "token", "") or "")[:12])}</code>'
+            )
+            sent = await notification_service.send_admin_notification(text)
             if not sent:
                 logger.warning(
                     'Promocode gift activation admin notification fallback returned false',

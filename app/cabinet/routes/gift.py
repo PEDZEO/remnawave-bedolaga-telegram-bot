@@ -1,5 +1,6 @@
 import re
 from datetime import UTC, datetime
+from html import escape
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -85,13 +86,16 @@ async def _send_admin_gift_purchase_fallback(
         bot = Bot(token=settings.BOT_TOKEN)
         try:
             notification_service = AdminNotificationService(bot)
-            sent = await notification_service.send_gift_purchase_notification(
-                db,
-                buyer=buyer,
-                purchase=purchase,
-                tariff_name=getattr(tariff, 'name', None),
-                payment_method=getattr(purchase, 'payment_method', None),
+            text = (
+                '🎁 <b>ПОКУПКА ПОДАРОЧНОЙ ПОДПИСКИ</b>\n\n'
+                f'👤 Покупатель: {escape("@" + buyer.username) if buyer.username else f"ID {buyer.id}"}\n'
+                f'🧾 Тариф: {escape(getattr(tariff, "name", "Неизвестный") or "Неизвестный")}\n'
+                f'📅 Период: {int(getattr(purchase, "period_days", 0) or 0)} дн.\n'
+                f'💵 Сумма: {settings.format_price(int(getattr(purchase, "amount_kopeks", 0) or 0))}\n'
+                f'🎯 Получатель: {escape(getattr(purchase, "gift_recipient_value", "") or "Код (без получателя)")}\n'
+                f'🔑 Код: <code>{escape((getattr(purchase, "token", "") or "")[:12])}</code>'
             )
+            sent = await notification_service.send_admin_notification(text)
             if not sent:
                 logger.warning(
                     'Gift purchase admin notification fallback returned false',
@@ -124,13 +128,19 @@ async def _send_admin_gift_activation_fallback(
         bot = Bot(token=settings.BOT_TOKEN)
         try:
             notification_service = AdminNotificationService(bot)
-            sent = await notification_service.send_gift_activation_notification(
-                db,
-                recipient=recipient,
-                buyer=buyer,
-                purchase=purchase,
-                tariff_name=getattr(tariff, 'name', None),
+            buyer_display = escape(f'@{buyer.username}') if buyer and getattr(buyer, 'username', None) else 'Неизвестно'
+            recipient_display = (
+                escape(f'@{recipient.username}') if getattr(recipient, 'username', None) else f'ID {recipient.id}'
             )
+            text = (
+                '✅ <b>АКТИВАЦИЯ ПОДАРОЧНОЙ ПОДПИСКИ</b>\n\n'
+                f'👤 Получатель: {recipient_display}\n'
+                f'🎁 Отправитель: {buyer_display}\n'
+                f'🧾 Тариф: {escape(getattr(tariff, "name", "Неизвестный") or "Неизвестный")}\n'
+                f'📅 Период: {int(getattr(purchase, "period_days", 0) or 0)} дн.\n'
+                f'🔑 Код: <code>{escape((getattr(purchase, "token", "") or "")[:12])}</code>'
+            )
+            sent = await notification_service.send_admin_notification(text)
             if not sent:
                 logger.warning(
                     'Gift activation admin notification fallback returned false',
