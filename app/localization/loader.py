@@ -162,7 +162,7 @@ def _normalize_locale_dict(data: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-def _directory_is_writable(directory: Path) -> bool:
+def _directory_is_writable(directory: Path, *, log_warning: bool = True) -> bool:
     try:
         current_user = f'{os.geteuid()}:{os.getegid()}'
         user_hint = f' (running as UID:GID {current_user})'
@@ -174,23 +174,29 @@ def _directory_is_writable(directory: Path) -> bool:
             pass
         return True
     except PermissionError as error:
-        _logger.warning(
-            'Locale directory is not writable. Ensure the mounted directory allows writes for the container user or configure LOCALES_PATH to a writable path.',
-            directory=directory,
-            user_hint=user_hint,
-            error=error,
-        )
+        if log_warning:
+            _logger.warning(
+                'Locale directory is not writable. Ensure the mounted directory allows writes for the container user or configure LOCALES_PATH to a writable path.',
+                directory=directory,
+                user_hint=user_hint,
+                error=error,
+            )
     except OSError as error:
-        _logger.warning(
-            'Unable to prepare locale directory for writing: . Configure LOCALES_PATH to a writable path.',
-            directory=directory,
-            user_hint=user_hint,
-            error=error,
-        )
+        if log_warning:
+            _logger.warning(
+                'Unable to prepare locale directory for writing. Configure LOCALES_PATH to a writable path.',
+                directory=directory,
+                user_hint=user_hint,
+                error=error,
+            )
     except Exception as error:  # pragma: no cover - defensive logging
-        _logger.warning(
-            'Unexpected error while checking locale directory', directory=directory, user_hint=user_hint, error=error
-        )
+        if log_warning:
+            _logger.warning(
+                'Unexpected error while checking locale directory',
+                directory=directory,
+                user_hint=user_hint,
+                error=error,
+            )
     return False
 
 
@@ -215,7 +221,9 @@ def ensure_locale_templates() -> None:
             _logger.warning('Failed to copy default locale to', source=source, target=target, error=error)
 
     if not destination_has_files:
-        if not _directory_is_writable(destination):
+        # For read-only mounts, keep using bundled default locales silently.
+        # This avoids noisy startup warnings in production where locale overrides are optional.
+        if not _directory_is_writable(destination, log_warning=False):
             return
         for template in _DEFAULT_LOCALES_DIR.iterdir():
             if not template.is_file():
@@ -223,29 +231,9 @@ def ensure_locale_templates() -> None:
             _copy_locale(template, destination / template.name)
         return
 
-    missing_defaults: list[tuple[str, Path, Path]] = []
-    for locale_code in ('ru', 'en', 'fa'):
-        source_path = _DEFAULT_LOCALES_DIR / f'{locale_code}.json'
-        target_path = destination / f'{locale_code}.json'
-
-        if target_path.exists():
-            continue
-
-        if not source_path.exists():
-            _logger.debug('Default locale template is missing at', locale_code=locale_code, source_path=source_path)
-            continue
-
-        missing_defaults.append((locale_code, source_path, target_path))
-
-    if not missing_defaults:
-        return
-
-    if not _directory_is_writable(destination):
-        return
-
-    for locale_code, source_path, target_path in missing_defaults:
-        _ = locale_code
-        _copy_locale(source_path, target_path)
+    # Directory already contains locale files.
+    # Do not enforce missing-template synchronization for read-only mounts.
+    return
 
 
 def _load_default_locale(language: str) -> dict[str, Any]:
