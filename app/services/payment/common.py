@@ -308,13 +308,7 @@ async def send_cart_notification_after_topup(
 
     Returns True if a cart notification was sent.
     """
-    if await is_ultima_mode_enabled_cached():
-        logger.info(
-            'Skip cart flow after top-up in Ultima mode',
-            user_id=getattr(user, 'id', None),
-            amount_kopeks=amount_kopeks,
-        )
-        return False
+    ultima_mode_enabled = await is_ultima_mode_enabled_cached()
 
     from aiogram import types
 
@@ -369,6 +363,14 @@ async def send_cart_notification_after_topup(
         )
 
     if auto_purchase_success:
+        return False
+
+    if ultima_mode_enabled:
+        logger.info(
+            'Skip fallback cart notification after top-up in Ultima mode',
+            user_id=getattr(user, 'id', None),
+            amount_kopeks=amount_kopeks,
+        )
         return False
 
     if not bot or not getattr(user, 'telegram_id', None):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from types import ModuleType
 
 import pytest
 from aiogram.types import InlineKeyboardMarkup
@@ -13,7 +14,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from app.services.payment.common import PaymentCommonMixin
+from app.services.payment.common import PaymentCommonMixin, send_cart_notification_after_topup
 
 
 class _FakeBot:
@@ -78,6 +79,13 @@ async def test_send_payment_success_notification_recovers_missing_greenlet(monke
         'app.services.payment.common.get_db',
         fake_get_db,
     )
+    websocket_module = ModuleType('app.cabinet.routes.websocket')
+
+    async def notify_user_balance_topup_stub(*args, **kwargs):  # type: ignore[no-untyped-def]
+        return None
+
+    websocket_module.notify_user_balance_topup = notify_user_balance_topup_stub  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, 'app.cabinet.routes.websocket', websocket_module)
     await service._send_payment_success_notification(
         lazy_user.telegram_id,
         12300,
@@ -91,3 +99,55 @@ async def test_send_payment_success_notification_recovers_missing_greenlet(monke
     assert 'Тестовый метод' in message['text']
     assert service.keyboard_user is not None
     assert isinstance(service.keyboard_user, SimpleNamespace)
+
+
+@pytest.mark.asyncio
+async def test_send_cart_notification_after_topup_still_attempts_auto_purchase_in_ultima(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auto_purchase_calls: list[tuple[object, object]] = []
+
+    async def auto_purchase_stub(db, user, *, bot=None):  # type: ignore[no-untyped-def]
+        auto_purchase_calls.append((db, user))
+        return False
+
+    async def is_ultima_enabled_stub() -> bool:
+        return True
+
+    async def has_user_cart_stub(_user_id: int) -> bool:
+        return True
+
+    async def get_user_cart_stub(_user_id: int):  # type: ignore[no-untyped-def]
+        return {'total_price': 5_000}
+
+    monkeypatch.setattr(
+        'app.services.payment.common.is_ultima_mode_enabled_cached',
+        is_ultima_enabled_stub,
+    )
+    monkeypatch.setattr(
+        'app.services.subscription_auto_purchase_service.auto_purchase_saved_cart_after_topup',
+        auto_purchase_stub,
+    )
+    monkeypatch.setattr(
+        'app.services.user_cart_service.user_cart_service.has_user_cart',
+        has_user_cart_stub,
+    )
+    monkeypatch.setattr(
+        'app.services.user_cart_service.user_cart_service.get_user_cart',
+        get_user_cart_stub,
+    )
+
+    user = SimpleNamespace(id=17, telegram_id=7017, language='ru')
+    db = object()
+    bot = _FakeBot()
+
+    result = await send_cart_notification_after_topup(
+        user=user,
+        amount_kopeks=1_000,
+        db=db,
+        bot=bot,
+    )
+
+    assert result is False
+    assert auto_purchase_calls == [(db, user)]
+    assert bot.messages == []

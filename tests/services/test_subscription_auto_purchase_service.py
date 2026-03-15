@@ -1,5 +1,6 @@
+import sys
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -995,3 +996,229 @@ async def test_auto_purchase_trial_remaining_days_transferred(monkeypatch):
     assert cleared_draft_ids == [user.id]
     assert admin_service.called is True
     assert bot.sent >= 1
+
+
+async def test_auto_purchase_saved_cart_after_topup_tariff_purchase_converts_trial(monkeypatch):
+    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
+
+    now = datetime.now(UTC)
+    subscription = SimpleNamespace(
+        id=654,
+        is_trial=True,
+        status='trial',
+        end_date=now + timedelta(days=2),
+        start_date=now - timedelta(days=1),
+        device_limit=1,
+        traffic_limit_gb=5,
+        connected_squads=['trial-squad'],
+        tariff_id=None,
+    )
+
+    user = SimpleNamespace(
+        id=54,
+        telegram_id=5454,
+        balance_kopeks=150_000,
+        language='ru',
+        subscription=subscription,
+        remnawave_uuid='rmw-5454',
+        get_primary_promo_group=lambda: None,
+    )
+
+    cart_data = {
+        'cart_mode': 'tariff_purchase',
+        'tariff_id': 77,
+        'period_days': 30,
+        'total_price': 100_000,
+        'discount_percent': 0,
+        'promo_offer_percent': 0,
+    }
+
+    tariff = SimpleNamespace(
+        id=77,
+        name='Обычный',
+        is_active=True,
+        period_prices={'30': 100_000},
+        device_limit=3,
+        allowed_squads=['paid-squad'],
+        traffic_limit_gb=250,
+        device_price_kopeks=0,
+    )
+
+    subtract_calls: list[tuple] = []
+
+    async def subtract_stub(*args, **kwargs):
+        subtract_calls.append((args, kwargs))
+        return True
+
+    monkeypatch.setattr(
+        'app.database.crud.user.subtract_user_balance',
+        subtract_stub,
+    )
+
+    async def get_tariff_by_id_stub(*args, **kwargs):
+        return tariff
+
+    monkeypatch.setattr(
+        'app.database.crud.tariff.get_tariff_by_id',
+        get_tariff_by_id_stub,
+    )
+
+    async def get_subscription_by_user_id_stub(*args, **kwargs):
+        return subscription
+
+    monkeypatch.setattr(
+        'app.database.crud.subscription.get_subscription_by_user_id',
+        get_subscription_by_user_id_stub,
+    )
+
+    async def extend_stub(db, current_subscription, days, **kwargs):
+        current_subscription.end_date = current_subscription.end_date + timedelta(days=days)
+        current_subscription.tariff_id = kwargs.get('tariff_id')
+        current_subscription.traffic_limit_gb = kwargs.get('traffic_limit_gb')
+        current_subscription.device_limit = kwargs.get('device_limit')
+        current_subscription.connected_squads = kwargs.get('connected_squads')
+        current_subscription.is_trial = False
+        current_subscription.status = 'active'
+        return current_subscription
+
+    monkeypatch.setattr(
+        'app.database.crud.subscription.extend_subscription',
+        extend_stub,
+    )
+
+    async def create_paid_subscription_stub(*args, **kwargs):
+        raise AssertionError('Existing trial subscription must be extended, not recreated')
+
+    monkeypatch.setattr(
+        'app.database.crud.subscription.create_paid_subscription',
+        create_paid_subscription_stub,
+    )
+
+    create_transaction_calls = {'count': 0}
+
+    async def create_transaction_stub(*args, **kwargs):
+        create_transaction_calls['count'] += 1
+        return SimpleNamespace(id=901)
+
+    monkeypatch.setattr(
+        'app.database.crud.transaction.create_transaction',
+        create_transaction_stub,
+    )
+
+    class _SubscriptionServiceStub:
+        def __init__(self):
+            self.update_called = False
+            self.create_called = False
+
+        async def update_remnawave_user(self, *args, **kwargs):
+            self.update_called = True
+
+        async def create_remnawave_user(self, *args, **kwargs):
+            self.create_called = True
+
+    service_stub = _SubscriptionServiceStub()
+    monkeypatch.setattr(
+        'app.services.subscription_auto_purchase_service.SubscriptionService',
+        lambda: service_stub,
+    )
+
+    async def get_user_cart_stub(_user_id):
+        return cart_data
+
+    deleted_cart_ids: list[int] = []
+
+    async def delete_user_cart_stub(user_id: int):
+        deleted_cart_ids.append(user_id)
+
+    cleared_draft_ids: list[int] = []
+
+    async def clear_checkout_draft_stub(user_id: int):
+        cleared_draft_ids.append(user_id)
+
+    monkeypatch.setattr(
+        'app.services.subscription_auto_purchase_service.user_cart_service.get_user_cart',
+        get_user_cart_stub,
+    )
+    monkeypatch.setattr(
+        'app.services.subscription_auto_purchase_service.user_cart_service.delete_user_cart',
+        delete_user_cart_stub,
+    )
+    monkeypatch.setattr(
+        'app.services.subscription_auto_purchase_service.clear_subscription_checkout_draft',
+        clear_checkout_draft_stub,
+    )
+    monkeypatch.setattr(
+        'app.services.subscription_auto_purchase_service.get_texts',
+        lambda lang: DummyTexts(),
+    )
+    monkeypatch.setattr(
+        'app.services.subscription_auto_purchase_service.format_period_description',
+        lambda days, lang: f'{days} дней',
+    )
+
+    async def strip_keyboard_stub(keyboard):
+        return keyboard
+
+    monkeypatch.setattr(
+        'app.services.subscription_auto_purchase_service.strip_bot_menu_buttons_for_ultima',
+        strip_keyboard_stub,
+    )
+
+    ws_calls = {'renewed': 0, 'activated': 0}
+
+    async def notify_user_subscription_renewed_stub(*args, **kwargs):
+        ws_calls['renewed'] += 1
+
+    async def notify_user_subscription_activated_stub(*args, **kwargs):
+        ws_calls['activated'] += 1
+
+    websocket_module = ModuleType('app.cabinet.routes.websocket')
+    websocket_module.notify_user_subscription_renewed = notify_user_subscription_renewed_stub  # type: ignore[attr-defined]
+    websocket_module.notify_user_subscription_activated = notify_user_subscription_activated_stub  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, 'app.cabinet.routes.websocket', websocket_module)
+
+    class _AdminServiceStub:
+        def __init__(self):
+            self.called = False
+            self.was_trial_conversion = None
+
+        async def send_subscription_purchase_notification(self, *args, **kwargs):
+            self.called = True
+            self.was_trial_conversion = args[5]
+
+    admin_service = _AdminServiceStub()
+    monkeypatch.setattr(
+        'app.services.subscription_auto_purchase_service.AdminNotificationService',
+        lambda bot: admin_service,
+    )
+
+    class _BotStub:
+        def __init__(self):
+            self.sent_messages = 0
+
+        async def send_message(self, *args, **kwargs):
+            self.sent_messages += 1
+
+    bot = _BotStub()
+    db_session = SimpleNamespace()
+
+    result = await auto_purchase_saved_cart_after_topup(db_session, user, bot=bot)
+
+    assert result is True
+    assert len(subtract_calls) == 1
+    assert subscription.is_trial is False
+    assert subscription.status == 'active'
+    assert subscription.tariff_id == tariff.id
+    assert subscription.device_limit == tariff.device_limit
+    assert subscription.traffic_limit_gb == tariff.traffic_limit_gb
+    assert subscription.connected_squads == tariff.allowed_squads
+    assert deleted_cart_ids == [user.id]
+    assert cleared_draft_ids == [user.id]
+    assert create_transaction_calls['count'] == 1
+    assert service_stub.update_called is True
+    assert service_stub.create_called is False
+    assert admin_service.called is True
+    assert admin_service.was_trial_conversion is True
+    assert bot.sent_messages >= 1
+    assert ws_calls['renewed'] == 1
+    assert ws_calls['activated'] == 0
