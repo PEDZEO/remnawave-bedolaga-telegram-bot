@@ -206,9 +206,6 @@ def ensure_locale_templates() -> None:
         _logger.debug('Default locales directory is missing', DEFAULT_LOCALES_DIR=_DEFAULT_LOCALES_DIR)
         return
 
-    if not _directory_is_writable(destination):
-        return
-
     destination_has_files = any(destination.glob('*'))
 
     def _copy_locale(source: Path, target: Path) -> None:
@@ -218,12 +215,15 @@ def ensure_locale_templates() -> None:
             _logger.warning('Failed to copy default locale to', source=source, target=target, error=error)
 
     if not destination_has_files:
+        if not _directory_is_writable(destination):
+            return
         for template in _DEFAULT_LOCALES_DIR.iterdir():
             if not template.is_file():
                 continue
             _copy_locale(template, destination / template.name)
         return
 
+    missing_defaults: list[tuple[str, Path, Path]] = []
     for locale_code in ('ru', 'en', 'fa'):
         source_path = _DEFAULT_LOCALES_DIR / f'{locale_code}.json'
         target_path = destination / f'{locale_code}.json'
@@ -235,6 +235,16 @@ def ensure_locale_templates() -> None:
             _logger.debug('Default locale template is missing at', locale_code=locale_code, source_path=source_path)
             continue
 
+        missing_defaults.append((locale_code, source_path, target_path))
+
+    if not missing_defaults:
+        return
+
+    if not _directory_is_writable(destination):
+        return
+
+    for locale_code, source_path, target_path in missing_defaults:
+        _ = locale_code
         _copy_locale(source_path, target_path)
 
 
