@@ -1412,10 +1412,6 @@ class GuestPurchaseStatus(Enum):
 class GuestPurchase(Base):
     __tablename__ = 'guest_purchases'
     __table_args__ = (
-        Index('ix_guest_purchases_token', 'token'),
-        Index('ix_guest_purchases_status', 'status'),
-        Index('ix_guest_purchases_user_id', 'user_id'),
-        Index('ix_guest_purchases_buyer_user_id', 'buyer_user_id'),
         Index('ix_guest_purchases_user_gift_status', 'user_id', 'is_gift', 'status'),
     )
 

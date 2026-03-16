@@ -44,6 +44,55 @@ async def _needs_auto_stamp() -> bool:
         return has_users
 
 
+async def _is_fresh_database() -> bool:
+    """Return True when the target DB has no public tables and no Alembic state."""
+    from app.database.database import engine
+
+    async with engine.connect() as conn:
+        has_alembic = await conn.run_sync(lambda sync_conn: inspect(sync_conn).has_table('alembic_version'))
+        if has_alembic:
+            return False
+
+        def _has_any_tables(sync_conn) -> bool:
+            return bool(inspect(sync_conn).get_table_names())
+
+        has_any_tables = await conn.run_sync(_has_any_tables)
+        return not has_any_tables
+
+
+async def _is_current_schema_snapshot_without_alembic() -> bool:
+    """Detect partially bootstrapped/current-schema DBs that should be stamped at head."""
+    from app.database.database import engine
+
+    async with engine.connect() as conn:
+        has_alembic = await conn.run_sync(lambda sync_conn: inspect(sync_conn).has_table('alembic_version'))
+        if has_alembic:
+            return False
+
+        def _has_current_schema_markers(sync_conn) -> bool:
+            inspector = inspect(sync_conn)
+            return any(
+                [
+                    inspector.has_table('guest_purchases'),
+                    inspector.has_table('cabinet_refresh_tokens'),
+                    inspector.has_table('main_menu_buttons'),
+                ]
+            )
+
+        return await conn.run_sync(_has_current_schema_markers)
+
+
+async def _bootstrap_current_schema() -> None:
+    """Create the current SQLAlchemy metadata for a fresh database."""
+    from app.database.database import engine
+    from app.database.models import Base
+
+    async with engine.begin() as conn:
+        await conn.run_sync(lambda sync_conn: Base.metadata.create_all(bind=sync_conn, checkfirst=True))
+
+    logger.info('Current SQLAlchemy schema bootstrapped for fresh database')
+
+
 _INITIAL_REVISION = '0001'
 _LEGACY_REVISION_REMAP: dict[str, str] = {
     # Legacy branch value from older server snapshots no longer present in new chain.
@@ -94,6 +143,17 @@ async def _remap_legacy_revision_if_needed() -> bool:
 async def run_alembic_upgrade() -> None:
     """Run ``alembic upgrade heads``, auto-stamping existing databases first."""
     await _remap_legacy_revision_if_needed()
+
+    if await _is_fresh_database():
+        logger.warning('Fresh database detected — bootstrapping current schema and stamping Alembic heads')
+        await _bootstrap_current_schema()
+        await _stamp_alembic_revision('heads')
+        return
+
+    if await _is_current_schema_snapshot_without_alembic():
+        logger.warning('Current-schema database without alembic_version detected — stamping Alembic heads')
+        await _stamp_alembic_revision('heads')
+        return
 
     if await _needs_auto_stamp():
         logger.warning(
