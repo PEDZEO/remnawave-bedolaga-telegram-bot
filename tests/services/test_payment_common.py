@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from types import SimpleNamespace
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import pytest
 from aiogram.types import InlineKeyboardMarkup
