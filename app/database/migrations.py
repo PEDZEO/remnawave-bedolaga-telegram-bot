@@ -97,6 +97,14 @@ _INITIAL_REVISION = '0001'
 _LEGACY_REVISION_REMAP: dict[str, str] = {
     # Legacy branch value from older server snapshots no longer present in new chain.
     '0004': '0003',
+    # Legacy post-0040 revisions were later squashed out of the current branch.
+    # Production snapshots may still be stamped with these values even though the
+    # current metadata already works with the resulting schema.
+    '0041': '0040',
+    '0042': '0040',
+    '0043': '0040',
+    '0044': '0040',
+    '0045': '0040',
 }
 
 
