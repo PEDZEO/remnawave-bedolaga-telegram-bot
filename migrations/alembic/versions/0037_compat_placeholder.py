@@ -1,7 +1,7 @@
 """compat placeholder for missing 0037 revision
 
 Revision ID: 0037
-Revises: 0018
+Revises: 0019
 
 This migration intentionally does nothing and exists only to keep
 upgrade path continuity for environments that already have DB stamped
@@ -12,7 +12,7 @@ from typing import Sequence, Union
 
 
 revision: str = '0037'
-down_revision: Union[str, None] = '0018'
+down_revision: Union[str, None] = '0019'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
