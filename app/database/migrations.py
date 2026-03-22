@@ -7,7 +7,7 @@ from typing import Any
 import structlog
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 
 
 logger = structlog.get_logger(__name__)
@@ -37,10 +37,10 @@ async def _needs_auto_stamp() -> bool:
     from app.database.database import engine
 
     async with engine.connect() as conn:
-        has_alembic = await conn.run_sync(lambda sync_conn: inspect(sync_conn).has_table('alembic_version'))
+        has_alembic = await _has_public_table(conn, 'alembic_version')
         if has_alembic:
             return False
-        has_users = await conn.run_sync(lambda sync_conn: inspect(sync_conn).has_table('users'))
+        has_users = await _has_public_table(conn, 'users')
         return has_users
 
 
@@ -49,14 +49,11 @@ async def _is_fresh_database() -> bool:
     from app.database.database import engine
 
     async with engine.connect() as conn:
-        has_alembic = await conn.run_sync(lambda sync_conn: inspect(sync_conn).has_table('alembic_version'))
+        has_alembic = await _has_public_table(conn, 'alembic_version')
         if has_alembic:
             return False
 
-        def _has_any_tables(sync_conn) -> bool:
-            return bool(inspect(sync_conn).get_table_names())
-
-        has_any_tables = await conn.run_sync(_has_any_tables)
+        has_any_tables = await _has_any_public_tables(conn)
         return not has_any_tables
 
 
@@ -65,21 +62,11 @@ async def _is_current_schema_snapshot_without_alembic() -> bool:
     from app.database.database import engine
 
     async with engine.connect() as conn:
-        has_alembic = await conn.run_sync(lambda sync_conn: inspect(sync_conn).has_table('alembic_version'))
+        has_alembic = await _has_public_table(conn, 'alembic_version')
         if has_alembic:
             return False
 
-        def _has_current_schema_markers(sync_conn) -> bool:
-            inspector = inspect(sync_conn)
-            return any(
-                [
-                    inspector.has_table('guest_purchases'),
-                    inspector.has_table('cabinet_refresh_tokens'),
-                    inspector.has_table('main_menu_buttons'),
-                ]
-            )
-
-        return await conn.run_sync(_has_current_schema_markers)
+        return await _has_any_public_table(conn, ['guest_purchases', 'cabinet_refresh_tokens', 'main_menu_buttons'])
 
 
 async def _bootstrap_current_schema() -> None:
@@ -108,6 +95,48 @@ _LEGACY_REVISION_REMAP: dict[str, str] = {
 }
 
 
+async def _has_public_table(conn, table_name: str) -> bool:
+    """Check table existence via information_schema to avoid inspector false negatives."""
+    query = text(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = :table_name
+        )
+        """
+    )
+    return bool((await conn.execute(query, {'table_name': table_name})).scalar())
+
+
+async def _has_any_public_tables(conn) -> bool:
+    """Check whether the public schema already contains any tables."""
+    query = text(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+        )
+        """
+    )
+    return bool((await conn.execute(query)).scalar())
+
+
+async def _has_any_public_table(conn, table_names: list[str]) -> bool:
+    """Check whether any table from the provided list exists in the public schema."""
+    query = text(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = ANY(:table_names)
+        )
+        """
+    )
+    return bool((await conn.execute(query, {'table_names': table_names})).scalar())
+
+
 async def _get_current_alembic_revision(conn) -> str | None:
     """Return current revision from alembic_version table, if present."""
     revision = (
@@ -123,7 +152,7 @@ async def _remap_legacy_revision_if_needed() -> bool:
     from app.database.database import engine
 
     async with engine.begin() as conn:
-        has_alembic = await conn.run_sync(lambda sync_conn: inspect(sync_conn).has_table('alembic_version'))
+        has_alembic = await _has_public_table(conn, 'alembic_version')
         if not has_alembic:
             return False
 
