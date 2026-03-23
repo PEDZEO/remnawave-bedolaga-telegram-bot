@@ -14,6 +14,7 @@ from .admin_campaigns import router as admin_campaigns_router
 from .admin_channels import router as admin_channels_router
 from .admin_email_templates import router as admin_email_templates_router
 from .admin_menu_layout import router as admin_menu_layout_router
+from .admin_news import router as admin_news_router
 from .admin_partners import router as admin_partners_router
 from .admin_payment_methods import router as admin_payment_methods_router
 from .admin_payments import router as admin_payments_router
@@ -42,6 +43,7 @@ from .contests import router as contests_router
 from .gift import router as gift_router
 from .info import router as info_router
 from .media import router as media_router
+from .news import router as news_router
 from .notifications import router as notifications_router
 from .oauth import router as oauth_router
 from .partner_application import router as partner_application_router
@@ -84,6 +86,7 @@ router.include_router(info_router)
 router.include_router(branding_router)
 router.include_router(gift_router)
 router.include_router(media_router)
+router.include_router(news_router)
 
 # Wheel routes
 router.include_router(wheel_router)
@@ -123,6 +126,7 @@ router.include_router(admin_channels_router)
 router.include_router(admin_roles_router)
 router.include_router(admin_policies_router)
 router.include_router(admin_audit_log_router)
+router.include_router(admin_news_router)
 
 # WebSocket route
 router.include_router(websocket_router)
