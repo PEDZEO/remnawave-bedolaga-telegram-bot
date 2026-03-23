@@ -15,7 +15,9 @@ from .admin_channels import router as admin_channels_router
 from .admin_email_templates import router as admin_email_templates_router
 from .admin_menu_layout import router as admin_menu_layout_router
 from .admin_news import router as admin_news_router
+from .admin_news_categories import router as admin_news_categories_router
 from .admin_news_media import router as admin_news_media_router
+from .admin_news_tags import router as admin_news_tags_router
 from .admin_partners import router as admin_partners_router
 from .admin_payment_methods import router as admin_payment_methods_router
 from .admin_payments import router as admin_payments_router
@@ -128,6 +130,8 @@ router.include_router(admin_roles_router)
 router.include_router(admin_policies_router)
 router.include_router(admin_audit_log_router)
 router.include_router(admin_news_router)
+router.include_router(admin_news_categories_router)
+router.include_router(admin_news_tags_router)
 router.include_router(admin_news_media_router)
 
 # WebSocket route
