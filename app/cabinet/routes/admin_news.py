@@ -15,6 +15,7 @@ from app.database.crud.news import (
     get_all_news,
     get_all_news_count,
     get_news_article_by_id,
+    unfeature_all_news,
     update_news_article,
 )
 from app.database.models import NewsArticle, User
@@ -120,6 +121,8 @@ async def create_article(
 ) -> NewsArticleResponse:
     """Create a new news article."""
     try:
+        if request.is_featured:
+            await unfeature_all_news(db)
         article = await create_news_article(
             db,
             title=request.title,
@@ -174,6 +177,8 @@ async def update_article(
 
     try:
         update_data = request.model_dump(exclude_unset=True)
+        if update_data.get('is_featured'):
+            await unfeature_all_news(db)
         article = await update_news_article(db, article, **update_data)
     except IntegrityError:
         raise HTTPException(
@@ -273,7 +278,11 @@ async def toggle_featured(
         )
 
     try:
-        article = await update_news_article(db, article, is_featured=not article.is_featured)
+        new_featured = not article.is_featured
+        # Only one article can be featured at a time — unfeature all others first
+        if new_featured:
+            await unfeature_all_news(db)
+        article = await update_news_article(db, article, is_featured=new_featured)
         return NewsToggleResponse(
             id=article.id,
             is_published=article.is_published,
