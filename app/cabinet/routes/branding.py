@@ -40,6 +40,7 @@ GOOGLE_ADS_ID_KEY = 'CABINET_GOOGLE_ADS_ID'  # Stores conversion ID (e.g. "AW-12
 GOOGLE_ADS_LABEL_KEY = 'CABINET_GOOGLE_ADS_LABEL'  # Stores conversion label (alphanumeric)
 LITE_MODE_ENABLED_KEY = 'CABINET_LITE_MODE_ENABLED'  # Stores "true" or "false"
 ULTIMA_MODE_ENABLED_KEY = 'CABINET_ULTIMA_MODE_ENABLED'  # Stores "true" or "false"
+ULTIMA_ACCOUNT_LINKING_MODE_KEY = 'CABINET_ULTIMA_ACCOUNT_LINKING_MODE'  # Stores "code" or "provider_auth"
 GIFT_ENABLED_KEY = 'CABINET_GIFT_ENABLED'  # Stores "true" or "false"
 ANIMATION_CONFIG_KEY = 'CABINET_ANIMATION_CONFIG'  # Stores JSON with animation config
 ULTIMA_THEME_CONFIG_KEY = 'CABINET_ULTIMA_THEME_CONFIG'  # Stores JSON with Ultima visual config
@@ -300,6 +301,12 @@ class UltimaModeEnabledUpdate(BaseModel):
     """Request to update ultima mode setting."""
 
     enabled: bool
+
+
+class UltimaAccountLinkingModeResponse(BaseModel):
+    """Ultima account-linking mode setting."""
+
+    mode: Literal['code', 'provider_auth'] = 'code'
 
 
 class GiftEnabledResponse(BaseModel):
@@ -1101,6 +1108,21 @@ async def update_ultima_mode_enabled(
     logger.info('Admin set ultima mode enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
 
     return UltimaModeEnabledResponse(enabled=payload.enabled)
+
+
+@router.get('/ultima-account-linking-mode', response_model=UltimaAccountLinkingModeResponse)
+async def get_ultima_account_linking_mode(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Get Ultima account-linking mode.
+    This is a public endpoint - no authentication required.
+    """
+    mode_value = await get_setting_value(db, ULTIMA_ACCOUNT_LINKING_MODE_KEY)
+    normalized_mode = (mode_value or settings.CABINET_ULTIMA_ACCOUNT_LINKING_MODE or 'code').strip().lower()
+    if normalized_mode not in {'code', 'provider_auth'}:
+        normalized_mode = 'code'
+    return UltimaAccountLinkingModeResponse(mode=normalized_mode)
 
 
 # ============ Gift Mode Routes ============

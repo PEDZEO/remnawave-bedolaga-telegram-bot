@@ -8,17 +8,34 @@ import structlog
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
-from app.database.crud.user import get_user_by_id
+from app.database.crud.user import (
+    get_user_by_email,
+    get_user_by_id,
+    get_user_by_oauth_provider,
+    get_user_by_telegram_id,
+    set_user_oauth_provider_id,
+)
 from app.database.models import CabinetRefreshToken, Ticket, TicketMessage, User, UserStatus
 from app.handlers.tickets import notify_admins_about_new_ticket
 from app.utils.cache import cache, cache_key
 
+from ..auth import validate_telegram_init_data
+from ..auth.jwt_handler import get_token_payload
+from ..auth.oauth_providers import (
+    OAuthUserInfo,
+    build_vk_pkce_payload,
+    consume_oauth_state,
+    consume_oauth_state_any,
+    generate_oauth_state,
+    get_provider,
+)
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.account_linking import (
     LinkCodeConfirmRequest,
@@ -27,15 +44,19 @@ from ..schemas.account_linking import (
     LinkCodePreviewResponse,
     LinkedIdentitiesResponse,
     LinkedIdentity,
+    LinkOperationResponse,
+    LinkProviderAuthorizeResponse,
+    LinkProviderCallbackRequest,
     ManualMergeRequest,
     ManualMergeResponse,
     ManualMergeTicketStatusResponse,
+    PendingLinkResultResponse,
     TelegramRelinkStatus,
     UnlinkIdentityConfirmRequest,
     UnlinkIdentityRequestResponse,
     UnlinkIdentityResponse,
 )
-from ..schemas.auth import AuthResponse
+from ..schemas.auth import AuthResponse, TelegramAuthRequest
 from ..services.account_linking import (
     LINK_CODE_TTL_SECONDS,
     LinkCodeAttemptsExceededError,
@@ -44,6 +65,7 @@ from ..services.account_linking import (
     confirm_link_code,
     create_link_code,
     get_user_identity_hints,
+    merge_accounts_for_linking,
     preview_link_code,
 )
 from ..services.manual_merge_ticket import (
@@ -57,6 +79,7 @@ from .auth import _create_auth_response, _store_refresh_token
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix='/auth', tags=['Cabinet Account Linking'])
+_link_result_security = HTTPBearer(auto_error=False)
 
 UNLINK_CONFIRM_TTL_SECONDS = 10 * 60
 UNLINK_COOLDOWN_SECONDS = 24 * 60 * 60
@@ -66,6 +89,7 @@ UNLINK_OTP_MAX_ATTEMPTS = 5
 UNLINK_OTP_SEND_COOLDOWN_SECONDS = 60
 UNLINK_OTP_SEND_WINDOW_SECONDS = 60 * 60
 UNLINK_OTP_SEND_MAX_PER_WINDOW = 5
+LINK_RESULT_TTL_SECONDS = 5 * 60
 
 _UNLINK_PROVIDER_ATTRS: dict[str, str] = {
     'telegram': 'telegram_id',
@@ -106,6 +130,10 @@ def _telegram_relink_cooldown_key(user_id: int) -> str:
 
 def _telegram_unlink_marker_key(user_id: int) -> str:
     return cache_key('cabinet', 'telegram_relink', 'unlink_marker', user_id)
+
+
+def _link_result_key(user_id: int) -> str:
+    return cache_key('cabinet', 'link_identity', 'result', user_id)
 
 
 def _unlink_otp_hash(otp_code: str) -> str:
@@ -261,6 +289,339 @@ async def _ensure_telegram_relink_allowed(target_user: User, source_user: User) 
             )
 
 
+async def _ensure_telegram_attach_allowed(
+    target_user: User,
+    *,
+    source_telegram_id: int | None,
+) -> None:
+    """Guard Telegram link/relink for both merge and fresh attach flows."""
+    if source_telegram_id is None:
+        return
+
+    if target_user.telegram_id is not None and target_user.telegram_id != source_telegram_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                'code': 'telegram_relink_requires_unlink',
+                'message': 'To link another Telegram account, unlink current Telegram first',
+            },
+        )
+
+    if target_user.telegram_id is None:
+        cooldown_payload = await cache.get(_telegram_relink_cooldown_key(target_user.id))
+        is_active, _, retry_after = _extract_cooldown_state(
+            cooldown_payload,
+            TELEGRAM_RELINK_COOLDOWN_SECONDS,
+        )
+        if is_active:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={
+                    'code': 'telegram_relink_cooldown_active',
+                    'message': 'Telegram account can be changed only once per 30 days',
+                    'retry_after_seconds': retry_after or TELEGRAM_RELINK_COOLDOWN_SECONDS,
+                },
+            )
+
+
+def _status_from_code(code: str | None) -> str:
+    if code == 'manual_merge_required':
+        return 'manual'
+    if code:
+        return 'error'
+    return 'success'
+
+
+def _extract_detail_code(detail: object) -> str | None:
+    if isinstance(detail, dict):
+        raw_code = detail.get('code')
+        if isinstance(raw_code, str) and raw_code:
+            return raw_code
+    return None
+
+
+def _extract_detail_message(detail: object, fallback: str) -> str:
+    if isinstance(detail, dict):
+        raw_message = detail.get('message')
+        if isinstance(raw_message, str) and raw_message:
+            return raw_message
+    if isinstance(detail, str) and detail:
+        return detail
+    return fallback
+
+
+def _get_link_result_user_id(credentials: HTTPAuthorizationCredentials | None) -> int:
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Authentication required',
+            headers={'WWW-Authenticate': 'Bearer'},
+        )
+
+    payload = get_token_payload(credentials.credentials, expected_type='access')
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid or expired token',
+            headers={'WWW-Authenticate': 'Bearer'},
+        )
+
+    try:
+        return int(payload.get('sub'))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid token payload',
+            headers={'WWW-Authenticate': 'Bearer'},
+        ) from exc
+
+
+async def _store_link_result(
+    *,
+    user_id: int,
+    provider: str,
+    status_value: str,
+    message: str,
+    code: str | None = None,
+    auth_response: AuthResponse | None = None,
+) -> None:
+    payload: dict[str, object] = {
+        'status': status_value,
+        'provider': provider,
+        'message': message,
+        'code': code,
+    }
+    if auth_response is not None:
+        payload['auth_response'] = auth_response.model_dump(mode='json')
+    await cache.set(
+        _link_result_key(user_id),
+        payload,
+        expire=LINK_RESULT_TTL_SECONDS,
+    )
+
+
+async def _finalize_link_auth_response(
+    db: AsyncSession,
+    *,
+    user: User,
+    provider: str,
+) -> AuthResponse:
+    user.cabinet_last_login = datetime.now(UTC).replace(tzinfo=None)
+    await db.commit()
+    auth_response = await _create_auth_response(user, db)
+    await _store_refresh_token(db, user.id, auth_response.refresh_token, device_info=f'account-link:{provider}')
+    return auth_response
+
+
+def _fill_missing_profile_fields_from_oauth(user: User, user_info: OAuthUserInfo) -> bool:
+    updated = False
+    if not user.first_name and user_info.first_name:
+        user.first_name = user_info.first_name
+        updated = True
+    if not user.last_name and user_info.last_name:
+        user.last_name = user_info.last_name
+        updated = True
+    if not user.username and user_info.username:
+        user.username = user_info.username
+        updated = True
+    if not user.email and user_info.email and user_info.email_verified:
+        user.email = user_info.email
+        user.email_verified = True
+        user.email_verified_at = datetime.now(UTC).replace(tzinfo=None)
+        updated = True
+    if updated:
+        user.updated_at = datetime.now(UTC).replace(tzinfo=None)
+    return updated
+
+
+async def _consume_link_oauth_state(
+    *,
+    state: str,
+    provider: str | None = None,
+) -> tuple[str, dict[str, object], int]:
+    if provider:
+        state_payload_raw = await consume_oauth_state(state, provider)
+        resolved_provider = provider
+    else:
+        state_payload_raw = await consume_oauth_state_any(state)
+        resolved_provider = ''
+        if isinstance(state_payload_raw, dict):
+            raw_provider = state_payload_raw.get('provider')
+            if isinstance(raw_provider, str):
+                resolved_provider = raw_provider.strip().lower()
+
+    if not isinstance(state_payload_raw, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={'code': 'oauth_state_invalid', 'message': 'Invalid or expired OAuth state'},
+        )
+
+    if state_payload_raw.get('intent') != 'link':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={'code': 'oauth_state_invalid', 'message': 'OAuth state is not valid for linking'},
+        )
+
+    if not resolved_provider:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={'code': 'oauth_provider_invalid', 'message': 'OAuth provider is not defined in state'},
+        )
+
+    target_user_id = state_payload_raw.get('target_user_id')
+    if not isinstance(target_user_id, int) or target_user_id <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={'code': 'oauth_state_invalid', 'message': 'OAuth state target is invalid'},
+        )
+
+    return resolved_provider, state_payload_raw, target_user_id
+
+
+async def _exchange_oauth_link_user_info(
+    *,
+    provider: str,
+    request: LinkProviderCallbackRequest,
+    state_payload: dict[str, object],
+) -> OAuthUserInfo:
+    oauth_provider = get_provider(provider)
+    if not oauth_provider:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={'code': 'oauth_provider_invalid', 'message': f'OAuth provider "{provider}" is not enabled'},
+        )
+
+    try:
+        exchange_kwargs: dict[str, str] = {'state': request.state}
+        if provider == 'vk':
+            if request.type and request.type != 'code_v2':
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={'code': 'oauth_vk_type_invalid', 'message': 'Unsupported VK OAuth response type'},
+                )
+            if not request.device_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={'code': 'oauth_vk_device_missing', 'message': 'Missing VK device_id in callback'},
+                )
+            code_verifier = state_payload.get('code_verifier')
+            if not isinstance(code_verifier, str) or not code_verifier:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={'code': 'oauth_vk_pkce_missing', 'message': 'Missing VK PKCE verifier'},
+                )
+            exchange_kwargs.update({'device_id': request.device_id, 'code_verifier': code_verifier})
+
+        token_data = await oauth_provider.exchange_code(request.code, **exchange_kwargs)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error('OAuth link code exchange failed', provider=provider, exc=exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={'code': 'oauth_exchange_failed', 'message': 'Failed to exchange authorization code'},
+        ) from exc
+
+    try:
+        return await oauth_provider.get_user_info(token_data)
+    except Exception as exc:
+        logger.error('OAuth link user info fetch failed', provider=provider, exc=exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={'code': 'oauth_userinfo_failed', 'message': 'Failed to fetch user information from provider'},
+        ) from exc
+
+
+async def _link_oauth_identity(
+    db: AsyncSession,
+    *,
+    user: User,
+    provider: str,
+    user_info: OAuthUserInfo,
+) -> User:
+    source_user = await get_user_by_oauth_provider(db, provider, user_info.provider_id)
+
+    if source_user is None and user_info.email and user_info.email_verified:
+        email_user = await get_user_by_email(db, user_info.email)
+        if email_user:
+            await set_user_oauth_provider_id(db, email_user, provider, user_info.provider_id)
+            source_user = email_user
+
+    if source_user is None:
+        await set_user_oauth_provider_id(db, user, provider, user_info.provider_id)
+        _fill_missing_profile_fields_from_oauth(user, user_info)
+        return user
+
+    await _ensure_telegram_relink_allowed(user, source_user)
+
+    if source_user.id == user.id:
+        await set_user_oauth_provider_id(db, user, provider, user_info.provider_id)
+        _fill_missing_profile_fields_from_oauth(user, user_info)
+        return user
+
+    try:
+        return await merge_accounts_for_linking(
+            db,
+            source_user_id=source_user.id,
+            target_user_id=user.id,
+        )
+    except (LinkCodeAttemptsExceededError, LinkCodeInvalidError, LinkCodeConflictError) as exc:
+        raise _link_error_to_http(exc) from exc
+
+
+def _sync_telegram_profile_from_init_data(user: User, user_data: dict[str, object]) -> None:
+    updated = False
+    username = user_data.get('username')
+    first_name = user_data.get('first_name')
+    last_name = user_data.get('last_name')
+
+    if isinstance(username, str) and username and username != user.username:
+        user.username = username
+        updated = True
+    if isinstance(first_name, str) and first_name and first_name != user.first_name:
+        user.first_name = first_name
+        updated = True
+    if isinstance(last_name, str) and last_name and last_name != user.last_name:
+        user.last_name = last_name
+        updated = True
+    if user.telegram_id is not None:
+        user.auth_type = 'telegram'
+        updated = True
+    if updated:
+        user.updated_at = datetime.now(UTC).replace(tzinfo=None)
+
+
+async def _link_telegram_identity(
+    db: AsyncSession,
+    *,
+    user: User,
+    telegram_id: int,
+    user_data: dict[str, object],
+) -> User:
+    source_user = await get_user_by_telegram_id(db, telegram_id)
+    await _ensure_telegram_attach_allowed(user, source_telegram_id=telegram_id)
+
+    if source_user is None:
+        user.telegram_id = telegram_id
+        _sync_telegram_profile_from_init_data(user, user_data)
+        return user
+
+    await _ensure_telegram_relink_allowed(user, source_user)
+
+    if source_user.id == user.id:
+        _sync_telegram_profile_from_init_data(user, user_data)
+        return user
+
+    try:
+        return await merge_accounts_for_linking(
+            db,
+            source_user_id=source_user.id,
+            target_user_id=user.id,
+        )
+    except (LinkCodeAttemptsExceededError, LinkCodeInvalidError, LinkCodeConflictError) as exc:
+        raise _link_error_to_http(exc) from exc
+
+
 @router.get('/identities', response_model=LinkedIdentitiesResponse)
 async def get_linked_identities(user: User = Depends(get_current_cabinet_user)):
     """Get linked login identities for current user."""
@@ -304,6 +665,228 @@ async def get_linked_identities(user: User = Depends(get_current_cabinet_user)):
             cooldown_until=cooldown_until if telegram_cooldown_active else None,
             retry_after_seconds=relink_retry_after if telegram_cooldown_active else None,
         ),
+    )
+
+
+@router.get('/link/result', response_model=PendingLinkResultResponse)
+async def get_pending_link_result(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(_link_result_security),
+):
+    """Consume pending external-browser link result for current user."""
+    _ = request  # keep signature explicit for future audit/security hooks
+    user_id = _get_link_result_user_id(credentials)
+    payload = await cache.get(_link_result_key(user_id))
+    if not isinstance(payload, dict):
+        return PendingLinkResultResponse(pending=False)
+
+    await cache.delete(_link_result_key(user_id))
+    return PendingLinkResultResponse(
+        pending=True,
+        status=payload.get('status') if isinstance(payload.get('status'), str) else None,
+        provider=payload.get('provider') if isinstance(payload.get('provider'), str) else None,
+        message=payload.get('message') if isinstance(payload.get('message'), str) else None,
+        code=payload.get('code') if isinstance(payload.get('code'), str) else None,
+        auth_response=payload.get('auth_response')
+        if isinstance(payload.get('auth_response'), dict)
+        else None,
+    )
+
+
+@router.get('/link/oauth/{provider}/authorize', response_model=LinkProviderAuthorizeResponse)
+async def get_link_provider_authorize_url(
+    provider: str,
+    user: User = Depends(get_current_cabinet_user),
+):
+    """Get OAuth authorize URL for direct account linking."""
+    normalized_provider = provider.strip().lower()
+    oauth_provider = get_provider(normalized_provider)
+    if not oauth_provider:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                'code': 'oauth_provider_invalid',
+                'message': f'OAuth provider "{normalized_provider}" is not enabled',
+            },
+        )
+
+    state_payload: dict[str, object] = {
+        'intent': 'link',
+        'target_user_id': user.id,
+    }
+    if normalized_provider == 'vk':
+        vk_payload, code_challenge = build_vk_pkce_payload()
+        state_payload.update(vk_payload)
+        state = await generate_oauth_state(normalized_provider, payload=state_payload)
+        authorize_url = oauth_provider.get_authorization_url(state, code_challenge=code_challenge)
+    else:
+        state = await generate_oauth_state(normalized_provider, payload=state_payload)
+        authorize_url = oauth_provider.get_authorization_url(state)
+
+    return LinkProviderAuthorizeResponse(
+        provider=normalized_provider,
+        authorize_url=authorize_url,
+        state=state,
+    )
+
+
+@router.post('/link/oauth/{provider}/callback', response_model=AuthResponse)
+async def link_provider_callback(
+    provider: str,
+    request: LinkProviderCallbackRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Complete direct OAuth linking in the same authenticated browser session."""
+    normalized_provider, state_payload, target_user_id = await _consume_link_oauth_state(
+        state=request.state,
+        provider=provider.strip().lower(),
+    )
+    if target_user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                'code': 'link_target_mismatch',
+                'message': 'OAuth callback does not belong to current cabinet session',
+            },
+        )
+
+    user_info = await _exchange_oauth_link_user_info(
+        provider=normalized_provider,
+        request=request,
+        state_payload=state_payload,
+    )
+    primary_user = await _link_oauth_identity(
+        db,
+        user=user,
+        provider=normalized_provider,
+        user_info=user_info,
+    )
+    return await _finalize_link_auth_response(
+        db,
+        user=primary_user,
+        provider=normalized_provider,
+    )
+
+
+@router.post('/link/oauth/server-complete', response_model=LinkOperationResponse)
+async def link_provider_server_complete(
+    request: LinkProviderCallbackRequest,
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Complete OAuth linking without current JWT.
+    Used when Mini App opens OAuth in an external browser and result is polled from the main app.
+    """
+    normalized_provider = 'oauth'
+    target_user_id: int | None = None
+    try:
+        normalized_provider, state_payload, target_user_id = await _consume_link_oauth_state(
+            state=request.state,
+        )
+        target_user = await get_user_by_id(db, target_user_id)
+        if not target_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={'code': 'link_target_missing', 'message': 'Target account not found'},
+            )
+
+        user_info = await _exchange_oauth_link_user_info(
+            provider=normalized_provider,
+            request=request,
+            state_payload=state_payload,
+        )
+        primary_user = await _link_oauth_identity(
+            db,
+            user=target_user,
+            provider=normalized_provider,
+            user_info=user_info,
+        )
+        switched_account = primary_user.id != target_user.id
+        if switched_account:
+            auth_response = await _finalize_link_auth_response(
+                db,
+                user=primary_user,
+                provider=normalized_provider,
+            )
+        else:
+            primary_user.cabinet_last_login = datetime.now(UTC).replace(tzinfo=None)
+            await db.commit()
+            auth_response = None
+        response = LinkOperationResponse(
+            status='success',
+            provider=normalized_provider,
+            message='Identity linked successfully',
+            code='identity_linked',
+            switched_account=switched_account,
+        )
+        await _store_link_result(
+            user_id=target_user_id,
+            provider=normalized_provider,
+            status_value=response.status,
+            message=response.message,
+            code=response.code,
+            auth_response=auth_response,
+        )
+        return response
+    except HTTPException as exc:
+        detail = exc.detail
+        code = _extract_detail_code(detail)
+        message = _extract_detail_message(detail, 'Failed to link identity')
+        status_value = _status_from_code(code)
+
+        if target_user_id:
+            await _store_link_result(
+                user_id=target_user_id,
+                provider=normalized_provider,
+                status_value=status_value,
+                message=message,
+                code=code,
+            )
+
+        return LinkOperationResponse(
+            status=status_value,
+            provider=normalized_provider,
+            message=message,
+            code=code,
+            switched_account=False,
+        )
+
+
+@router.post('/link/telegram', response_model=AuthResponse)
+async def link_telegram_identity(
+    request: TelegramAuthRequest,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Link Telegram identity to current account using Telegram Mini App init data."""
+    user_data = validate_telegram_init_data(request.init_data)
+    if not user_data:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                'code': 'telegram_auth_invalid',
+                'message': 'Invalid or expired Telegram authentication data',
+            },
+        )
+
+    telegram_id = user_data.get('id')
+    if not isinstance(telegram_id, int) or telegram_id <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={'code': 'telegram_id_missing', 'message': 'Missing Telegram user ID'},
+        )
+
+    primary_user = await _link_telegram_identity(
+        db,
+        user=user,
+        telegram_id=telegram_id,
+        user_data=user_data,
+    )
+    return await _finalize_link_auth_response(
+        db,
+        user=primary_user,
+        provider='telegram',
     )
 
 

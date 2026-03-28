@@ -160,6 +160,11 @@ async def oauth_callback(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Invalid or expired OAuth state',
         )
+    if state_payload.get('intent') == 'link':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='OAuth state is reserved for account linking',
+        )
 
     # 2. Get provider instance
     oauth_provider = get_provider(provider)

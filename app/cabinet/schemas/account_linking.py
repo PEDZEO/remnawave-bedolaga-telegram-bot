@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from .auth import AuthResponse
+
 
 class LinkedIdentity(BaseModel):
     provider: str = Field(..., description='Identity provider name')
@@ -42,6 +44,42 @@ class TelegramRelinkStatus(BaseModel):
 class LinkedIdentitiesResponse(BaseModel):
     identities: list[LinkedIdentity]
     telegram_relink: TelegramRelinkStatus
+
+
+class LinkProviderAuthorizeResponse(BaseModel):
+    provider: str = Field(..., description='Identity provider name')
+    authorize_url: str = Field(..., description='OAuth authorize URL')
+    state: str = Field(..., description='OAuth state token')
+
+
+class LinkProviderCallbackRequest(BaseModel):
+    code: str = Field(..., min_length=1, max_length=2048, description='Authorization code from provider')
+    state: str = Field(..., min_length=1, max_length=128, description='State token from provider callback')
+    device_id: str | None = Field(None, max_length=256, description='Optional VK device id')
+    type: str | None = Field(None, max_length=64, description='Optional provider callback type')
+
+
+class LinkOperationResponse(BaseModel):
+    status: str = Field(..., description='Operation status: success, manual, or error')
+    provider: str = Field(..., description='Identity provider name')
+    message: str = Field(..., description='User-facing status message')
+    code: str | None = Field(None, description='Machine-readable status/error code')
+    switched_account: bool = Field(
+        False,
+        description='Whether primary account changed and client should switch auth session',
+    )
+
+
+class PendingLinkResultResponse(BaseModel):
+    pending: bool = Field(..., description='Whether there is a pending external link result')
+    status: str | None = Field(None, description='Operation status: success, manual, or error')
+    provider: str | None = Field(None, description='Identity provider name')
+    message: str | None = Field(None, description='User-facing status message')
+    code: str | None = Field(None, description='Machine-readable status/error code')
+    auth_response: AuthResponse | None = Field(
+        None,
+        description='Fresh auth payload when primary account changed during external link',
+    )
 
 
 class LinkCodeCreateResponse(BaseModel):

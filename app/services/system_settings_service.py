@@ -299,6 +299,7 @@ class BotConfigurationService:
         'HIDE_SUBSCRIPTION_LINK': 'INTERFACE_SUBSCRIPTION',
         'MAIN_MENU_MODE': 'INTERFACE',
         'CABINET_BUTTON_STYLE': 'INTERFACE',
+        'CABINET_ULTIMA_ACCOUNT_LINKING_MODE': 'HAPP',
         'CONNECT_BUTTON_MODE': 'CONNECT_BUTTON',
         'MINIAPP_CUSTOM_URL': 'CONNECT_BUTTON',
         'ENABLE_DEEP_LINKS': 'ADDITIONAL',
@@ -417,6 +418,14 @@ class BotConfigurationService:
             ChoiceOption('primary', '🔵 Синий'),
             ChoiceOption('success', '🟢 Зелёный'),
             ChoiceOption('danger', '🔴 Красный'),
+        ],
+        'CABINET_ULTIMA_ACCOUNT_LINKING_MODE': [
+            ChoiceOption('code', '🔐 По коду', 'Текущий flow через код привязки и подтверждение.'),
+            ChoiceOption(
+                'provider_auth',
+                '🪪 Через вход',
+                'Привязка через кнопки доступных способов входа прямо в кабинете.',
+            ),
         ],
         'SALES_MODE': [
             ChoiceOption('classic', '📋 Классический (периоды из .env)'),
@@ -718,6 +727,18 @@ class BotConfigurationService:
             'example': 'd4aa2b8c-9a36-4f31-93a2-6f07dad05fba',
             'warning': 'Убедитесь, что конфигурация существует в панели и содержит нужные приложения.',
             'dependencies': 'Настроенное подключение к RemnaWave API',
+        },
+        'CABINET_ULTIMA_ACCOUNT_LINKING_MODE': {
+            'description': (
+                'Определяет, как в Ultima работает экран «Сохранение доступа»: '
+                'через одноразовый код или через прямую авторизацию доступных способов входа.'
+            ),
+            'format': 'Выберите один из доступных режимов.',
+            'example': 'provider_auth',
+            'warning': (
+                'Режим «Через вход» требует корректно настроенных OAuth-провайдеров/Telegram и '
+                'использует тот же safe-merge, что и кодовая привязка.'
+            ),
         },
         'TRAFFIC_MONITORING_ENABLED': {
             'description': (

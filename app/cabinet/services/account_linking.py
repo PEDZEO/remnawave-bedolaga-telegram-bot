@@ -306,11 +306,41 @@ async def confirm_link_code(db: AsyncSession, code: str, target_user: User) -> U
     payload, code_hash = await _load_payload_by_code(code)
     await _check_confirm_attempts(code_hash, target_user.id)
 
-    stmt = select(User).where(User.id.in_([payload.source_user_id, target_user.id])).with_for_update()
+    primary_user = await merge_accounts_for_linking(
+        db,
+        source_user_id=payload.source_user_id,
+        target_user_id=target_user.id,
+    )
+
+    await cache.delete(_code_key(code_hash))
+    await cache.delete(_source_pointer_key(payload.source_user_id))
+    await cache.delete(_attempts_key(code_hash, target_user.id))
+
+    logger.info(
+        'Account linking confirmed',
+        source_user_id=payload.source_user_id,
+        target_user_id=target_user.id,
+        primary_user_id=primary_user.id,
+        source_identities=get_user_identity_hints(primary_user),
+    )
+    return primary_user
+
+
+async def merge_accounts_for_linking(
+    db: AsyncSession,
+    *,
+    source_user_id: int,
+    target_user_id: int,
+) -> User:
+    """Merge two accounts using the same safe direction logic as link-code confirm."""
+    if source_user_id == target_user_id:
+        raise LinkCodeConflictError('Cannot link account to itself', code='link_code_same_account')
+
+    stmt = select(User).where(User.id.in_([source_user_id, target_user_id])).with_for_update()
     users_result = await db.execute(stmt)
     users = {user.id: user for user in users_result.scalars().all()}
-    source_user = users.get(payload.source_user_id)
-    locked_target_user = users.get(target_user.id)
+    source_user = users.get(source_user_id)
+    locked_target_user = users.get(target_user_id)
 
     if source_user is None or locked_target_user is None:
         raise LinkCodeInvalidError('Source or target account not found', code='link_code_user_not_found')
@@ -349,19 +379,6 @@ async def confirm_link_code(db: AsyncSession, code: str, target_user: User) -> U
             'Identity is already linked to another account',
             code='link_code_identity_conflict',
         ) from exc
-
-    await cache.delete(_code_key(code_hash))
-    await cache.delete(_source_pointer_key(payload.source_user_id))
-    await cache.delete(_attempts_key(code_hash, target_user.id))
-
-    logger.info(
-        'Account linking confirmed',
-        source_user_id=source_user.id,
-        target_user_id=target_user.id,
-        primary_user_id=primary_user.id,
-        secondary_user_id=secondary_user.id,
-        source_identities=get_user_identity_hints(primary_user),
-    )
     return primary_user
 
 

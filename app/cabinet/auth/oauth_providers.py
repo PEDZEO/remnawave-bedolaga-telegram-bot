@@ -94,6 +94,8 @@ class VKIDUserInfoResponse(TypedDict, total=False):
 class OAuthStatePayload(TypedDict, total=False):
     provider: str
     code_verifier: str
+    intent: str
+    target_user_id: int
 
 
 # --- Models ---
@@ -133,8 +135,8 @@ async def generate_oauth_state(provider: str, payload: OAuthStatePayload | None 
     return state
 
 
-async def consume_oauth_state(state: str, provider: str) -> OAuthStatePayload | None:
-    """Validate and consume a CSRF state token from Redis."""
+async def consume_oauth_state_any(state: str) -> OAuthStatePayload | None:
+    """Consume a CSRF state token and return raw payload without provider pre-validation."""
     key = cache_key('oauth_state', state)
     stored_value: str | None = await cache.get(key)
     if stored_value is None:
@@ -143,8 +145,15 @@ async def consume_oauth_state(state: str, provider: str) -> OAuthStatePayload | 
     try:
         payload: OAuthStatePayload = json.loads(stored_value)
     except json.JSONDecodeError:
-        # Backward compatibility: old cache value was plain provider string
         payload = {'provider': stored_value}
+    return payload
+
+
+async def consume_oauth_state(state: str, provider: str) -> OAuthStatePayload | None:
+    """Validate and consume a CSRF state token from Redis."""
+    payload = await consume_oauth_state_any(state)
+    if payload is None:
+        return None
     if payload.get('provider') != provider:
         return None
     return payload
