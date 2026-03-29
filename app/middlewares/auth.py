@@ -16,6 +16,7 @@ from app.database.database import AsyncSessionLocal
 from app.services.remnawave_service import RemnaWaveService
 from app.states import RegistrationStates
 from app.utils.check_reg_process import is_registration_process
+from app.utils.support_contact import build_support_contact_keyboard
 from app.utils.validators import sanitize_telegram_name
 
 
@@ -61,11 +62,11 @@ class AuthMiddleware(BaseMiddleware):
                 db_user = await get_user_by_telegram_id(db, user.id)
 
                 if not db_user:
-                    state: FSMContext = data.get('state')
+                    registration_state: FSMContext = data.get('state')
                     current_state = None
 
-                    if state:
-                        current_state = await state.get_state()
+                    if registration_state:
+                        current_state = await registration_state.get_state()
 
                     is_reg_process = is_registration_process(event, current_state)
 
@@ -98,18 +99,21 @@ class AuthMiddleware(BaseMiddleware):
 
                 if db_user.status == UserStatus.BLOCKED.value:
                     if isinstance(event, Message):
-                        await event.answer('🚫 Ваш аккаунт заблокирован администратором.')
+                        await event.answer(
+                            '🚫 Ваш аккаунт заблокирован администратором.',
+                            reply_markup=build_support_contact_keyboard(),
+                        )
                     elif isinstance(event, CallbackQuery):
                         await event.answer('🚫 Ваш аккаунт заблокирован администратором.', show_alert=True)
                     logger.info('🚫 Заблокированный пользователь попытался использовать бота', user_id=user.id)
                     return None
 
                 if db_user.status == UserStatus.DELETED.value:
-                    state: FSMContext = data.get('state')
+                    deleted_state: FSMContext = data.get('state')
                     current_state = None
 
-                    if state:
-                        current_state = await state.get_state()
+                    if deleted_state:
+                        current_state = await deleted_state.get_state()
 
                     registration_states = [
                         RegistrationStates.waiting_for_language.state,

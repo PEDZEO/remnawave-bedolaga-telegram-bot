@@ -6,6 +6,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, PreCheckoutQuery, TelegramObject, User as TgUser
 
 from app.services.blacklist_service import blacklist_service
+from app.utils.support_contact import build_support_contact_keyboard
 
 
 logger = structlog.get_logger(__name__)
@@ -38,7 +39,7 @@ class BlacklistMiddleware(BaseMiddleware):
 
         try:
             if isinstance(event, Message):
-                await event.answer(block_text)
+                await event.answer(block_text, reply_markup=build_support_contact_keyboard())
             elif isinstance(event, CallbackQuery):
                 await event.answer(block_text, show_alert=True)
             elif isinstance(event, PreCheckoutQuery):
