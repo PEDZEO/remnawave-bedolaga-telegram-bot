@@ -42,11 +42,11 @@ def test_default_ultima_theme_config_has_separate_theme_and_animation_presets():
 def test_ultima_theme_config_update_accepts_known_presets():
     update = branding.UltimaThemeConfigUpdate(
         themePresetId='rose-nebula',
-        animationPresetId='meteor-stream',
+        animationPresetId='classic-waves',
     )
 
     assert update.themePresetId == 'rose-nebula'
-    assert update.animationPresetId == 'meteor-stream'
+    assert update.animationPresetId == 'classic-waves'
 
 
 def test_ultima_theme_config_update_rejects_unknown_theme_preset():

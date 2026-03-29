@@ -68,6 +68,7 @@ UltimaThemePresetId = Literal[
 ]
 
 UltimaAnimationPresetId = Literal[
+    'classic-waves',
     'orbital-aura',
     'radar-sweep',
     'nebula-drift',
