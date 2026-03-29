@@ -1411,9 +1411,7 @@ class GuestPurchaseStatus(Enum):
 
 class GuestPurchase(Base):
     __tablename__ = 'guest_purchases'
-    __table_args__ = (
-        Index('ix_guest_purchases_user_gift_status', 'user_id', 'is_gift', 'status'),
-    )
+    __table_args__ = (Index('ix_guest_purchases_user_gift_status', 'user_id', 'is_gift', 'status'),)
 
     id = Column(Integer, primary_key=True, index=True)
 

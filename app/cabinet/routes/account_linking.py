@@ -684,9 +684,7 @@ async def get_pending_link_result(
         provider=payload.get('provider') if isinstance(payload.get('provider'), str) else None,
         message=payload.get('message') if isinstance(payload.get('message'), str) else None,
         code=payload.get('code') if isinstance(payload.get('code'), str) else None,
-        auth_response=payload.get('auth_response')
-        if isinstance(payload.get('auth_response'), dict)
-        else None,
+        auth_response=payload.get('auth_response') if isinstance(payload.get('auth_response'), dict) else None,
     )
 
 

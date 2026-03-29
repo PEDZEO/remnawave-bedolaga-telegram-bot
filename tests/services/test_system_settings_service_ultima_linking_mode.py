@@ -4,9 +4,7 @@ from app.services.system_settings_service import BotConfigurationService
 
 
 def test_ultima_account_linking_mode_is_mapped_to_happ_category() -> None:
-    assert (
-        BotConfigurationService.CATEGORY_KEY_OVERRIDES['CABINET_ULTIMA_ACCOUNT_LINKING_MODE'] == 'HAPP'
-    )
+    assert BotConfigurationService.CATEGORY_KEY_OVERRIDES['CABINET_ULTIMA_ACCOUNT_LINKING_MODE'] == 'HAPP'
 
 
 def test_ultima_account_linking_mode_declares_expected_choices() -> None:
