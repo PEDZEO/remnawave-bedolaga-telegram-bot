@@ -31,17 +31,6 @@ class TelegramWidgetAuthRequest(BaseModel):
     referral_code: str | None = Field(None, max_length=32, description='Referral code of inviter')
 
 
-class MobileBridgeAuthRequest(BaseModel):
-    """Trusted server-to-server request for cabinet session bootstrap."""
-
-    telegram_id: int = Field(..., ge=1, description='Telegram user ID')
-    username: str | None = Field(None, max_length=255, description="User's username")
-    first_name: str | None = Field(None, max_length=255, description="User's first name")
-    last_name: str | None = Field(None, max_length=255, description="User's last name")
-    language: str = Field('ru', max_length=16, description='Preferred language')
-    device_info: str | None = Field(None, max_length=255, description='Optional device/session label')
-
-
 class EmailRegisterRequest(BaseModel):
     """Request to register/link email to existing Telegram account."""
 
