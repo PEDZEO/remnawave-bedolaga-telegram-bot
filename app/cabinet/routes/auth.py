@@ -2,10 +2,11 @@
 
 import asyncio
 import hashlib
+import hmac
 from datetime import UTC, datetime
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,6 +66,7 @@ from ..schemas.auth import (
     EmailVerifyRequest,
     PasswordForgotRequest,
     PasswordResetRequest,
+    MobileBridgeAuthRequest,
     RefreshTokenRequest,
     RegisterResponse,
     TelegramAuthRequest,
@@ -240,6 +242,20 @@ async def _process_referral_code(
         logger.info('Referral applied from code', user_id=user.id, referrer_id=referrer.id, referral_code=referral_code)
     except Exception as e:
         logger.error('Failed to process referral code', error=e, referral_code=referral_code)
+
+
+def _verify_mobile_bridge_secret(secret: str | None) -> None:
+    configured_secret = settings.CABINET_MOBILE_BRIDGE_SECRET
+    if not configured_secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail='Mobile bridge is not configured',
+        )
+    if not secret or not hmac.compare_digest(secret, configured_secret):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Invalid mobile bridge secret',
+        )
 
 
 async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -> None:
@@ -443,6 +459,72 @@ async def auth_telegram(
     response.campaign_bonus = await _process_campaign_bonus(db, user, request.campaign_slug)
     if response.campaign_bonus:
         response.user = _user_to_response(user)
+
+    return response
+
+
+@router.post('/mobile-bridge', response_model=AuthResponse, include_in_schema=False)
+async def auth_mobile_bridge(
+    request: MobileBridgeAuthRequest,
+    db: AsyncSession = Depends(get_cabinet_db),
+    bridge_secret: str | None = Header(default=None, alias='X-Mobile-Bridge-Secret'),
+):
+    """Issue cabinet tokens for a trusted mobile bridge caller."""
+    _verify_mobile_bridge_secret(bridge_secret)
+
+    user = await get_user_by_telegram_id(db, request.telegram_id)
+
+    if not user:
+        logger.info(
+            'Creating new user from cabinet mobile bridge: telegram_id',
+            telegram_id=request.telegram_id,
+        )
+        user = await create_user(
+            db=db,
+            telegram_id=request.telegram_id,
+            username=request.username,
+            first_name=request.first_name,
+            last_name=request.last_name,
+            language=request.language,
+        )
+        logger.info(
+            'User created successfully from mobile bridge: id=, telegram_id',
+            user_id=user.id,
+            telegram_id=user.telegram_id,
+        )
+    else:
+        updated = False
+        if request.username != user.username:
+            user.username = request.username
+            updated = True
+        if request.first_name != user.first_name:
+            user.first_name = request.first_name
+            updated = True
+        if request.last_name != user.last_name:
+            user.last_name = request.last_name
+            updated = True
+        if request.language and request.language != user.language:
+            user.language = request.language
+            updated = True
+        if updated:
+            logger.info('User profile updated from mobile bridge', user_id=user.id)
+
+    if user.status != 'active':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='User account is not active',
+        )
+
+    user.cabinet_last_login = datetime.now(UTC)
+    await db.commit()
+
+    response = await _create_auth_response(user, db)
+    await _store_refresh_token(
+        db,
+        user.id,
+        response.refresh_token,
+        device_info=request.device_info or 'mobile-bridge',
+    )
 
     return response
 

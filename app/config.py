@@ -721,6 +721,7 @@ class Settings(BaseSettings):
     CABINET_EMAIL_AUTH_ENABLED: bool = True  # Enable email registration/login in cabinet
     CABINET_URL: str = 'https://example.com/cabinet'  # Base URL for cabinet (used in verification emails)
     CABINET_ULTIMA_ACCOUNT_LINKING_MODE: str = 'code'
+    CABINET_MOBILE_BRIDGE_SECRET: str | None = None
 
     # OAuth 2.0 provider settings for cabinet
     OAUTH_GOOGLE_CLIENT_ID: str = ''

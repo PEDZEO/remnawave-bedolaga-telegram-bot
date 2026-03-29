@@ -65,7 +65,6 @@ from ..services.account_linking import (
     confirm_link_code,
     create_link_code,
     get_user_identity_hints,
-    merge_accounts_for_linking,
     preview_link_code,
 )
 from ..services.manual_merge_ticket import (
@@ -532,6 +531,16 @@ async def _exchange_oauth_link_user_info(
         ) from exc
 
 
+def _raise_identity_already_linked_conflict(provider: str) -> None:
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            'code': 'link_code_identity_conflict',
+            'message': f'{provider.capitalize()} is already linked to another account',
+        },
+    )
+
+
 async def _link_oauth_identity(
     db: AsyncSession,
     *,
@@ -544,6 +553,8 @@ async def _link_oauth_identity(
     if source_user is None and user_info.email and user_info.email_verified:
         email_user = await get_user_by_email(db, user_info.email)
         if email_user:
+            if email_user.id != user.id:
+                _raise_identity_already_linked_conflict(provider)
             await set_user_oauth_provider_id(db, email_user, provider, user_info.provider_id)
             source_user = email_user
 
@@ -552,21 +563,13 @@ async def _link_oauth_identity(
         _fill_missing_profile_fields_from_oauth(user, user_info)
         return user
 
-    await _ensure_telegram_relink_allowed(user, source_user)
-
     if source_user.id == user.id:
         await set_user_oauth_provider_id(db, user, provider, user_info.provider_id)
         _fill_missing_profile_fields_from_oauth(user, user_info)
         return user
 
-    try:
-        return await merge_accounts_for_linking(
-            db,
-            source_user_id=source_user.id,
-            target_user_id=user.id,
-        )
-    except (LinkCodeAttemptsExceededError, LinkCodeInvalidError, LinkCodeConflictError) as exc:
-        raise _link_error_to_http(exc) from exc
+    _raise_identity_already_linked_conflict(provider)
+    raise AssertionError('unreachable')
 
 
 def _sync_telegram_profile_from_init_data(user: User, user_data: dict[str, object]) -> None:
@@ -612,14 +615,8 @@ async def _link_telegram_identity(
         _sync_telegram_profile_from_init_data(user, user_data)
         return user
 
-    try:
-        return await merge_accounts_for_linking(
-            db,
-            source_user_id=source_user.id,
-            target_user_id=user.id,
-        )
-    except (LinkCodeAttemptsExceededError, LinkCodeInvalidError, LinkCodeConflictError) as exc:
-        raise _link_error_to_http(exc) from exc
+    _raise_identity_already_linked_conflict('telegram')
+    raise AssertionError('unreachable')
 
 
 @router.get('/identities', response_model=LinkedIdentitiesResponse)
