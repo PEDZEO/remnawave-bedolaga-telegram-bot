@@ -55,7 +55,29 @@ DEFAULT_ANIMATION_CONFIG = {
     'reducedOnMobile': True,
 }
 
+UltimaThemePresetId = Literal[
+    'emerald-classic',
+    'neon-ocean',
+    'sunset-mint',
+    'arctic-glass',
+    'rose-nebula',
+    'midnight-gold',
+    'crimson-luxe',
+    'polar-night',
+    'citrus-pulse',
+]
+
+UltimaAnimationPresetId = Literal[
+    'orbital-aura',
+    'radar-sweep',
+    'nebula-drift',
+    'pulse-grid',
+    'meteor-stream',
+]
+
 DEFAULT_ULTIMA_THEME_CONFIG = {
+    'themePresetId': 'emerald-classic',
+    'animationPresetId': 'orbital-aura',
     'primaryColor': '#1bd29f',
     'primaryTextColor': '#ffffff',
     'secondaryColor': '#0c2d2a',
@@ -340,6 +362,8 @@ class AnalyticsCountersUpdate(BaseModel):
 class UltimaThemeConfigResponse(BaseModel):
     """Ultima visual and animation config."""
 
+    themePresetId: UltimaThemePresetId = 'emerald-classic'
+    animationPresetId: UltimaAnimationPresetId = 'orbital-aura'
     primaryColor: str = '#1bd29f'
     primaryTextColor: str = '#ffffff'
     secondaryColor: str = '#0c2d2a'
@@ -369,6 +393,8 @@ class UltimaThemeConfigResponse(BaseModel):
 class UltimaThemeConfigUpdate(BaseModel):
     """Partial update for Ultima visual config."""
 
+    themePresetId: UltimaThemePresetId | None = None
+    animationPresetId: UltimaAnimationPresetId | None = None
     primaryColor: str | None = None
     primaryTextColor: str | None = None
     secondaryColor: str | None = None
