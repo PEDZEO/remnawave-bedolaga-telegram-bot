@@ -1,7 +1,7 @@
 """add news_categories and news_tags tables with FK columns on news_articles
 
 Revision ID: 0049
-Revises: 0048
+Revises: 0046
 Create Date: 2026-03-23
 
 Adds managed categories and tags for news articles.
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = '0049'
-down_revision: str | None = '0048'
+down_revision: str | None = '0046'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -1,7 +1,7 @@
 """add news_articles table
 
 Revision ID: 0046
-Revises: 0045
+Revises: 0040
 Create Date: 2026-03-23
 
 Adds news_articles table for the cabinet news/blog feature.
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = '0046'
-down_revision: str | None = '0045'
+down_revision: str | None = '0040'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
