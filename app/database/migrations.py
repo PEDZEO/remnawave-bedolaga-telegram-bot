@@ -7,6 +7,7 @@ from typing import Any
 import structlog
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 
 
@@ -147,6 +148,12 @@ async def _get_current_alembic_revision(conn) -> str | None:
     return str(revision)
 
 
+async def _get_current_alembic_revisions(conn) -> list[str]:
+    """Return all current Alembic revisions from alembic_version table."""
+    result = await conn.execute(text('SELECT version_num FROM alembic_version ORDER BY version_num'))
+    return [str(row[0]) for row in result.fetchall()]
+
+
 async def _remap_legacy_revision_if_needed() -> bool:
     """Rewrite known obsolete alembic_version values to current chain nodes."""
     from app.database.database import engine
@@ -156,23 +163,90 @@ async def _remap_legacy_revision_if_needed() -> bool:
         if not has_alembic:
             return False
 
-        current_revision = await _get_current_alembic_revision(conn)
-        if current_revision is None:
+        current_revisions = await _get_current_alembic_revisions(conn)
+        if not current_revisions:
             return False
 
-        target_revision = _LEGACY_REVISION_REMAP.get(current_revision)
-        if target_revision is None:
-            return False
+        current_revision_set = set(current_revisions)
+        remapped_revisions: list[tuple[str, str]] = []
 
-        await conn.execute(
-            text('UPDATE alembic_version SET version_num = :target WHERE version_num = :current'),
-            {'target': target_revision, 'current': current_revision},
-        )
+        for current_revision in current_revisions:
+            target_revision = _LEGACY_REVISION_REMAP.get(current_revision)
+            if target_revision is None or target_revision == current_revision:
+                continue
+
+            if target_revision in current_revision_set:
+                await conn.execute(
+                    text('DELETE FROM alembic_version WHERE version_num = :current'),
+                    {'current': current_revision},
+                )
+            else:
+                await conn.execute(
+                    text('UPDATE alembic_version SET version_num = :target WHERE version_num = :current'),
+                    {'target': target_revision, 'current': current_revision},
+                )
+                current_revision_set.remove(current_revision)
+                current_revision_set.add(target_revision)
+
+            remapped_revisions.append((current_revision, target_revision))
+
+        if not remapped_revisions:
+            return False
 
     logger.warning(
         'Alembic revision remap applied for legacy database snapshot',
-        from_revision=current_revision,
-        to_revision=target_revision,
+        revisions=remapped_revisions,
+    )
+    return True
+
+
+def _is_revision_ancestor(script: ScriptDirectory, ancestor_revision: str, descendant_revision: str) -> bool:
+    """Return True when ``ancestor_revision`` is in the lineage of ``descendant_revision``."""
+    if ancestor_revision == descendant_revision:
+        return False
+
+    try:
+        return any(
+            revision.revision == ancestor_revision
+            for revision in script.walk_revisions(base='base', head=descendant_revision)
+        )
+    except Exception:
+        return False
+
+
+async def _normalize_overlapping_current_revisions_if_needed() -> bool:
+    """Remove legacy ancestor rows when alembic_version contains overlapping current revisions."""
+    from app.database.database import engine
+
+    async with engine.begin() as conn:
+        has_alembic = await _has_public_table(conn, 'alembic_version')
+        if not has_alembic:
+            return False
+
+        current_revisions = await _get_current_alembic_revisions(conn)
+        if len(current_revisions) < 2:
+            return False
+
+        script = ScriptDirectory.from_config(_get_alembic_config())
+        ancestor_revisions = sorted(
+            {
+                revision
+                for revision in current_revisions
+                for other_revision in current_revisions
+                if revision != other_revision and _is_revision_ancestor(script, revision, other_revision)
+            }
+        )
+        if not ancestor_revisions:
+            return False
+
+        await conn.execute(
+            text('DELETE FROM alembic_version WHERE version_num = ANY(:revisions)'),
+            {'revisions': ancestor_revisions},
+        )
+
+    logger.warning(
+        'Removed overlapping ancestor revisions from alembic_version',
+        revisions=ancestor_revisions,
     )
     return True
 
@@ -180,6 +254,7 @@ async def _remap_legacy_revision_if_needed() -> bool:
 async def run_alembic_upgrade() -> None:
     """Run ``alembic upgrade heads``, auto-stamping existing databases first."""
     await _remap_legacy_revision_if_needed()
+    await _normalize_overlapping_current_revisions_if_needed()
 
     if await _is_fresh_database():
         logger.warning('Fresh database detected — bootstrapping current schema and stamping Alembic heads')
