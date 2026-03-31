@@ -609,6 +609,11 @@ class RemnaWaveWebhookService:
                     changed = True
 
         # Sync subscription URL (validate to prevent stored XSS)
+        short_uuid = data.get('shortUuid')
+        if short_uuid and subscription.remnawave_short_uuid != short_uuid:
+            subscription.remnawave_short_uuid = short_uuid
+            changed = True
+
         subscription_url = data.get('subscriptionUrl')
         if (
             subscription_url
@@ -707,10 +712,14 @@ class RemnaWaveWebhookService:
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         if subscription:
+            new_short_uuid = data.get('shortUuid')
             new_url = data.get('subscriptionUrl')
             new_crypto_link = data.get('subscriptionCryptoLink')
             changed = False
 
+            if new_short_uuid and subscription.remnawave_short_uuid != new_short_uuid:
+                subscription.remnawave_short_uuid = new_short_uuid
+                changed = True
             if new_url and self._is_valid_url(new_url) and subscription.subscription_url != new_url:
                 subscription.subscription_url = new_url
                 changed = True

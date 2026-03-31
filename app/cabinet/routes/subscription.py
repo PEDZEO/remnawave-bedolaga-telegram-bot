@@ -36,6 +36,7 @@ from app.services.user_cart_service import user_cart_service
 from app.utils.cache import RateLimitCache, cache, cache_key
 from app.utils.pricing_utils import format_period_description
 from app.utils.promo_offer import get_user_active_promo_discount_percent
+from app.utils.timezone import panel_datetime_to_utc
 from app.utils.user_utils import mark_user_as_had_paid_subscription
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
@@ -68,6 +69,50 @@ from .subscription_helpers import (
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/subscription', tags=['Cabinet Subscription'])
+
+
+async def _refresh_subscription_link_from_panel(db: AsyncSession, user: User) -> None:
+    """Best-effort sync of short UUID and subscription links before returning connect data."""
+    if not user.remnawave_uuid or not user.subscription:
+        return
+
+    try:
+        service = RemnaWaveService()
+        if not service.is_configured:
+            return
+
+        async with service.get_api_client() as api:
+            panel_user = await api.get_user_by_uuid(user.remnawave_uuid)
+
+        if not panel_user:
+            return
+
+        changed = False
+        if panel_user.short_uuid and user.subscription.remnawave_short_uuid != panel_user.short_uuid:
+            user.subscription.remnawave_short_uuid = panel_user.short_uuid
+            changed = True
+
+        if panel_user.subscription_url and user.subscription.subscription_url != panel_user.subscription_url:
+            user.subscription.subscription_url = panel_user.subscription_url
+            changed = True
+
+        panel_crypto_link = panel_user.happ_crypto_link
+        if panel_crypto_link and user.subscription.subscription_crypto_link != panel_crypto_link:
+            user.subscription.subscription_crypto_link = panel_crypto_link
+            changed = True
+
+        if panel_user.expire_at:
+            panel_end_date = panel_datetime_to_utc(panel_user.expire_at)
+            if user.subscription.end_date != panel_end_date:
+                user.subscription.end_date = panel_end_date
+                changed = True
+
+        if changed:
+            await db.commit()
+            await db.refresh(user, ['subscription'])
+            logger.info('Refreshed subscription link from panel before connect response', user_id=user.id)
+    except Exception as e:
+        logger.warning('Failed to refresh subscription link from panel before connect response', user_id=user.id, error=e)
 
 
 @router.get('', response_model=SubscriptionStatusResponse)
@@ -2892,6 +2937,8 @@ async def get_connection_link(
     )
 
     await db.refresh(user, ['subscription'])
+    await _refresh_subscription_link_from_panel(db, user)
+    await db.refresh(user, ['subscription'])
 
     if not user.subscription:
         raise HTTPException(
@@ -2979,6 +3026,8 @@ async def get_app_config(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, Any]:
     """Get app configuration for connection with deep links."""
+    await db.refresh(user, ['subscription'])
+    await _refresh_subscription_link_from_panel(db, user)
     await db.refresh(user, ['subscription'])
 
     subscription_url = None
