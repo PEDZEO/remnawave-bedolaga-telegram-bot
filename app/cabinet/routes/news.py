@@ -1,4 +1,5 @@
 """Public news routes for cabinet - user-facing news/blog section."""
+
 import time
 from typing import Any
 

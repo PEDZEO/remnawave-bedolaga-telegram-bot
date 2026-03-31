@@ -1,4 +1,5 @@
 """Admin routes for managing news articles in cabinet."""
+
 from datetime import UTC, datetime
 from typing import Any
 

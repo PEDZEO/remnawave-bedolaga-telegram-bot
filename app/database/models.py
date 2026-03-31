@@ -3046,6 +3046,8 @@ class AdminAuditLog(Base):
 
     def __repr__(self) -> str:
         return f'<AdminAuditLog id={self.id} action={self.action!r} status={self.status!r}>'
+
+
 class NewsArticle(Base):
     """News article for the cabinet news section."""
 

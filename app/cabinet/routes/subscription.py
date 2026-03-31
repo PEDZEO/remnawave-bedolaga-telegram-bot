@@ -112,7 +112,9 @@ async def _refresh_subscription_link_from_panel(db: AsyncSession, user: User) ->
             await db.refresh(user, ['subscription'])
             logger.info('Refreshed subscription link from panel before connect response', user_id=user.id)
     except Exception as e:
-        logger.warning('Failed to refresh subscription link from panel before connect response', user_id=user.id, error=e)
+        logger.warning(
+            'Failed to refresh subscription link from panel before connect response', user_id=user.id, error=e
+        )
 
 
 @router.get('', response_model=SubscriptionStatusResponse)
