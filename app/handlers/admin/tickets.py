@@ -26,6 +26,13 @@ logger = structlog.get_logger(__name__)
 
 # Максимальная длина сообщения Telegram (с запасом)
 MAX_MESSAGE_LEN = 3500
+UNREACHABLE_CHAT_ERROR_PHRASES = (
+    'chat not found',
+    'bot was blocked by the user',
+    'bot was blocked',
+    'user is deactivated',
+    'user not found',
+)
 
 
 def _split_long_block(block: str, max_len: int) -> list[str]:
@@ -82,6 +89,11 @@ def _split_text_into_pages(header: str, message_blocks: list[str], max_len: int 
         pages.append(current)
 
     return pages or [header]
+
+
+def _is_unreachable_ticket_chat_error(error: TelegramBadRequest) -> bool:
+    error_text = str(error).lower()
+    return any(phrase in error_text for phrase in UNREACHABLE_CHAT_ERROR_PHRASES)
 
 
 async def show_admin_tickets(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
@@ -1095,6 +1107,14 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
                 )
                 return
             except TelegramBadRequest as photo_error:
+                if _is_unreachable_ticket_chat_error(photo_error):
+                    logger.warning(
+                        'Skipping ticket reply notification: user chat unavailable',
+                        chat_id=chat_id,
+                        ticket_id=ticket.id,
+                        photo_error=photo_error,
+                    )
+                    return
                 logger.error(
                     'Не удалось отправить фото-уведомление пользователю для тикета',
                     chat_id=chat_id,
@@ -1112,6 +1132,16 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
 
         logger.info('Ticket # reply notification sent to user', ticket_id=ticket.id, chat_id=chat_id)
 
+    except TelegramBadRequest as e:
+        if _is_unreachable_ticket_chat_error(e):
+            logger.warning(
+                'Skipping ticket reply notification: user chat unavailable',
+                ticket_id=ticket.id,
+                chat_id=locals().get('chat_id'),
+                error=e,
+            )
+            return
+        logger.error('Error notifying user about ticket reply', error=e)
     except Exception as e:
         logger.error('Error notifying user about ticket reply', error=e)
 
