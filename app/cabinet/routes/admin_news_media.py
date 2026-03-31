@@ -6,7 +6,7 @@ import asyncio
 import re
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 
 from app.config import settings
 from app.database.models import User
@@ -33,18 +33,21 @@ _SAFE_FILENAME_RE = re.compile(r'^(thumb_)?[0-9a-f]{32}\.(jpg|mp4|webm)$')
 router = APIRouter(prefix='/admin/news/media', tags=['Cabinet Admin News Media'])
 
 
-def _build_media_url(request: Request, relative_path: str) -> str:
-    """Build a full URL for a media file from the request base URL."""
-    base = str(request.base_url).rstrip('/')
-    return f'{base}/uploads/{relative_path}'
+def _build_media_url(relative_path: str) -> str:
+    """Return a stable app-relative media URL.
+
+    Relative URLs avoid proxy/mixed-content issues when the app is served
+    behind different public domains or HTTPS terminators.
+    """
+    return f'/uploads/{relative_path}'
 
 
-def _build_response(request: Request, saved: SavedMedia) -> NewsMediaUploadResponse:
-    """Convert SavedMedia to API response with full URLs."""
-    thumbnail_url = _build_media_url(request, saved.thumbnail_path) if saved.thumbnail_path else None
+def _build_response(saved: SavedMedia) -> NewsMediaUploadResponse:
+    """Convert SavedMedia to API response with app-relative URLs."""
+    thumbnail_url = _build_media_url(saved.thumbnail_path) if saved.thumbnail_path else None
 
     return NewsMediaUploadResponse(
-        url=_build_media_url(request, saved.relative_path),
+        url=_build_media_url(saved.relative_path),
         thumbnail_url=thumbnail_url,
         media_type=saved.media_type,
         filename=saved.filename,
@@ -56,7 +59,6 @@ def _build_response(request: Request, saved: SavedMedia) -> NewsMediaUploadRespo
 
 @router.post('/upload', response_model=NewsMediaUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_media(
-    request: Request,
     file: UploadFile,
     admin: User = Depends(require_permission('news:edit')),
 ) -> NewsMediaUploadResponse:
@@ -122,7 +124,7 @@ async def upload_media(
         admin_id=admin.id,
     )
 
-    return _build_response(request, saved)
+    return _build_response(saved)
 
 
 @router.delete('/{filename}', status_code=status.HTTP_204_NO_CONTENT)
