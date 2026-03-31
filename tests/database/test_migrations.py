@@ -130,7 +130,6 @@ async def test_normalize_overlapping_current_revisions_prunes_ancestor_rows(
 
         async def execute(self, statement, params=None):  # type: ignore[no-untyped-def]
             self.calls.append((str(statement), params))
-            return None
 
     class FakeBegin:
         def __init__(self, connection: FakeConnection) -> None:
