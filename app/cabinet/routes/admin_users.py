@@ -9,6 +9,7 @@ from sqlalchemy import Integer, and_, delete as sa_delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.database.crud.campaign import get_campaign_registration_by_user
 from app.database.crud.subscription import (
     extend_subscription,
@@ -227,7 +228,6 @@ async def _sync_subscription_to_panel(
     Returns dict with changes/errors.
     """
     try:
-        from app.config import settings
         from app.external.remnawave_api import TrafficLimitStrategy, UserStatus as PanelUserStatus
         from app.services.remnawave_service import RemnaWaveService
         from app.utils.subscription_utils import resolve_hwid_device_limit_for_payload
@@ -2612,7 +2612,6 @@ async def sync_user_to_panel(
         )
 
     try:
-        from app.config import settings
         from app.external.remnawave_api import TrafficLimitStrategy, UserStatus as PanelUserStatus
         from app.services.remnawave_service import RemnaWaveService
         from app.utils.subscription_utils import resolve_hwid_device_limit_for_payload
