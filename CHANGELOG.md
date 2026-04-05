@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.25.1](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.25.0...v3.25.1) (2026-04-05)
+
+
+### Bug Fixes
+
+* **news:** return relative media urls ([2f535a9](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/2f535a92e058857655bc676c6e08b4e31b6f1b34))
+* **tickets:** downgrade unreachable chat reply errors ([e7424c3](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/commit/e7424c3a91faf97901e6893d1c687c20da297c5e))
+
 ## [3.25.0](https://github.com/PEDZEO/remnawave-bedolaga-telegram-bot/compare/v3.24.2...v3.25.0) (2026-03-31)
 
 
