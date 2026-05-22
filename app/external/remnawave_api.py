@@ -396,7 +396,12 @@ class RemnaWaveAPI:
             await self.session.close()
 
     async def _make_request(
-        self, method: str, endpoint: str, data: dict | None = None, params: dict | None = None
+        self,
+        method: str,
+        endpoint: str,
+        data: dict | None = None,
+        params: dict | None = None,
+        quiet_statuses: tuple[int, ...] = (),
     ) -> dict:
         if not self.session:
             raise RemnaWaveAPIError('Session not initialized. Use async context manager.')
@@ -441,9 +446,10 @@ class RemnaWaveAPI:
                         is_harmless = response.status == 400 and (
                             'already enabled' in error_lower or 'already disabled' in error_lower
                         )
-                        log = logger.warning if response.status in (502, 503, 504) or is_harmless else logger.error
-                        log('API Error %s: %s', response.status, error_message)
-                        log('Response: %s', response_text[:500])
+                        if response.status not in quiet_statuses:
+                            log = logger.warning if response.status in (502, 503, 504) or is_harmless else logger.error
+                            log('API Error %s: %s', response.status, error_message)
+                            log('Response: %s', response_text[:500])
                         raise RemnaWaveAPIError(error_message, response.status, response_data)
 
                     return response_data
@@ -977,8 +983,39 @@ class RemnaWaveAPI:
         return response['response']
 
     async def get_bandwidth_stats_nodes_realtime(self) -> list[dict[str, Any]]:
-        response = await self._make_request('GET', '/api/bandwidth-stats/nodes/realtime')
-        return response['response']
+        endpoints = (
+            '/api/bandwidth-stats/nodes/realtime',
+            '/api/nodes/usage/realtime',
+        )
+
+        for endpoint in endpoints:
+            try:
+                response = await self._make_request('GET', endpoint, quiet_statuses=(404,))
+            except RemnaWaveAPIError as e:
+                if e.status_code == 404:
+                    logger.debug('RemnaWave realtime node usage endpoint is unavailable', endpoint=endpoint)
+                    continue
+                raise
+
+            response_data = response.get('response', response)
+            if isinstance(response_data, list):
+                return response_data
+
+            if isinstance(response_data, dict):
+                for key in ('nodes', 'usage', 'items', 'data'):
+                    maybe_items = response_data.get(key)
+                    if isinstance(maybe_items, list):
+                        return maybe_items
+
+            logger.warning(
+                'Unexpected RemnaWave realtime node usage response format',
+                endpoint=endpoint,
+                response_type=type(response_data).__name__,
+            )
+            return []
+
+        logger.debug('RemnaWave realtime node usage endpoints are unavailable')
+        return []
 
     async def get_bandwidth_stats_node_users(
         self, node_uuid: str, start_date: str, end_date: str, top_users_limit: int = 10
