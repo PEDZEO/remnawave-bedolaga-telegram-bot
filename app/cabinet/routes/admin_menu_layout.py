@@ -51,12 +51,14 @@ router = APIRouter(prefix='/admin/menu-layout', tags=['Admin Menu Layout'])
 
 
 class UltimaStartConfigResponse(BaseModel):
+    enabled: bool
     message_text: str
     button_text: str
     button_url: str
 
 
 class UltimaStartConfigUpdate(BaseModel):
+    enabled: bool = True
     message_text: str = Field(default=DEFAULT_MESSAGE_TEXT, min_length=1, max_length=4096)
     button_text: str = Field(default=DEFAULT_BUTTON_TEXT, min_length=1, max_length=64)
     button_url: str = Field(default='', max_length=1024)
@@ -173,6 +175,7 @@ async def get_ultima_start_settings(
     _ = admin
     config = await get_ultima_start_config(db)
     return UltimaStartConfigResponse(
+        enabled=config.enabled,
         message_text=config.message_text,
         button_text=config.button_text,
         button_url=config.button_url,
@@ -188,12 +191,14 @@ async def update_ultima_start_settings(
     _ = admin
     config = await set_ultima_start_config(
         db,
+        enabled=payload.enabled,
         message_text=payload.message_text,
         button_text=payload.button_text,
         button_url=payload.button_url,
     )
     await db.commit()
     return UltimaStartConfigResponse(
+        enabled=config.enabled,
         message_text=config.message_text,
         button_text=config.button_text,
         button_url=config.button_url,

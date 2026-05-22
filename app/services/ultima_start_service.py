@@ -51,6 +51,7 @@ ULTIMA_NOTIFICATION_ALLOWED_PATHS: frozenset[str] = frozenset(
 
 @dataclass(slots=True)
 class UltimaStartConfig:
+    enabled: bool
     message_text: str
     button_text: str
     button_url: str
@@ -87,11 +88,13 @@ async def get_ultima_start_config(db: AsyncSession) -> UltimaStartConfig:
         except (TypeError, json.JSONDecodeError):
             payload = {}
 
+    enabled = _coerce_bool(payload.get('enabled'), default=True)
     message_text = str(payload.get('message_text') or DEFAULT_MESSAGE_TEXT).strip()
     button_text = str(payload.get('button_text') or DEFAULT_BUTTON_TEXT).strip()
     button_url = _normalize_button_url(payload.get('button_url'))
 
     return UltimaStartConfig(
+        enabled=enabled,
         message_text=message_text or DEFAULT_MESSAGE_TEXT,
         button_text=button_text or DEFAULT_BUTTON_TEXT,
         button_url=button_url,
@@ -101,17 +104,20 @@ async def get_ultima_start_config(db: AsyncSession) -> UltimaStartConfig:
 async def set_ultima_start_config(
     db: AsyncSession,
     *,
+    enabled: bool,
     message_text: str,
     button_text: str,
     button_url: str,
 ) -> UltimaStartConfig:
     config = UltimaStartConfig(
+        enabled=enabled,
         message_text=message_text.strip() or DEFAULT_MESSAGE_TEXT,
         button_text=button_text.strip() or DEFAULT_BUTTON_TEXT,
         button_url=_normalize_button_url(button_url),
     )
 
     payload = {
+        'enabled': config.enabled,
         'message_text': config.message_text,
         'button_text': config.button_text,
         'button_url': config.button_url,

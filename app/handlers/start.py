@@ -113,13 +113,14 @@ async def _send_main_entrypoint_message(
 ) -> None:
     if await is_ultima_mode_enabled(db):
         ultima_config = await get_ultima_start_config(db)
-        await send_answer(
-            ultima_config.message_text,
-            reply_markup=build_ultima_start_keyboard(ultima_config),
-            parse_mode='HTML',
-            disable_web_page_preview=True,
-        )
-        return
+        if ultima_config.enabled:
+            await send_answer(
+                ultima_config.message_text,
+                reply_markup=build_ultima_start_keyboard(ultima_config),
+                parse_mode='HTML',
+                disable_web_page_preview=True,
+            )
+            return
 
     has_active_subscription, subscription_is_active = _calculate_subscription_flags(getattr(user, 'subscription', None))
     menu_text = await get_main_menu_text(user, texts, db)
