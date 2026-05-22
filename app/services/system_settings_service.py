@@ -404,6 +404,11 @@ class BotConfigurationService:
             ChoiceOption('contact', '💬 Только контакт'),
             ChoiceOption('both', '🔁 Оба варианта'),
         ],
+        'MINIAPP_SUPPORT_TYPE': [
+            ChoiceOption('tickets', '🎫 Тикеты'),
+            ChoiceOption('profile', '👤 Профиль Telegram'),
+            ChoiceOption('url', '🔗 Внешняя ссылка'),
+        ],
         'CONNECT_BUTTON_MODE': [
             ChoiceOption('guide', '📘 Гайд'),
             ChoiceOption('miniapp_subscription', '🧾 Mini App подписка'),
