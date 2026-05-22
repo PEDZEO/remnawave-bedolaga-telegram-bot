@@ -406,6 +406,7 @@ class BotConfigurationService:
         ],
         'MINIAPP_SUPPORT_TYPE': [
             ChoiceOption('tickets', '🎫 Тикеты'),
+            ChoiceOption('both', '🎫👤 Тикеты + профиль Telegram'),
             ChoiceOption('profile', '👤 Профиль Telegram'),
             ChoiceOption('url', '🔗 Внешняя ссылка'),
         ],

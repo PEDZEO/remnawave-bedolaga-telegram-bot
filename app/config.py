@@ -47,7 +47,7 @@ class Settings(BaseSettings):
 
     # MiniApp tickets settings
     MINIAPP_TICKETS_ENABLED: bool = True  # Enable/disable tickets section in miniapp
-    MINIAPP_SUPPORT_TYPE: str = 'tickets'  # one of: tickets, profile, url
+    MINIAPP_SUPPORT_TYPE: str = 'tickets'  # one of: tickets, profile, url, both
     MINIAPP_SUPPORT_URL: str = ''  # Custom URL to redirect when tickets disabled (only for url type)
 
     ADMIN_NOTIFICATIONS_ENABLED: bool = False
@@ -2433,9 +2433,9 @@ class Settings(BaseSettings):
         return bool(self.MINIAPP_TICKETS_ENABLED)
 
     def get_miniapp_support_type(self) -> str:
-        """Get miniapp support type: tickets, profile, or url."""
+        """Get miniapp support type: tickets, profile, url, or both."""
         support_type = (self.MINIAPP_SUPPORT_TYPE or 'tickets').strip().lower()
-        return support_type if support_type in {'tickets', 'profile', 'url'} else 'tickets'
+        return support_type if support_type in {'tickets', 'profile', 'url', 'both'} else 'tickets'
 
     def get_miniapp_support_url(self) -> str:
         """Get custom support URL for miniapp (when type is 'url')."""

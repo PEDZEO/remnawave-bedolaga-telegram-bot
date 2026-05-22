@@ -101,7 +101,7 @@ class SupportConfigResponse(BaseModel):
     """Support/tickets configuration for miniapp."""
 
     tickets_enabled: bool
-    support_type: str  # "tickets", "profile", "url"
+    support_type: str  # "tickets", "profile", "url", "both"
     support_url: str | None = None
     support_username: str | None = None
 
@@ -309,26 +309,19 @@ async def update_user_language(
 @router.get('/support-config', response_model=SupportConfigResponse)
 async def get_support_config():
     """Get support/tickets configuration for cabinet."""
-    # Use SUPPORT_SYSTEM_MODE setting (configurable from admin panel)
-    support_mode = settings.get_support_system_mode()  # returns: tickets, contact, or both
+    support_type = settings.get_miniapp_support_type()
+    tickets_enabled = (
+        settings.is_miniapp_tickets_enabled()
+        and settings.is_support_tickets_enabled()
+        and support_type in {'tickets', 'both'}
+    )
 
-    # Map support mode to support type for frontend
-    # - "tickets" mode -> tickets only, no contact
-    # - "contact" mode -> contact only (profile), no tickets
-    # - "both" mode -> tickets enabled, contact available as fallback
-    if support_mode == 'tickets':
-        tickets_enabled = True
-        support_type = 'tickets'
-    elif support_mode == 'contact':
-        tickets_enabled = False
+    if support_type in {'tickets', 'both'} and not tickets_enabled:
         support_type = 'profile'
-    else:  # both
-        tickets_enabled = True
-        support_type = 'tickets'
 
     return SupportConfigResponse(
         tickets_enabled=tickets_enabled,
         support_type=support_type,
-        support_url=None,  # Cabinet doesn't use custom URLs
+        support_url=settings.get_miniapp_support_url() if support_type == 'url' else None,
         support_username=settings.SUPPORT_USERNAME,  # Always return for fallback
     )
