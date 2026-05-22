@@ -52,6 +52,7 @@ from app.services.ultima_start_service import (
     build_ultima_start_keyboard,
     get_ultima_start_config,
     is_ultima_mode_enabled,
+    is_ultima_start_button_usable,
 )
 from app.states import RegistrationStates
 from app.utils.promo_offer import (
@@ -113,7 +114,7 @@ async def _send_main_entrypoint_message(
 ) -> None:
     if await is_ultima_mode_enabled(db):
         ultima_config = await get_ultima_start_config(db)
-        if ultima_config.enabled:
+        if ultima_config.enabled and is_ultima_start_button_usable(ultima_config):
             await send_answer(
                 ultima_config.message_text,
                 reply_markup=build_ultima_start_keyboard(ultima_config),
@@ -121,6 +122,8 @@ async def _send_main_entrypoint_message(
                 disable_web_page_preview=True,
             )
             return
+        if ultima_config.enabled:
+            logger.warning('Ultima start message skipped because button URL is not usable')
 
     has_active_subscription, subscription_is_active = _calculate_subscription_flags(getattr(user, 'subscription', None))
     menu_text = await get_main_menu_text(user, texts, db)

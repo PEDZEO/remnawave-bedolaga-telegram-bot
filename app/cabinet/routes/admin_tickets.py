@@ -32,12 +32,36 @@ class AdminTicketUserInfo(BaseModel):
 
     id: int
     telegram_id: int | None = None  # Can be None for email-only users
+    auth_type: str | None = None
     email: str | None = None
     username: str | None = None
     first_name: str | None = None
     last_name: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AdminTicketUserContext(BaseModel):
+    """Compact user diagnostics for support operators."""
+
+    language: str | None = None
+    status: str | None = None
+    balance_kopeks: int = 0
+    has_had_paid_subscription: bool = False
+    created_at: datetime | None = None
+    last_activity: datetime | None = None
+    cabinet_last_login: datetime | None = None
+    restriction_topup: bool = False
+    restriction_subscription: bool = False
+    restriction_reason: str | None = None
+    subscription_status: str | None = None
+    subscription_actual_status: str | None = None
+    subscription_end_date: datetime | None = None
+    subscription_device_limit: int | None = None
+    subscription_traffic_limit_gb: int | None = None
+    subscription_traffic_used_gb: float | None = None
+    subscription_traffic_used_percent: float | None = None
+    remnawave_uuid: str | None = None
 
 
 class AdminTicketResponse(BaseModel):
@@ -69,6 +93,7 @@ class AdminTicketDetailResponse(BaseModel):
     closed_at: datetime | None = None
     is_reply_blocked: bool = False
     user: AdminTicketUserInfo | None = None
+    user_context: AdminTicketUserContext | None = None
     messages: list[TicketMessageResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
@@ -159,10 +184,36 @@ def _user_to_info(user: User) -> AdminTicketUserInfo:
     return AdminTicketUserInfo(
         id=user.id,
         telegram_id=user.telegram_id,
+        auth_type=user.auth_type,
         email=user.email,
         username=user.username,
         first_name=user.first_name,
         last_name=user.last_name,
+    )
+
+
+def _user_to_context(user: User) -> AdminTicketUserContext:
+    """Convert User to compact diagnostics for ticket support."""
+    subscription = getattr(user, 'subscription', None)
+    return AdminTicketUserContext(
+        language=user.language,
+        status=user.status,
+        balance_kopeks=user.balance_kopeks or 0,
+        has_had_paid_subscription=bool(user.has_had_paid_subscription),
+        created_at=user.created_at,
+        last_activity=user.last_activity,
+        cabinet_last_login=user.cabinet_last_login,
+        restriction_topup=bool(user.restriction_topup),
+        restriction_subscription=bool(user.restriction_subscription),
+        restriction_reason=user.restriction_reason,
+        subscription_status=getattr(subscription, 'status', None),
+        subscription_actual_status=getattr(subscription, 'actual_status', None) if subscription else None,
+        subscription_end_date=getattr(subscription, 'end_date', None),
+        subscription_device_limit=getattr(subscription, 'device_limit', None),
+        subscription_traffic_limit_gb=getattr(subscription, 'traffic_limit_gb', None),
+        subscription_traffic_used_gb=getattr(subscription, 'traffic_used_gb', None),
+        subscription_traffic_used_percent=getattr(subscription, 'traffic_used_percent', None) if subscription else None,
+        remnawave_uuid=user.remnawave_uuid,
     )
 
 
@@ -389,7 +440,12 @@ async def get_ticket_detail(
 ):
     """Get ticket with all messages for admin."""
     query = (
-        select(Ticket).where(Ticket.id == ticket_id).options(selectinload(Ticket.messages), selectinload(Ticket.user))
+        select(Ticket)
+        .where(Ticket.id == ticket_id)
+        .options(
+            selectinload(Ticket.messages),
+            selectinload(Ticket.user).selectinload(User.subscription),
+        )
     )
 
     result = await db.execute(query)
@@ -405,8 +461,10 @@ async def get_ticket_detail(
     messages_response = [_message_to_response(m) for m in messages]
 
     user_info = None
+    user_context = None
     if ticket.user:
         user_info = _user_to_info(ticket.user)
+        user_context = _user_to_context(ticket.user)
 
     return AdminTicketDetailResponse(
         id=ticket.id,
@@ -418,6 +476,7 @@ async def get_ticket_detail(
         closed_at=ticket.closed_at,
         is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
         user=user_info,
+        user_context=user_context,
         messages=messages_response,
     )
 

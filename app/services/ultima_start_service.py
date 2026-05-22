@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 import structlog
 from aiogram import types
@@ -146,6 +147,15 @@ def build_ultima_start_keyboard(config: UltimaStartConfig) -> types.InlineKeyboa
             ]
         ]
     )
+
+
+def is_ultima_start_button_usable(config: UltimaStartConfig) -> bool:
+    parsed = urlparse((config.button_url or '').strip())
+    if parsed.scheme not in {'http', 'https'} or not parsed.netloc:
+        return False
+    if parsed.netloc.lower() == 't.me' and not parsed.path.strip('/'):
+        return False
+    return True
 
 
 async def get_ultima_notification_config(db: AsyncSession) -> UltimaNotificationConfig:
