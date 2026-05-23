@@ -2006,55 +2006,70 @@ class AdminNotificationService:
             )
             return False
 
-        # Если есть медиа, отправляем фото с текстом как caption (если влезает) или текст + фото
-        if media_file_id and media_type == 'photo':
-            return await self._send_ticket_photo_notification(text, media_file_id, keyboard)
+        # Если есть медиа, отправляем его вместе с текстом как caption (если влезает) или текст + медиа.
+        if media_file_id and media_type in {'photo', 'video', 'document'}:
+            return await self._send_ticket_media_notification(text, media_file_id, media_type, keyboard)
 
         return await self._send_message(text, reply_markup=keyboard, ticket_event=True)
 
-    async def _send_ticket_photo_notification(
+    async def _send_ticket_media_notification(
         self,
         text: str,
-        photo_file_id: str,
+        media_file_id: str,
+        media_type: str,
         keyboard: types.InlineKeyboardMarkup | None = None,
     ) -> bool:
-        """Отправить фото с текстом в тикет-топик.
-        Если текст <= 1024 символов — отправляем фото с caption.
-        Иначе — сначала текст, потом фото в тот же топик.
+        """Отправить вложение с текстом в тикет-топик.
+        Если текст <= 1024 символов — отправляем вложение с caption.
+        Иначе — сначала текст, потом вложение в тот же топик.
         """
         if not self.chat_id:
             return False
 
         thread_id = self.ticket_topic_id or self.topic_id
+        send_method = {
+            'photo': self.bot.send_photo,
+            'video': self.bot.send_video,
+            'document': self.bot.send_document,
+        }.get(media_type)
+
+        if send_method is None:
+            return await self._send_message(text, reply_markup=keyboard, ticket_event=True)
+
+        media_key = {
+            'photo': 'photo',
+            'video': 'video',
+            'document': 'document',
+        }[media_type]
 
         try:
             if len(text) <= 1024:
-                # Фото с caption — всё в одном сообщении
-                photo_kwargs: dict = {
+                # Медиа с caption — всё в одном сообщении
+                media_kwargs: dict = {
                     'chat_id': self.chat_id,
-                    'photo': photo_file_id,
+                    media_key: media_file_id,
                     'caption': text,
                     'parse_mode': 'HTML',
                 }
                 if thread_id:
-                    photo_kwargs['message_thread_id'] = thread_id
+                    media_kwargs['message_thread_id'] = thread_id
                 if keyboard:
-                    photo_kwargs['reply_markup'] = keyboard
-                await self.bot.send_photo(**photo_kwargs)
+                    media_kwargs['reply_markup'] = keyboard
+                await send_method(**media_kwargs)
             else:
-                # Текст отдельно, фото следом в тот же топик
+                # Текст отдельно, медиа следом в тот же топик
                 await self._send_message(text, reply_markup=keyboard, ticket_event=True)
-                photo_kwargs = {
+                media_kwargs = {
                     'chat_id': self.chat_id,
-                    'photo': photo_file_id,
+                    media_key: media_file_id,
                 }
                 if thread_id:
-                    photo_kwargs['message_thread_id'] = thread_id
-                await self.bot.send_photo(**photo_kwargs)
+                    media_kwargs['message_thread_id'] = thread_id
+                await send_method(**media_kwargs)
 
             return True
         except Exception as e:
-            logger.error('Ошибка отправки фото-уведомления тикета', error=e)
+            logger.error('Ошибка отправки медиа-уведомления тикета', error=e, media_type=media_type)
             # Fallback: отправляем хотя бы текст
             return await self._send_message(text, reply_markup=keyboard, ticket_event=True)
 

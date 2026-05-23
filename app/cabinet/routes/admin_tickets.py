@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -112,7 +112,16 @@ class AdminTicketListResponse(BaseModel):
 class AdminReplyRequest(BaseModel):
     """Admin reply to ticket."""
 
-    message: str = Field(..., min_length=1, max_length=4000, description='Reply message')
+    message: str = Field('', max_length=4000, description='Reply message')
+    media_type: str | None = Field(None, description='Media type: photo, video, document')
+    media_file_id: str | None = Field(None, max_length=255, description='Telegram file_id of uploaded media')
+    media_caption: str | None = Field(None, max_length=1000, description='Media caption')
+
+    @model_validator(mode='after')
+    def validate_message_or_media(self):
+        if not (self.message or '').strip() and not self.media_file_id:
+            raise ValueError('Reply message or media is required')
+        return self
 
 
 class AdminStatusUpdateRequest(BaseModel):
@@ -498,12 +507,19 @@ async def reply_to_ticket(
             detail='Ticket not found',
         )
 
+    reply_text = (request.message or '').strip()
+    reply_preview = reply_text or ('Вложение' if request.media_file_id else '')
+
     # Create admin message
     message = TicketMessage(
         ticket_id=ticket.id,
         user_id=ticket.user_id,
-        message_text=request.message,
+        message_text=reply_text,
         is_from_admin=True,
+        has_media=bool(request.media_type and request.media_file_id),
+        media_type=request.media_type,
+        media_file_id=request.media_file_id,
+        media_caption=request.media_caption,
         created_at=datetime.now(UTC),
     )
     db.add(message)
@@ -528,7 +544,7 @@ async def reply_to_ticket(
         try:
             from app.handlers.admin.tickets import notify_user_about_ticket_reply
 
-            await notify_user_about_ticket_reply(bot, ticket, request.message, db)
+            await notify_user_about_ticket_reply(bot, ticket, reply_preview, db)
         except Exception as e:
             logger.warning('Failed to notify user about ticket reply', error=e)
         finally:
@@ -539,11 +555,11 @@ async def reply_to_ticket(
     # Уведомить пользователя в кабинете
     try:
         notification = await TicketNotificationCRUD.create_user_notification_for_admin_reply(
-            db, ticket, request.message
+            db, ticket, reply_preview
         )
         if notification:
             # Отправить WebSocket уведомление
-            await notify_user_ticket_reply(ticket.user_id, ticket.id, (request.message or '')[:100])
+            await notify_user_ticket_reply(ticket.user_id, ticket.id, reply_preview[:100])
     except Exception as e:
         logger.warning('Failed to create cabinet notification for admin reply', error=e)
 

@@ -274,8 +274,8 @@ async def view_admin_ticket(
         for msg in ticket.messages:
             sender = '👤 Пользователь' if msg.is_user_message else '🛠️ Поддержка'
             block = f'{sender} ({msg.created_at.strftime("%d.%m %H:%M")}):\n{msg.message_text}\n\n'
-            if getattr(msg, 'has_media', False) and getattr(msg, 'media_type', None) == 'photo':
-                block += '📎 Вложение: фото\n\n'
+            if getattr(msg, 'has_media', False) and getattr(msg, 'media_type', None):
+                block += f'📎 Вложение: {msg.media_type}\n\n'
             message_blocks.append(block)
 
     # Разбиваем на страницы
@@ -285,7 +285,9 @@ async def view_admin_ticket(
 
     # Формируем клавиатуру
     has_photos = any(
-        getattr(m, 'has_media', False) and getattr(m, 'media_type', None) == 'photo' for m in ticket.messages or []
+        getattr(m, 'has_media', False)
+        and getattr(m, 'media_type', None) in {'photo', 'video', 'document'}
+        for m in ticket.messages or []
     )
     keyboard = get_admin_ticket_view_keyboard(
         ticket_id, ticket.is_closed, db_user.language, is_user_blocked=ticket.is_user_reply_blocked
@@ -431,6 +433,14 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
         media_type = 'photo'
         media_file_id = message.photo[-1].file_id
         media_caption = message.caption
+    elif message.video:
+        media_type = 'video'
+        media_file_id = message.video.file_id
+        media_caption = message.caption
+    elif message.document:
+        media_type = 'document'
+        media_file_id = message.document.file_id
+        media_caption = message.caption
 
     if len(reply_text) < 1 and not media_file_id:
         texts = get_texts(db_user.language)
@@ -514,7 +524,7 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
         await state.clear()
 
         # Уведомляем пользователя о новом ответе
-        await notify_user_about_ticket_reply(message.bot, ticket, reply_text, db)
+        await notify_user_about_ticket_reply(message.bot, ticket, reply_text or 'Вложение', db)
         # Админ-уведомления о ответе в тикет отключены по требованию
 
     except Exception as e:
@@ -850,8 +860,8 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
                     sender = '👤 Пользователь' if msg.is_user_message else '🛠️ Поддержка'
                     ticket_text += f'{sender} ({msg.created_at.strftime("%d.%m %H:%M")}):\n'
                     ticket_text += f'{msg.message_text}\n\n'
-                    if getattr(msg, 'has_media', False) and getattr(msg, 'media_type', None) == 'photo':
-                        ticket_text += '📎 Вложение: фото\n\n'
+                    if getattr(msg, 'has_media', False) and getattr(msg, 'media_type', None):
+                        ticket_text += f'📎 Вложение: {msg.media_type}\n\n'
 
             kb = get_admin_ticket_view_keyboard(
                 updated.id, updated.is_closed, db_user.language, is_user_blocked=updated.is_user_reply_blocked
@@ -880,7 +890,8 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
             except Exception:
                 pass
             has_photos = any(
-                getattr(m, 'has_media', False) and getattr(m, 'media_type', None) == 'photo'
+                getattr(m, 'has_media', False)
+                and getattr(m, 'media_type', None) in {'photo', 'video', 'document'}
                 for m in updated.messages or []
             )
             if has_photos:
@@ -1089,40 +1100,56 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
             ]
         )
 
-        # Если было фото в последнем ответе админа — отправим как фото
+        # Если в последнем ответе админа было вложение, продублируем его в уведомлении.
         last_message = await TicketMessageCRUD.get_last_message(db, ticket.id)
         if (
             last_message
             and last_message.has_media
-            and last_message.media_type == 'photo'
+            and last_message.media_type in {'photo', 'video', 'document'}
+            and last_message.media_file_id
             and last_message.is_from_admin
         ):
             caption = base_text
             try:
-                await bot.send_photo(
-                    chat_id=chat_id,
-                    photo=last_message.media_file_id,
-                    caption=caption,
-                    reply_markup=keyboard,
-                )
+                if last_message.media_type == 'photo':
+                    await bot.send_photo(
+                        chat_id=chat_id,
+                        photo=last_message.media_file_id,
+                        caption=caption,
+                        reply_markup=keyboard,
+                    )
+                elif last_message.media_type == 'video':
+                    await bot.send_video(
+                        chat_id=chat_id,
+                        video=last_message.media_file_id,
+                        caption=caption,
+                        reply_markup=keyboard,
+                    )
+                else:
+                    await bot.send_document(
+                        chat_id=chat_id,
+                        document=last_message.media_file_id,
+                        caption=caption,
+                        reply_markup=keyboard,
+                    )
                 return
-            except TelegramBadRequest as photo_error:
-                if _is_unreachable_ticket_chat_error(photo_error):
+            except TelegramBadRequest as media_error:
+                if _is_unreachable_ticket_chat_error(media_error):
                     logger.warning(
                         'Skipping ticket reply notification: user chat unavailable',
                         chat_id=chat_id,
                         ticket_id=ticket.id,
-                        photo_error=photo_error,
+                        media_error=media_error,
                     )
                     return
                 logger.error(
-                    'Не удалось отправить фото-уведомление пользователю для тикета',
+                    'Failed to send media ticket reply notification',
                     chat_id=chat_id,
                     ticket_id=ticket.id,
-                    photo_error=photo_error,
+                    media_error=media_error,
                 )
             except Exception as e:
-                logger.error('Не удалось отправить фото-уведомление', error=e)
+                logger.error('Failed to send media ticket reply notification', error=e)
         # Фоллбек: текстовое уведомление
         await bot.send_message(
             chat_id=chat_id,
@@ -1196,24 +1223,32 @@ def register_handlers(dp: Dispatcher):
         if not ticket:
             await callback.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), show_alert=True)
             return
-        photos = [
-            m.media_file_id
+        attachments = [
+            (getattr(m, 'media_type', None), m.media_file_id)
             for m in ticket.messages
-            if getattr(m, 'has_media', False) and getattr(m, 'media_type', None) == 'photo' and m.media_file_id
+            if getattr(m, 'has_media', False)
+            and getattr(m, 'media_type', None) in {'photo', 'video', 'document'}
+            and m.media_file_id
         ]
-        if not photos:
+        if not attachments:
             await callback.answer(texts.t('NO_ATTACHMENTS', 'Вложений нет.'), show_alert=True)
             return
-        from aiogram.types import InputMediaPhoto
 
-        chunks = [photos[i : i + 10] for i in range(0, len(photos), 10)]
         last_group_message = None
-        for chunk in chunks:
-            media = [InputMediaPhoto(media=pid) for pid in chunk]
+        for media_type, file_id in attachments:
             try:
-                messages = await callback.message.bot.send_media_group(chat_id=callback.from_user.id, media=media)
-                if messages:
-                    last_group_message = messages[-1]
+                if media_type == 'photo':
+                    last_group_message = await callback.message.bot.send_photo(
+                        chat_id=callback.from_user.id, photo=file_id
+                    )
+                elif media_type == 'video':
+                    last_group_message = await callback.message.bot.send_video(
+                        chat_id=callback.from_user.id, video=file_id
+                    )
+                else:
+                    last_group_message = await callback.message.bot.send_document(
+                        chat_id=callback.from_user.id, document=file_id
+                    )
             except Exception:
                 pass
         # После отправки добавим кнопку удалить под последним сообщением группы

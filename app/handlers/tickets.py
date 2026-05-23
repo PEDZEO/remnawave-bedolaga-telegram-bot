@@ -222,7 +222,7 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
     # Удалим сообщение пользователя через 2 секунды
     asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
     # Валидируем: допускаем пустой текст, если есть фото
-    if (not message_text or len(message_text) < 10) and not message.photo:
+    if (not message_text or len(message_text) < 10) and not media_file_id:
         texts = get_texts(db_user.language)
         data_prompt = await state.get_data()
         prompt_chat_id = data_prompt.get('prompt_chat_id')
@@ -263,7 +263,7 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
             f'📊 Статус: {ticket.status_emoji} '
             f'{texts.t("TICKET_STATUS_OPEN", "Открыт")}\n'
             f'📅 Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
-            + ('📎 Вложение: фото\n' if media_type == 'photo' else '')
+            + (f'📎 Вложение: {media_type}\n' if media_type else '')
         )
 
         data_prompt = await state.get_data()
@@ -552,8 +552,8 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         for msg in ticket.messages:
             sender = '👤 Вы' if msg.is_user_message else '🛠️ Поддержка'
             block = f'{sender} ({format_local_datetime(msg.created_at, "%d.%m %H:%M")}):\n{msg.message_text}\n\n'
-            if getattr(msg, 'has_media', False) and getattr(msg, 'media_type', None) == 'photo':
-                block += '📎 Вложение: фото\n\n'
+            if getattr(msg, 'has_media', False) and getattr(msg, 'media_type', None):
+                block += f'📎 Вложение: {msg.media_type}\n\n'
             message_blocks.append(block)
     pages = _split_text_into_pages(header, message_blocks, max_len=3500)
     total_pages = len(pages)
@@ -566,7 +566,9 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     )
     # Если есть вложения фото — добавим кнопку для просмотра
     has_photos = any(
-        getattr(m, 'has_media', False) and getattr(m, 'media_type', None) == 'photo' for m in ticket.messages or []
+        getattr(m, 'has_media', False)
+        and getattr(m, 'media_type', None) in {'photo', 'video', 'document'}
+        for m in ticket.messages or []
     )
     if has_photos:
         try:
@@ -627,26 +629,28 @@ async def send_ticket_attachments(callback: types.CallbackQuery, db_user: User, 
         await callback.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), show_alert=True)
         return
 
-    photos = [
-        m.media_file_id
+    attachments = [
+        (getattr(m, 'media_type', None), m.media_file_id)
         for m in ticket.messages
-        if getattr(m, 'has_media', False) and getattr(m, 'media_type', None) == 'photo' and m.media_file_id
+        if getattr(m, 'has_media', False)
+        and getattr(m, 'media_type', None) in {'photo', 'video', 'document'}
+        and m.media_file_id
     ]
-    if not photos:
+    if not attachments:
         await callback.answer(texts.t('NO_ATTACHMENTS', 'Вложений нет.'), show_alert=True)
         return
 
-    # Telegram ограничивает media group до 10 элементов. Отправим чанками.
-    from aiogram.types import InputMediaPhoto
-
-    chunks = [photos[i : i + 10] for i in range(0, len(photos), 10)]
     last_group_message = None
-    for chunk in chunks:
-        media = [InputMediaPhoto(media=pid) for pid in chunk]
+    for media_type, file_id in attachments:
         try:
-            messages = await callback.message.bot.send_media_group(chat_id=callback.from_user.id, media=media)
-            if messages:
-                last_group_message = messages[-1]
+            if media_type == 'photo':
+                last_group_message = await callback.message.bot.send_photo(chat_id=callback.from_user.id, photo=file_id)
+            elif media_type == 'video':
+                last_group_message = await callback.message.bot.send_video(chat_id=callback.from_user.id, video=file_id)
+            else:
+                last_group_message = await callback.message.bot.send_document(
+                    chat_id=callback.from_user.id, document=file_id
+                )
         except Exception:
             pass
     if last_group_message:
@@ -792,8 +796,24 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         media_type = 'photo'
         media_file_id = message.photo[-1].file_id
         media_caption = message.caption
+    elif message.video:
+        media_type = 'video'
+        media_file_id = message.video.file_id
+        media_caption = message.caption
+    elif message.document:
+        media_type = 'document'
+        media_file_id = message.document.file_id
+        media_caption = message.caption
+    elif message.video:
+        media_type = 'video'
+        media_file_id = message.video.file_id
+        media_caption = message.caption
+    elif message.document:
+        media_type = 'document'
+        media_file_id = message.document.file_id
+        media_caption = message.caption
 
-    if len(reply_text) < 5:
+    if len(reply_text) < 5 and not media_file_id:
         texts = get_texts(db_user.language)
         await message.answer(
             texts.t('TICKET_REPLY_TOO_SHORT', 'Ответ должен содержать минимум 5 символов. Попробуйте еще раз:')
@@ -891,7 +911,7 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         # Уведомить админов об ответе пользователя
         logger.info('Attempting to notify admins about ticket reply #', ticket_id=ticket_id)
         await notify_admins_about_ticket_reply(
-            ticket, reply_text, db, media_file_id=media_file_id, media_type=media_type
+            ticket, reply_text or 'Вложение', db, media_file_id=media_file_id, media_type=media_type
         )
 
     except Exception as e:

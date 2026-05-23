@@ -149,6 +149,7 @@ async def create_ticket(
         user_id=user.id,
         message_text=request.message,
         is_from_admin=False,
+        has_media=bool(request.media_type and request.media_file_id),
         media_type=request.media_type,
         media_file_id=request.media_file_id,
         media_caption=request.media_caption,
@@ -259,12 +260,16 @@ async def add_ticket_message(
             detail='Replies to this ticket are blocked',
         )
 
+    message_text = (request.message or '').strip()
+    message_preview = message_text or ('Вложение' if request.media_file_id else '')
+
     # Create message with optional media
     message = TicketMessage(
         ticket_id=ticket.id,
         user_id=user.id,
-        message_text=request.message,
+        message_text=message_text,
         is_from_admin=False,
+        has_media=bool(request.media_type and request.media_file_id),
         media_type=request.media_type,
         media_file_id=request.media_file_id,
         media_caption=request.media_caption,
@@ -284,7 +289,7 @@ async def add_ticket_message(
     try:
         await notify_admins_about_ticket_reply(
             ticket,
-            request.message,
+            message_preview,
             db,
             media_file_id=request.media_file_id,
             media_type=request.media_type,
@@ -295,11 +300,11 @@ async def add_ticket_message(
     # Уведомить админов в кабинете
     try:
         notification = await TicketNotificationCRUD.create_admin_notification_for_user_reply(
-            db, ticket, request.message
+            db, ticket, message_preview
         )
         if notification:
             # Отправить WebSocket уведомление
-            await notify_admins_ticket_reply(ticket.id, (request.message or '')[:100], user.id)
+            await notify_admins_ticket_reply(ticket.id, message_preview[:100], user.id)
     except Exception as e:
         logger.error('Error creating cabinet notification for user reply', error=e)
 
