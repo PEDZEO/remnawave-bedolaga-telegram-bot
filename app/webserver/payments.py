@@ -1712,7 +1712,8 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     'antilopay_enabled': settings.is_antilopay_enabled(),
                     'jupiter_enabled': settings.is_jupiter_enabled(),
                     'donut_enabled': settings.is_donut_enabled(),
-                    'lava_enabled': settings.is_lava_enabled(),                }
+                    'lava_enabled': settings.is_lava_enabled(),
+                }
             )
 
     return router if routes_registered else None

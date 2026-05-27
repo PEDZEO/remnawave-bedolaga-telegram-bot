@@ -706,14 +706,18 @@ async def create_topup(
 
         elif request.payment_method == 'riopay':
             if not settings.is_riopay_enabled():
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='RioPay payment method is unavailable')
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail='RioPay payment method is unavailable'
+                )
 
             payment_service = PaymentService()
             result = await payment_service.create_riopay_payment(
                 db=db,
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
-                description=settings.get_balance_payment_description(request.amount_kopeks, telegram_user_id=user.telegram_id),
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id
+                ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 success_url=cabinet_success_url,
                 fail_url=cabinet_failed_url,
@@ -722,18 +726,24 @@ async def create_topup(
                 payment_url = result.get('payment_url')
                 payment_id = str(result.get('local_payment_id') or result.get('riopay_order_id') or 'pending')
             else:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create RioPay payment')
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create RioPay payment'
+                )
 
         elif request.payment_method == 'severpay':
             if not settings.is_severpay_enabled():
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='SeverPay payment method is unavailable')
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail='SeverPay payment method is unavailable'
+                )
 
             payment_service = PaymentService()
             result = await payment_service.create_severpay_payment(
                 db=db,
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
-                description=settings.get_balance_payment_description(request.amount_kopeks, telegram_user_id=user.telegram_id),
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id
+                ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 return_url=cabinet_success_url,
@@ -742,18 +752,24 @@ async def create_topup(
                 payment_url = result.get('payment_url')
                 payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
             else:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create SeverPay payment')
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create SeverPay payment'
+                )
 
         elif request.payment_method == 'paypear':
             if not settings.is_paypear_enabled():
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='PayPear payment method is unavailable')
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail='PayPear payment method is unavailable'
+                )
 
             payment_service = PaymentService()
             result = await payment_service.create_paypear_payment(
                 db=db,
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
-                description=settings.get_balance_payment_description(request.amount_kopeks, telegram_user_id=user.telegram_id),
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id
+                ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 return_url=cabinet_success_url,
@@ -762,18 +778,24 @@ async def create_topup(
                 payment_url = result.get('payment_url')
                 payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
             else:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create PayPear payment')
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create PayPear payment'
+                )
 
         elif request.payment_method == 'rollypay':
             if not settings.is_rollypay_enabled():
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='RollyPay payment method is unavailable')
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail='RollyPay payment method is unavailable'
+                )
 
             payment_service = PaymentService()
             result = await payment_service.create_rollypay_payment(
                 db=db,
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
-                description=settings.get_balance_payment_description(request.amount_kopeks, telegram_user_id=user.telegram_id),
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id
+                ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 payment_method_type=request.payment_option or None,
@@ -783,18 +805,24 @@ async def create_topup(
                 payment_url = result.get('payment_url')
                 payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
             else:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create RollyPay payment')
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create RollyPay payment'
+                )
 
         elif request.payment_method == 'overpay':
             if not settings.is_overpay_enabled():
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Overpay payment method is unavailable')
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail='Overpay payment method is unavailable'
+                )
 
             payment_service = PaymentService()
             result = await payment_service.create_overpay_payment(
                 db=db,
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
-                description=settings.get_balance_payment_description(request.amount_kopeks, telegram_user_id=user.telegram_id),
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id
+                ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 return_url=cabinet_success_url,
@@ -803,18 +831,24 @@ async def create_topup(
                 payment_url = result.get('payment_url')
                 payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
             else:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create Overpay payment')
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create Overpay payment'
+                )
 
         elif request.payment_method == 'aurapay':
             if not settings.is_aurapay_enabled():
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='AuraPay payment method is unavailable')
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail='AuraPay payment method is unavailable'
+                )
 
             payment_service = PaymentService()
             result = await payment_service.create_aurapay_payment(
                 db=db,
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
-                description=settings.get_balance_payment_description(request.amount_kopeks, telegram_user_id=user.telegram_id),
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id
+                ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 payment_method_type=request.payment_option or None,
@@ -824,18 +858,24 @@ async def create_topup(
                 payment_url = result.get('payment_url')
                 payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
             else:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create AuraPay payment')
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create AuraPay payment'
+                )
 
         elif request.payment_method == 'etoplatezhi':
             if not settings.is_etoplatezhi_enabled():
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Etoplatezhi payment method is unavailable')
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail='Etoplatezhi payment method is unavailable'
+                )
 
             payment_service = PaymentService()
             result = await payment_service.create_etoplatezhi_payment(
                 db=db,
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
-                description=settings.get_balance_payment_description(request.amount_kopeks, telegram_user_id=user.telegram_id),
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id
+                ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 payment_method_type=request.payment_option or None,
@@ -845,18 +885,24 @@ async def create_topup(
                 payment_url = result.get('payment_url')
                 payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
             else:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create Etoplatezhi payment')
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create Etoplatezhi payment'
+                )
 
         elif request.payment_method == 'antilopay':
             if not settings.is_antilopay_enabled():
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Antilopay payment method is unavailable')
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail='Antilopay payment method is unavailable'
+                )
 
             payment_service = PaymentService()
             result = await payment_service.create_antilopay_payment(
                 db=db,
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
-                description=settings.get_balance_payment_description(request.amount_kopeks, telegram_user_id=user.telegram_id),
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id
+                ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 payment_method_type=request.payment_option or None,
@@ -866,18 +912,24 @@ async def create_topup(
                 payment_url = result.get('payment_url')
                 payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
             else:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create Antilopay payment')
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create Antilopay payment'
+                )
 
         elif request.payment_method == 'jupiter':
             if not settings.is_jupiter_enabled():
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Jupiter payment method is unavailable')
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail='Jupiter payment method is unavailable'
+                )
 
             payment_service = PaymentService()
             result = await payment_service.create_jupiter_payment(
                 db=db,
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
-                description=settings.get_balance_payment_description(request.amount_kopeks, telegram_user_id=user.telegram_id),
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id
+                ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 payment_method_type=request.payment_option or None,
@@ -887,18 +939,24 @@ async def create_topup(
                 payment_url = result.get('payment_url')
                 payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
             else:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create Jupiter payment')
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create Jupiter payment'
+                )
 
         elif request.payment_method == 'donut':
             if not settings.is_donut_enabled():
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Donut payment method is unavailable')
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail='Donut payment method is unavailable'
+                )
 
             payment_service = PaymentService()
             result = await payment_service.create_donut_payment(
                 db=db,
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
-                description=settings.get_balance_payment_description(request.amount_kopeks, telegram_user_id=user.telegram_id),
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id
+                ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 payment_method_type=request.payment_option or None,
@@ -908,18 +966,24 @@ async def create_topup(
                 payment_url = result.get('payment_url')
                 payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
             else:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create Donut payment')
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create Donut payment'
+                )
 
         elif request.payment_method == 'lava':
             if not settings.is_lava_enabled():
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Lava payment method is unavailable')
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail='Lava payment method is unavailable'
+                )
 
             payment_service = PaymentService()
             result = await payment_service.create_lava_payment(
                 db=db,
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
-                description=settings.get_balance_payment_description(request.amount_kopeks, telegram_user_id=user.telegram_id),
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id
+                ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 payment_method_type=request.payment_option or None,
@@ -929,7 +993,9 @@ async def create_topup(
                 payment_url = result.get('payment_url')
                 payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
             else:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create Lava payment')
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to create Lava payment'
+                )
 
         elif request.payment_method == 'tribute':
             if not settings.TRIBUTE_ENABLED or not settings.TRIBUTE_DONATE_LINK:

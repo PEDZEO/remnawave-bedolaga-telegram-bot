@@ -566,8 +566,7 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     )
     # Если есть вложения фото — добавим кнопку для просмотра
     has_photos = any(
-        getattr(m, 'has_media', False)
-        and getattr(m, 'media_type', None) in {'photo', 'video', 'document'}
+        getattr(m, 'has_media', False) and getattr(m, 'media_type', None) in {'photo', 'video', 'document'}
         for m in ticket.messages or []
     )
     if has_photos:

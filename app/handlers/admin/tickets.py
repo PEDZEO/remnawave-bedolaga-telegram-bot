@@ -285,8 +285,7 @@ async def view_admin_ticket(
 
     # Формируем клавиатуру
     has_photos = any(
-        getattr(m, 'has_media', False)
-        and getattr(m, 'media_type', None) in {'photo', 'video', 'document'}
+        getattr(m, 'has_media', False) and getattr(m, 'media_type', None) in {'photo', 'video', 'document'}
         for m in ticket.messages or []
     )
     keyboard = get_admin_ticket_view_keyboard(
@@ -890,8 +889,7 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
             except Exception:
                 pass
             has_photos = any(
-                getattr(m, 'has_media', False)
-                and getattr(m, 'media_type', None) in {'photo', 'video', 'document'}
+                getattr(m, 'has_media', False) and getattr(m, 'media_type', None) in {'photo', 'video', 'document'}
                 for m in updated.messages or []
             )
             if has_photos:

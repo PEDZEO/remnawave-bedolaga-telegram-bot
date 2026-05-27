@@ -554,9 +554,7 @@ async def reply_to_ticket(
 
     # Уведомить пользователя в кабинете
     try:
-        notification = await TicketNotificationCRUD.create_user_notification_for_admin_reply(
-            db, ticket, reply_preview
-        )
+        notification = await TicketNotificationCRUD.create_user_notification_for_admin_reply(db, ticket, reply_preview)
         if notification:
             # Отправить WebSocket уведомление
             await notify_user_ticket_reply(ticket.user_id, ticket.id, reply_preview[:100])

@@ -149,13 +149,37 @@ def get_available_payment_methods() -> list[dict[str, str]]:
 
     if settings.is_kassa_ai_sbp_enabled():
         name = settings.get_kassa_ai_sbp_display_name()
-        methods.append({'id': 'kassa_ai_sbp', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_kassa_ai_sbp'})
+        methods.append(
+            {
+                'id': 'kassa_ai_sbp',
+                'name': name,
+                'icon': '*',
+                'description': f'via {name}',
+                'callback': 'topup_kassa_ai_sbp',
+            }
+        )
     if settings.is_kassa_ai_card_enabled():
         name = settings.get_kassa_ai_card_display_name()
-        methods.append({'id': 'kassa_ai_card', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_kassa_ai_card'})
+        methods.append(
+            {
+                'id': 'kassa_ai_card',
+                'name': name,
+                'icon': '*',
+                'description': f'via {name}',
+                'callback': 'topup_kassa_ai_card',
+            }
+        )
     if settings.is_kassa_ai_sberpay_enabled():
         name = settings.get_kassa_ai_sberpay_display_name()
-        methods.append({'id': 'kassa_ai_sberpay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_kassa_ai_sberpay'})
+        methods.append(
+            {
+                'id': 'kassa_ai_sberpay',
+                'name': name,
+                'icon': '*',
+                'description': f'via {name}',
+                'callback': 'topup_kassa_ai_sberpay',
+            }
+        )
 
     if (
         settings.is_kassa_ai_enabled()
@@ -176,53 +200,137 @@ def get_available_payment_methods() -> list[dict[str, str]]:
 
     if settings.is_riopay_enabled():
         name = settings.get_riopay_display_name()
-        methods.append({'id': 'riopay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_riopay'})
+        methods.append(
+            {'id': 'riopay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_riopay'}
+        )
 
     if settings.is_severpay_enabled():
         name = settings.get_severpay_display_name()
-        methods.append({'id': 'severpay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_severpay'})
+        methods.append(
+            {'id': 'severpay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_severpay'}
+        )
 
     if settings.is_paypear_enabled():
         name = settings.get_paypear_display_name()
-        methods.append({'id': 'paypear', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_paypear'})
+        methods.append(
+            {'id': 'paypear', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_paypear'}
+        )
 
     if settings.is_rollypay_enabled():
         name = settings.get_rollypay_display_name()
-        methods.append({'id': 'rollypay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_rollypay'})
+        methods.append(
+            {'id': 'rollypay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_rollypay'}
+        )
 
     if settings.is_overpay_enabled():
         name = settings.get_overpay_display_name()
-        methods.append({'id': 'overpay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_overpay'})
+        methods.append(
+            {'id': 'overpay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_overpay'}
+        )
 
     if settings.is_aurapay_sbp_enabled():
         name = settings.get_aurapay_sbp_display_name()
-        methods.append({'id': 'aurapay_sbp', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_aurapay_sbp'})
+        methods.append(
+            {
+                'id': 'aurapay_sbp',
+                'name': name,
+                'icon': '*',
+                'description': f'via {name}',
+                'callback': 'topup_aurapay_sbp',
+            }
+        )
     if settings.is_aurapay_card_enabled():
         name = settings.get_aurapay_card_display_name()
-        methods.append({'id': 'aurapay_card', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_aurapay_card'})
-    if settings.is_aurapay_enabled() and not settings.is_aurapay_sbp_enabled() and not settings.is_aurapay_card_enabled():
+        methods.append(
+            {
+                'id': 'aurapay_card',
+                'name': name,
+                'icon': '*',
+                'description': f'via {name}',
+                'callback': 'topup_aurapay_card',
+            }
+        )
+    if (
+        settings.is_aurapay_enabled()
+        and not settings.is_aurapay_sbp_enabled()
+        and not settings.is_aurapay_card_enabled()
+    ):
         name = settings.get_aurapay_display_name()
-        methods.append({'id': 'aurapay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_aurapay'})
+        methods.append(
+            {'id': 'aurapay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_aurapay'}
+        )
 
     if settings.is_etoplatezhi_sbp_enabled():
         name = settings.get_etoplatezhi_sbp_display_name()
-        methods.append({'id': 'etoplatezhi_sbp', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_etoplatezhi_sbp'})
+        methods.append(
+            {
+                'id': 'etoplatezhi_sbp',
+                'name': name,
+                'icon': '*',
+                'description': f'via {name}',
+                'callback': 'topup_etoplatezhi_sbp',
+            }
+        )
     if settings.is_etoplatezhi_card_enabled():
         name = settings.get_etoplatezhi_card_display_name()
-        methods.append({'id': 'etoplatezhi_card', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_etoplatezhi_card'})
-    if settings.is_etoplatezhi_enabled() and not settings.is_etoplatezhi_sbp_enabled() and not settings.is_etoplatezhi_card_enabled():
+        methods.append(
+            {
+                'id': 'etoplatezhi_card',
+                'name': name,
+                'icon': '*',
+                'description': f'via {name}',
+                'callback': 'topup_etoplatezhi_card',
+            }
+        )
+    if (
+        settings.is_etoplatezhi_enabled()
+        and not settings.is_etoplatezhi_sbp_enabled()
+        and not settings.is_etoplatezhi_card_enabled()
+    ):
         name = settings.get_etoplatezhi_display_name()
-        methods.append({'id': 'etoplatezhi', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_etoplatezhi'})
+        methods.append(
+            {
+                'id': 'etoplatezhi',
+                'name': name,
+                'icon': '*',
+                'description': f'via {name}',
+                'callback': 'topup_etoplatezhi',
+            }
+        )
 
     if settings.is_antilopay_sbp_enabled():
         name = settings.get_antilopay_sbp_display_name()
-        methods.append({'id': 'antilopay_sbp', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_antilopay_sbp'})
+        methods.append(
+            {
+                'id': 'antilopay_sbp',
+                'name': name,
+                'icon': '*',
+                'description': f'via {name}',
+                'callback': 'topup_antilopay_sbp',
+            }
+        )
     if settings.is_antilopay_card_enabled():
         name = settings.get_antilopay_card_display_name()
-        methods.append({'id': 'antilopay_card', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_antilopay_card'})
+        methods.append(
+            {
+                'id': 'antilopay_card',
+                'name': name,
+                'icon': '*',
+                'description': f'via {name}',
+                'callback': 'topup_antilopay_card',
+            }
+        )
     if settings.is_antilopay_sberpay_enabled():
         name = settings.get_antilopay_sberpay_display_name()
-        methods.append({'id': 'antilopay_sberpay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_antilopay_sberpay'})
+        methods.append(
+            {
+                'id': 'antilopay_sberpay',
+                'name': name,
+                'icon': '*',
+                'description': f'via {name}',
+                'callback': 'topup_antilopay_sberpay',
+            }
+        )
     if (
         settings.is_antilopay_enabled()
         and not settings.is_antilopay_sbp_enabled()
@@ -230,24 +338,54 @@ def get_available_payment_methods() -> list[dict[str, str]]:
         and not settings.is_antilopay_sberpay_enabled()
     ):
         name = settings.get_antilopay_display_name()
-        methods.append({'id': 'antilopay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_antilopay'})
+        methods.append(
+            {'id': 'antilopay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_antilopay'}
+        )
 
     if settings.is_jupiter_sbp_enabled():
         name = settings.get_jupiter_sbp_display_name()
-        methods.append({'id': 'jupiter_sbp', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_jupiter_sbp'})
+        methods.append(
+            {
+                'id': 'jupiter_sbp',
+                'name': name,
+                'icon': '*',
+                'description': f'via {name}',
+                'callback': 'topup_jupiter_sbp',
+            }
+        )
     if settings.is_jupiter_enabled() and not settings.is_jupiter_sbp_enabled():
         name = settings.get_jupiter_display_name()
-        methods.append({'id': 'jupiter', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_jupiter'})
+        methods.append(
+            {'id': 'jupiter', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_jupiter'}
+        )
 
     if settings.is_donut_card_enabled():
         name = settings.get_donut_card_display_name()
-        methods.append({'id': 'donut_card', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_donut_card'})
+        methods.append(
+            {
+                'id': 'donut_card',
+                'name': name,
+                'icon': '*',
+                'description': f'via {name}',
+                'callback': 'topup_donut_card',
+            }
+        )
     if settings.is_donut_sbp_enabled():
         name = settings.get_donut_sbp_display_name()
-        methods.append({'id': 'donut_sbp', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_donut_sbp'})
+        methods.append(
+            {'id': 'donut_sbp', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_donut_sbp'}
+        )
     if settings.is_donut_sbp_qr_enabled():
         name = settings.get_donut_sbp_qr_display_name()
-        methods.append({'id': 'donut_sbp_qr', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_donut_sbp_qr'})
+        methods.append(
+            {
+                'id': 'donut_sbp_qr',
+                'name': name,
+                'icon': '*',
+                'description': f'via {name}',
+                'callback': 'topup_donut_sbp_qr',
+            }
+        )
     if (
         settings.is_donut_enabled()
         and not settings.is_donut_card_enabled()
@@ -255,17 +393,25 @@ def get_available_payment_methods() -> list[dict[str, str]]:
         and not settings.is_donut_sbp_qr_enabled()
     ):
         name = settings.get_donut_display_name()
-        methods.append({'id': 'donut', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_donut'})
+        methods.append(
+            {'id': 'donut', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_donut'}
+        )
 
     if settings.is_lava_card_enabled():
         name = settings.get_lava_card_display_name()
-        methods.append({'id': 'lava_card', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_lava_card'})
+        methods.append(
+            {'id': 'lava_card', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_lava_card'}
+        )
     if settings.is_lava_sbp_enabled():
         name = settings.get_lava_sbp_display_name()
-        methods.append({'id': 'lava_sbp', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_lava_sbp'})
+        methods.append(
+            {'id': 'lava_sbp', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_lava_sbp'}
+        )
     if settings.is_lava_enabled() and not settings.is_lava_card_enabled() and not settings.is_lava_sbp_enabled():
         name = settings.get_lava_display_name()
-        methods.append({'id': 'lava', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_lava'})
+        methods.append(
+            {'id': 'lava', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_lava'}
+        )
 
     if settings.is_support_topup_enabled():
         methods.append(
