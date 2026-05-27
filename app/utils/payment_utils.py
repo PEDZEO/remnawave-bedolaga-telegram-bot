@@ -147,7 +147,22 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             }
         )
 
-    if settings.is_kassa_ai_enabled():
+    if settings.is_kassa_ai_sbp_enabled():
+        name = settings.get_kassa_ai_sbp_display_name()
+        methods.append({'id': 'kassa_ai_sbp', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_kassa_ai_sbp'})
+    if settings.is_kassa_ai_card_enabled():
+        name = settings.get_kassa_ai_card_display_name()
+        methods.append({'id': 'kassa_ai_card', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_kassa_ai_card'})
+    if settings.is_kassa_ai_sberpay_enabled():
+        name = settings.get_kassa_ai_sberpay_display_name()
+        methods.append({'id': 'kassa_ai_sberpay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_kassa_ai_sberpay'})
+
+    if (
+        settings.is_kassa_ai_enabled()
+        and not settings.is_kassa_ai_sbp_enabled()
+        and not settings.is_kassa_ai_card_enabled()
+        and not settings.is_kassa_ai_sberpay_enabled()
+    ):
         kassa_ai_name = settings.get_kassa_ai_display_name()
         methods.append(
             {
@@ -158,6 +173,99 @@ def get_available_payment_methods() -> list[dict[str, str]]:
                 'callback': 'topup_kassa_ai',
             }
         )
+
+    if settings.is_riopay_enabled():
+        name = settings.get_riopay_display_name()
+        methods.append({'id': 'riopay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_riopay'})
+
+    if settings.is_severpay_enabled():
+        name = settings.get_severpay_display_name()
+        methods.append({'id': 'severpay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_severpay'})
+
+    if settings.is_paypear_enabled():
+        name = settings.get_paypear_display_name()
+        methods.append({'id': 'paypear', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_paypear'})
+
+    if settings.is_rollypay_enabled():
+        name = settings.get_rollypay_display_name()
+        methods.append({'id': 'rollypay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_rollypay'})
+
+    if settings.is_overpay_enabled():
+        name = settings.get_overpay_display_name()
+        methods.append({'id': 'overpay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_overpay'})
+
+    if settings.is_aurapay_sbp_enabled():
+        name = settings.get_aurapay_sbp_display_name()
+        methods.append({'id': 'aurapay_sbp', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_aurapay_sbp'})
+    if settings.is_aurapay_card_enabled():
+        name = settings.get_aurapay_card_display_name()
+        methods.append({'id': 'aurapay_card', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_aurapay_card'})
+    if settings.is_aurapay_enabled() and not settings.is_aurapay_sbp_enabled() and not settings.is_aurapay_card_enabled():
+        name = settings.get_aurapay_display_name()
+        methods.append({'id': 'aurapay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_aurapay'})
+
+    if settings.is_etoplatezhi_sbp_enabled():
+        name = settings.get_etoplatezhi_sbp_display_name()
+        methods.append({'id': 'etoplatezhi_sbp', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_etoplatezhi_sbp'})
+    if settings.is_etoplatezhi_card_enabled():
+        name = settings.get_etoplatezhi_card_display_name()
+        methods.append({'id': 'etoplatezhi_card', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_etoplatezhi_card'})
+    if settings.is_etoplatezhi_enabled() and not settings.is_etoplatezhi_sbp_enabled() and not settings.is_etoplatezhi_card_enabled():
+        name = settings.get_etoplatezhi_display_name()
+        methods.append({'id': 'etoplatezhi', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_etoplatezhi'})
+
+    if settings.is_antilopay_sbp_enabled():
+        name = settings.get_antilopay_sbp_display_name()
+        methods.append({'id': 'antilopay_sbp', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_antilopay_sbp'})
+    if settings.is_antilopay_card_enabled():
+        name = settings.get_antilopay_card_display_name()
+        methods.append({'id': 'antilopay_card', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_antilopay_card'})
+    if settings.is_antilopay_sberpay_enabled():
+        name = settings.get_antilopay_sberpay_display_name()
+        methods.append({'id': 'antilopay_sberpay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_antilopay_sberpay'})
+    if (
+        settings.is_antilopay_enabled()
+        and not settings.is_antilopay_sbp_enabled()
+        and not settings.is_antilopay_card_enabled()
+        and not settings.is_antilopay_sberpay_enabled()
+    ):
+        name = settings.get_antilopay_display_name()
+        methods.append({'id': 'antilopay', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_antilopay'})
+
+    if settings.is_jupiter_sbp_enabled():
+        name = settings.get_jupiter_sbp_display_name()
+        methods.append({'id': 'jupiter_sbp', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_jupiter_sbp'})
+    if settings.is_jupiter_enabled() and not settings.is_jupiter_sbp_enabled():
+        name = settings.get_jupiter_display_name()
+        methods.append({'id': 'jupiter', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_jupiter'})
+
+    if settings.is_donut_card_enabled():
+        name = settings.get_donut_card_display_name()
+        methods.append({'id': 'donut_card', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_donut_card'})
+    if settings.is_donut_sbp_enabled():
+        name = settings.get_donut_sbp_display_name()
+        methods.append({'id': 'donut_sbp', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_donut_sbp'})
+    if settings.is_donut_sbp_qr_enabled():
+        name = settings.get_donut_sbp_qr_display_name()
+        methods.append({'id': 'donut_sbp_qr', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_donut_sbp_qr'})
+    if (
+        settings.is_donut_enabled()
+        and not settings.is_donut_card_enabled()
+        and not settings.is_donut_sbp_enabled()
+        and not settings.is_donut_sbp_qr_enabled()
+    ):
+        name = settings.get_donut_display_name()
+        methods.append({'id': 'donut', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_donut'})
+
+    if settings.is_lava_card_enabled():
+        name = settings.get_lava_card_display_name()
+        methods.append({'id': 'lava_card', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_lava_card'})
+    if settings.is_lava_sbp_enabled():
+        name = settings.get_lava_sbp_display_name()
+        methods.append({'id': 'lava_sbp', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_lava_sbp'})
+    if settings.is_lava_enabled() and not settings.is_lava_card_enabled() and not settings.is_lava_sbp_enabled():
+        name = settings.get_lava_display_name()
+        methods.append({'id': 'lava', 'name': name, 'icon': '*', 'description': f'via {name}', 'callback': 'topup_lava'})
 
     if settings.is_support_topup_enabled():
         methods.append(
@@ -276,6 +384,60 @@ def is_payment_method_available(method_id: str) -> bool:
         return settings.is_freekassa_enabled()
     if method_id == 'kassa_ai':
         return settings.is_kassa_ai_enabled()
+    if method_id == 'kassa_ai_sbp':
+        return settings.is_kassa_ai_sbp_enabled()
+    if method_id == 'kassa_ai_card':
+        return settings.is_kassa_ai_card_enabled()
+    if method_id == 'kassa_ai_sberpay':
+        return settings.is_kassa_ai_sberpay_enabled()
+    if method_id == 'riopay':
+        return settings.is_riopay_enabled()
+    if method_id == 'severpay':
+        return settings.is_severpay_enabled()
+    if method_id == 'paypear':
+        return settings.is_paypear_enabled()
+    if method_id == 'rollypay':
+        return settings.is_rollypay_enabled()
+    if method_id == 'overpay':
+        return settings.is_overpay_enabled()
+    if method_id == 'aurapay':
+        return settings.is_aurapay_enabled()
+    if method_id == 'aurapay_sbp':
+        return settings.is_aurapay_sbp_enabled()
+    if method_id == 'aurapay_card':
+        return settings.is_aurapay_card_enabled()
+    if method_id == 'etoplatezhi':
+        return settings.is_etoplatezhi_enabled()
+    if method_id == 'etoplatezhi_sbp':
+        return settings.is_etoplatezhi_sbp_enabled()
+    if method_id == 'etoplatezhi_card':
+        return settings.is_etoplatezhi_card_enabled()
+    if method_id == 'antilopay':
+        return settings.is_antilopay_enabled()
+    if method_id == 'antilopay_sbp':
+        return settings.is_antilopay_sbp_enabled()
+    if method_id == 'antilopay_card':
+        return settings.is_antilopay_card_enabled()
+    if method_id == 'antilopay_sberpay':
+        return settings.is_antilopay_sberpay_enabled()
+    if method_id == 'jupiter':
+        return settings.is_jupiter_enabled()
+    if method_id == 'jupiter_sbp':
+        return settings.is_jupiter_sbp_enabled()
+    if method_id == 'donut':
+        return settings.is_donut_enabled()
+    if method_id == 'donut_card':
+        return settings.is_donut_card_enabled()
+    if method_id == 'donut_sbp':
+        return settings.is_donut_sbp_enabled()
+    if method_id == 'donut_sbp_qr':
+        return settings.is_donut_sbp_qr_enabled()
+    if method_id == 'lava':
+        return settings.is_lava_enabled()
+    if method_id == 'lava_card':
+        return settings.is_lava_card_enabled()
+    if method_id == 'lava_sbp':
+        return settings.is_lava_sbp_enabled()
     if method_id == 'support':
         return settings.is_support_topup_enabled()
     return False
@@ -298,6 +460,33 @@ def get_payment_method_status() -> dict[str, bool]:
         'cloudpayments': settings.is_cloudpayments_enabled(),
         'freekassa': settings.is_freekassa_enabled(),
         'kassa_ai': settings.is_kassa_ai_enabled(),
+        'kassa_ai_sbp': settings.is_kassa_ai_sbp_enabled(),
+        'kassa_ai_card': settings.is_kassa_ai_card_enabled(),
+        'kassa_ai_sberpay': settings.is_kassa_ai_sberpay_enabled(),
+        'riopay': settings.is_riopay_enabled(),
+        'severpay': settings.is_severpay_enabled(),
+        'paypear': settings.is_paypear_enabled(),
+        'rollypay': settings.is_rollypay_enabled(),
+        'overpay': settings.is_overpay_enabled(),
+        'aurapay': settings.is_aurapay_enabled(),
+        'aurapay_sbp': settings.is_aurapay_sbp_enabled(),
+        'aurapay_card': settings.is_aurapay_card_enabled(),
+        'etoplatezhi': settings.is_etoplatezhi_enabled(),
+        'etoplatezhi_sbp': settings.is_etoplatezhi_sbp_enabled(),
+        'etoplatezhi_card': settings.is_etoplatezhi_card_enabled(),
+        'antilopay': settings.is_antilopay_enabled(),
+        'antilopay_sbp': settings.is_antilopay_sbp_enabled(),
+        'antilopay_card': settings.is_antilopay_card_enabled(),
+        'antilopay_sberpay': settings.is_antilopay_sberpay_enabled(),
+        'jupiter': settings.is_jupiter_enabled(),
+        'jupiter_sbp': settings.is_jupiter_sbp_enabled(),
+        'donut': settings.is_donut_enabled(),
+        'donut_card': settings.is_donut_card_enabled(),
+        'donut_sbp': settings.is_donut_sbp_enabled(),
+        'donut_sbp_qr': settings.is_donut_sbp_qr_enabled(),
+        'lava': settings.is_lava_enabled(),
+        'lava_card': settings.is_lava_card_enabled(),
+        'lava_sbp': settings.is_lava_sbp_enabled(),
         'support': settings.is_support_topup_enabled(),
     }
 
@@ -330,5 +519,27 @@ def get_enabled_payment_methods_count() -> int:
     if settings.is_freekassa_enabled():
         count += 1
     if settings.is_kassa_ai_enabled():
+        count += 1
+    if settings.is_riopay_enabled():
+        count += 1
+    if settings.is_severpay_enabled():
+        count += 1
+    if settings.is_paypear_enabled():
+        count += 1
+    if settings.is_rollypay_enabled():
+        count += 1
+    if settings.is_overpay_enabled():
+        count += 1
+    if settings.is_aurapay_enabled():
+        count += 1
+    if settings.is_etoplatezhi_enabled():
+        count += 1
+    if settings.is_antilopay_enabled():
+        count += 1
+    if settings.is_jupiter_enabled():
+        count += 1
+    if settings.is_donut_enabled():
+        count += 1
+    if settings.is_lava_enabled():
         count += 1
     return count

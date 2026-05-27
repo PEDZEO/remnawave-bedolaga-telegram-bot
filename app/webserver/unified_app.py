@@ -6,7 +6,7 @@ from pathlib import Path
 import structlog
 from aiogram import Bot, Dispatcher
 from fastapi import FastAPI, status
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.cabinet.routes import router as cabinet_router
@@ -182,6 +182,17 @@ def create_unified_app(
 
     miniapp_mounted, miniapp_path = _mount_miniapp_static(app)
     _mount_uploads_static(app)
+
+    @app.get('/apay-meta-file.txt', include_in_schema=False)
+    async def apay_meta_file() -> Response:  # pragma: no cover - thin static endpoint
+        token = (settings.ANTILOPAY_APAY_VERIFICATION_TAG or '').strip()
+        if not token:
+            return Response(status_code=status.HTTP_404_NOT_FOUND)
+        return PlainTextResponse(
+            content=token,
+            media_type='text/plain; charset=utf-8',
+            headers={'Cache-Control': 'no-store'},
+        )
 
     unified_health_path = '/health/unified' if settings.is_web_api_enabled() else '/health'
 

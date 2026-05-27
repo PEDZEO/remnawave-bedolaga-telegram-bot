@@ -1620,12 +1620,359 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
-    if settings.is_kassa_ai_enabled():
+    if settings.is_kassa_ai_sbp_enabled():
+        sbp_name = settings.get_kassa_ai_sbp_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_KASSA_AI_SBP', f'📱 {sbp_name}'),
+                    callback_data=_build_callback('kassa_ai_sbp'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_kassa_ai_card_enabled():
+        card_name = settings.get_kassa_ai_card_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_KASSA_AI_CARD', f'💳 {card_name}'),
+                    callback_data=_build_callback('kassa_ai_card'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_kassa_ai_sberpay_enabled():
+        sberpay_name = settings.get_kassa_ai_sberpay_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_KASSA_AI_SBERPAY', f'💳 {sberpay_name}'),
+                    callback_data=_build_callback('kassa_ai_sberpay'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if (
+        settings.is_kassa_ai_enabled()
+        and not settings.is_kassa_ai_sbp_enabled()
+        and not settings.is_kassa_ai_card_enabled()
+        and not settings.is_kassa_ai_sberpay_enabled()
+    ):
         kassa_ai_name = settings.get_kassa_ai_display_name()
         keyboard.append(
             [
                 InlineKeyboardButton(
                     text=texts.t('PAYMENT_KASSA_AI', f'💳 {kassa_ai_name}'), callback_data=_build_callback('kassa_ai')
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_riopay_enabled():
+        riopay_name = settings.get_riopay_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_RIOPAY', f'💳 Банковская карта ({riopay_name})'),
+                    callback_data=_build_callback('riopay'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_severpay_enabled():
+        severpay_name = settings.get_severpay_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_SEVERPAY', f'💳 Банковская карта ({severpay_name})'),
+                    callback_data=_build_callback('severpay'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_paypear_enabled():
+        paypear_name = settings.get_paypear_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_PAYPEAR', f'💳 Оплата ({paypear_name})'),
+                    callback_data=_build_callback('paypear'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_rollypay_enabled():
+        rollypay_name = settings.get_rollypay_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ROLLYPAY', f'💳 {rollypay_name}'),
+                    callback_data=_build_callback('rollypay'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_overpay_enabled():
+        overpay_name = settings.get_overpay_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_OVERPAY', f'💳 {overpay_name}'),
+                    callback_data=_build_callback('overpay'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_aurapay_sbp_enabled():
+        sbp_name = settings.get_aurapay_sbp_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_AURAPAY_SBP', f'📱 {sbp_name}'),
+                    callback_data=_build_callback('aurapay_sbp'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_aurapay_card_enabled():
+        card_name = settings.get_aurapay_card_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_AURAPAY_CARD', f'💳 {card_name}'),
+                    callback_data=_build_callback('aurapay_card'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if (
+        settings.is_aurapay_enabled()
+        and not settings.is_aurapay_sbp_enabled()
+        and not settings.is_aurapay_card_enabled()
+    ):
+        aurapay_name = settings.get_aurapay_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_AURAPAY', f'💳 {aurapay_name}'),
+                    callback_data=_build_callback('aurapay'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_etoplatezhi_sbp_enabled():
+        sbp_name = settings.get_etoplatezhi_sbp_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ETOPLATEZHI_SBP', f'📱 {sbp_name}'),
+                    callback_data=_build_callback('etoplatezhi_sbp'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_etoplatezhi_card_enabled():
+        card_name = settings.get_etoplatezhi_card_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ETOPLATEZHI_CARD', f'💳 {card_name}'),
+                    callback_data=_build_callback('etoplatezhi_card'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if (
+        settings.is_etoplatezhi_enabled()
+        and not settings.is_etoplatezhi_sbp_enabled()
+        and not settings.is_etoplatezhi_card_enabled()
+    ):
+        etoplatezhi_name = settings.get_etoplatezhi_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ETOPLATEZHI', f'💳 {etoplatezhi_name}'),
+                    callback_data=_build_callback('etoplatezhi'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_antilopay_sbp_enabled():
+        sbp_name = settings.get_antilopay_sbp_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ANTILOPAY_SBP', f'📱 {sbp_name}'),
+                    callback_data=_build_callback('antilopay_sbp'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_antilopay_card_enabled():
+        card_name = settings.get_antilopay_card_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ANTILOPAY_CARD', f'💳 {card_name}'),
+                    callback_data=_build_callback('antilopay_card'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_antilopay_sberpay_enabled():
+        sberpay_name = settings.get_antilopay_sberpay_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ANTILOPAY_SBERPAY', f'💳 {sberpay_name}'),
+                    callback_data=_build_callback('antilopay_sberpay'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if (
+        settings.is_antilopay_enabled()
+        and not settings.is_antilopay_sbp_enabled()
+        and not settings.is_antilopay_card_enabled()
+        and not settings.is_antilopay_sberpay_enabled()
+    ):
+        antilopay_name = settings.get_antilopay_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ANTILOPAY', f'💳 {antilopay_name}'),
+                    callback_data=_build_callback('antilopay'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_jupiter_sbp_enabled():
+        jupiter_sbp_name = settings.get_jupiter_sbp_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_JUPITER_SBP', f'📱 {jupiter_sbp_name}'),
+                    callback_data=_build_callback('jupiter_sbp'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_jupiter_enabled() and not settings.is_jupiter_sbp_enabled():
+        jupiter_name = settings.get_jupiter_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_JUPITER', f'🪐 {jupiter_name}'),
+                    callback_data=_build_callback('jupiter'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_donut_card_enabled():
+        donut_card_name = settings.get_donut_card_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_DONUT_CARD', f'💳 {donut_card_name}'),
+                    callback_data=_build_callback('donut_card'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_donut_sbp_enabled():
+        donut_sbp_name = settings.get_donut_sbp_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_DONUT_SBP', f'📱 {donut_sbp_name}'),
+                    callback_data=_build_callback('donut_sbp'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_donut_sbp_qr_enabled():
+        donut_qr_name = settings.get_donut_sbp_qr_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_DONUT_SBP_QR', f'🏦 {donut_qr_name}'),
+                    callback_data=_build_callback('donut_sbp_qr'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if (
+        settings.is_donut_enabled()
+        and not settings.is_donut_card_enabled()
+        and not settings.is_donut_sbp_enabled()
+        and not settings.is_donut_sbp_qr_enabled()
+    ):
+        donut_name = settings.get_donut_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_DONUT', f'🍩 {donut_name}'),
+                    callback_data=_build_callback('donut'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_lava_card_enabled():
+        lava_card_name = settings.get_lava_card_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_LAVA_CARD', f'💳 {lava_card_name}'),
+                    callback_data=_build_callback('lava_card'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_lava_sbp_enabled():
+        lava_sbp_name = settings.get_lava_sbp_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_LAVA_SBP', f'📱 {lava_sbp_name}'),
+                    callback_data=_build_callback('lava_sbp'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_lava_enabled() and not settings.is_lava_card_enabled() and not settings.is_lava_sbp_enabled():
+        lava_name = settings.get_lava_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_LAVA', f'🌋 {lava_name}'),
+                    callback_data=_build_callback('lava'),
                 )
             ]
         )

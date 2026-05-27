@@ -20,6 +20,12 @@ _ip_fetch_lock = asyncio.Lock()
 
 API_BASE_URL = 'https://api.fk.life/v1'
 
+KASSA_AI_SUB_METHODS = {
+    'kassa_ai_sbp': {'payment_system_id': 44},
+    'kassa_ai_card': {'payment_system_id': 36},
+    'kassa_ai_sberpay': {'payment_system_id': 43},
+}
+
 # Сервисы для определения публичного IP
 IP_SERVICES = [
     'https://api.ipify.org',

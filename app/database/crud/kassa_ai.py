@@ -16,7 +16,7 @@ logger = structlog.get_logger(__name__)
 async def create_kassa_ai_payment(
     db: AsyncSession,
     *,
-    user_id: int,
+    user_id: int | None,
     order_id: str,
     amount_kopeks: int,
     currency: str = 'RUB',
@@ -24,7 +24,7 @@ async def create_kassa_ai_payment(
     payment_url: str | None = None,
     payment_system_id: int | None = None,
     expires_at: datetime | None = None,
-    metadata_json: str | None = None,
+    metadata_json: dict | str | None = None,
 ) -> KassaAiPayment:
     """Создает запись о платеже KassaAI."""
     payment = KassaAiPayment(
@@ -36,7 +36,7 @@ async def create_kassa_ai_payment(
         payment_url=payment_url,
         payment_system_id=payment_system_id,
         expires_at=expires_at,
-        metadata_json=json.loads(metadata_json) if metadata_json else None,
+        metadata_json=json.loads(metadata_json) if isinstance(metadata_json, str) else metadata_json,
         status='pending',
         is_paid=False,
     )

@@ -55,6 +55,7 @@ from .polls import router as polls_router
 from .promo import router as promo_router
 from .promocode import router as promocode_router
 from .referral import router as referral_router
+from .site_verification import router as site_verification_router
 from .subscription import router as subscription_router
 from .ticket_notifications import (
     admin_router as admin_ticket_notifications_router,
@@ -68,6 +69,9 @@ from .withdrawal import router as withdrawal_router
 
 # Main cabinet router
 router = APIRouter(prefix='/cabinet', tags=['Cabinet'])
+
+# Public endpoints used by payment-provider crawlers.
+router.include_router(site_verification_router)
 
 # Include all sub-routers
 router.include_router(auth_router)

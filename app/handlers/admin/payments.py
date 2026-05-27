@@ -18,6 +18,7 @@ from app.services.payment_verification_service import (
     PendingPayment,
     get_payment_record,
     list_recent_pending_payments,
+    method_display_name,
     run_manual_check,
 )
 from app.utils.decorators import admin_required, error_handler
@@ -30,27 +31,7 @@ PAGE_SIZE = 6
 
 
 def _method_display(method: PaymentMethod) -> str:
-    if method == PaymentMethod.MULENPAY:
-        return settings.get_mulenpay_display_name()
-    if method == PaymentMethod.PAL24:
-        return 'PayPalych'
-    if method == PaymentMethod.WATA:
-        return 'WATA'
-    if method == PaymentMethod.HELEKET:
-        return 'Heleket'
-    if method == PaymentMethod.YOOKASSA:
-        return 'YooKassa'
-    if method == PaymentMethod.PLATEGA:
-        return settings.get_platega_display_name()
-    if method == PaymentMethod.CRYPTOBOT:
-        return 'CryptoBot'
-    if method == PaymentMethod.TELEGRAM_STARS:
-        return 'Telegram Stars'
-    if method == PaymentMethod.KASSA_AI:
-        return settings.get_kassa_ai_display_name()
-    if method == PaymentMethod.FREEKASSA:
-        return settings.get_freekassa_display_name()
-    return method.value
+    return method_display_name(method)
 
 
 def _status_info(
@@ -164,6 +145,34 @@ def _status_info(
         }
         return mapping.get(status, ('❓', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', '❓ Unknown')))
 
+    if record.method in {
+        PaymentMethod.RIOPAY,
+        PaymentMethod.SEVERPAY,
+        PaymentMethod.PAYPEAR,
+        PaymentMethod.ROLLYPAY,
+        PaymentMethod.OVERPAY,
+        PaymentMethod.AURAPAY,
+        PaymentMethod.ETOPLATEZHI,
+        PaymentMethod.ANTILOPAY,
+        PaymentMethod.JUPITER,
+        PaymentMethod.DONUT,
+        PaymentMethod.LAVA,
+    }:
+        if status in {'pending', 'created', 'new', 'preflight', 'authorized', 'awaiting 3ds result'}:
+            return '...', texts.t('ADMIN_PAYMENT_STATUS_PENDING', 'Pending')
+        if status in {'process', 'processing'}:
+            return '...', texts.t('ADMIN_PAYMENT_STATUS_PROCESSING', 'Processing')
+        if status in {'success', 'paid', 'completed', 'charged'}:
+            return 'OK', texts.t('ADMIN_PAYMENT_STATUS_PAID', 'Paid')
+        if status == 'expired':
+            return 'EX', texts.t('ADMIN_PAYMENT_STATUS_EXPIRED', 'Expired')
+        if status in {'canceled', 'cancelled', 'cancel'}:
+            return 'X', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', 'Cancelled')
+        if status in {'failed', 'fail', 'error', 'declined', 'decline'}:
+            return 'X', texts.t('ADMIN_PAYMENT_STATUS_FAILED', 'Failed')
+        if status == 'refunded':
+            return 'X', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', 'Cancelled')
+        return '?', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', 'Unknown')
     return '❓', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', '❓ Unknown')
 
 
@@ -191,6 +200,15 @@ def _is_checkable(record: PendingPayment) -> bool:
         return status in {'pending', 'created', ''}
     if record.method == PaymentMethod.KASSA_AI:
         return status in {'pending', 'created', 'processing', ''}
+    if record.method in {
+        PaymentMethod.RIOPAY,
+        PaymentMethod.SEVERPAY,
+        PaymentMethod.PAYPEAR,
+        PaymentMethod.ROLLYPAY,
+        PaymentMethod.OVERPAY,
+        PaymentMethod.AURAPAY,
+    }:
+        return status in {'pending', 'created', 'new', 'process', 'processing', 'preflight', 'authorized', ''}
     return False
 
 

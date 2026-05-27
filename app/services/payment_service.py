@@ -31,9 +31,20 @@ from app.services.payment import (
     WataPaymentMixin,
     YooKassaPaymentMixin,
 )
+from app.services.payment.antilopay import AntilopayPaymentMixin
+from app.services.payment.aurapay import AuraPayPaymentMixin
 from app.services.payment.cloudpayments import CloudPaymentsPaymentMixin
+from app.services.payment.donut import DonutPaymentMixin
+from app.services.payment.etoplatezhi import EtoplatezhiPaymentMixin
 from app.services.payment.freekassa import FreekassaPaymentMixin
+from app.services.payment.jupiter import JupiterPaymentMixin
 from app.services.payment.kassa_ai import KassaAiPaymentMixin
+from app.services.payment.lava import LavaPaymentMixin
+from app.services.payment.overpay import OverpayPaymentMixin
+from app.services.payment.paypear import PayPearPaymentMixin
+from app.services.payment.riopay import RioPayPaymentMixin
+from app.services.payment.rollypay import RollyPayPaymentMixin
+from app.services.payment.severpay import SeverPayPaymentMixin
 from app.services.platega_service import PlategaService
 from app.services.wata_service import WataService
 from app.services.yookassa_service import YooKassaService
@@ -147,6 +158,17 @@ class PaymentService(
     CloudPaymentsPaymentMixin,
     FreekassaPaymentMixin,
     KassaAiPaymentMixin,
+    RioPayPaymentMixin,
+    SeverPayPaymentMixin,
+    PayPearPaymentMixin,
+    RollyPayPaymentMixin,
+    OverpayPaymentMixin,
+    AuraPayPaymentMixin,
+    EtoplatezhiPaymentMixin,
+    AntilopayPaymentMixin,
+    JupiterPaymentMixin,
+    DonutPaymentMixin,
+    LavaPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
 
@@ -495,23 +517,272 @@ class PaymentService(
             return None
 
         # --- KassaAI ----------------------------------------------------------
-        if payment_method == 'kassa_ai':
+        if payment_method in ('kassa_ai', 'kassa_ai_sbp', 'kassa_ai_card', 'kassa_ai_sberpay'):
             if not settings.is_kassa_ai_enabled():
                 logger.warning('KassaAI is not enabled, cannot create guest payment')
                 return None
+
+            from app.services.kassa_ai_service import KASSA_AI_SUB_METHODS
+
+            sub = KASSA_AI_SUB_METHODS.get(payment_method)
+            ps_id = sub['payment_system_id'] if sub else None
 
             result = await self.create_kassa_ai_payment(
                 db=db,
                 user_id=None,
                 amount_kopeks=amount_kopeks,
                 description=description,
+                payment_system_id=ps_id,
             )
             if result:
                 await _patch_guest_metadata(result['local_payment_id'], 'kassa_ai')
                 return {
                     'payment_url': result.get('payment_url'),
                     'payment_id': result.get('order_id'),
-                    'provider': 'kassa_ai',
+                    'provider': payment_method,
+                }
+            return None
+
+        # --- RioPay -----------------------------------------------------------
+        if payment_method == 'riopay':
+            if not settings.is_riopay_enabled():
+                logger.warning('RioPay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_riopay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                success_url=return_url,
+                fail_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'riopay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('riopay_order_id') or result.get('order_id'),
+                    'provider': 'riopay',
+                }
+            return None
+
+        # --- SeverPay ---------------------------------------------------------
+        if payment_method == 'severpay':
+            if not settings.is_severpay_enabled():
+                logger.warning('SeverPay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_severpay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'severpay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('severpay_id') or result.get('order_id'),
+                    'provider': 'severpay',
+                }
+            return None
+
+        # --- PayPear ----------------------------------------------------------
+        if payment_method == 'paypear':
+            if not settings.is_paypear_enabled():
+                logger.warning('PayPear is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_paypear_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'paypear')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('paypear_id') or result.get('order_id'),
+                    'provider': 'paypear',
+                }
+            return None
+
+        # --- RollyPay ---------------------------------------------------------
+        if payment_method == 'rollypay':
+            if not settings.is_rollypay_enabled():
+                logger.warning('RollyPay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_rollypay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'rollypay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('rollypay_payment_id') or result.get('order_id'),
+                    'provider': 'rollypay',
+                }
+            return None
+
+        # --- Overpay ----------------------------------------------------------
+        if payment_method == 'overpay':
+            if not settings.is_overpay_enabled():
+                logger.warning('Overpay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_overpay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'overpay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('overpay_payment_id') or result.get('order_id'),
+                    'provider': 'overpay',
+                }
+            return None
+
+        # --- AuraPay ----------------------------------------------------------
+        if payment_method == 'aurapay':
+            if not settings.is_aurapay_enabled():
+                logger.warning('AuraPay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_aurapay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'aurapay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('aurapay_invoice_id') or result.get('order_id'),
+                    'provider': 'aurapay',
+                }
+            return None
+
+        # --- Etoplatezhi ------------------------------------------------------
+        if payment_method == 'etoplatezhi':
+            if not settings.is_etoplatezhi_enabled():
+                logger.warning('Etoplatezhi is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_etoplatezhi_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'etoplatezhi')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'etoplatezhi',
+                }
+            return None
+
+        # --- Antilopay --------------------------------------------------------
+        if payment_method == 'antilopay':
+            if not settings.is_antilopay_enabled():
+                logger.warning('Antilopay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_antilopay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'antilopay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'antilopay',
+                }
+            return None
+
+        # --- Jupiter ----------------------------------------------------------
+        if payment_method == 'jupiter':
+            if not settings.is_jupiter_enabled():
+                logger.warning('Jupiter is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_jupiter_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'jupiter')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'jupiter',
+                }
+            return None
+
+        # --- Donut ------------------------------------------------------------
+        if payment_method == 'donut':
+            if not settings.is_donut_enabled():
+                logger.warning('Donut is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_donut_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'donut')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'donut',
+                }
+            return None
+
+        # --- Lava -------------------------------------------------------------
+        if payment_method == 'lava':
+            if not settings.is_lava_enabled():
+                logger.warning('Lava is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_lava_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'lava')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'lava',
                 }
             return None
 

@@ -526,6 +526,199 @@ class Settings(BaseSettings):
     KASSA_AI_WEBHOOK_PORT: int = 8089
     # Способ оплаты: 44 = СБП (QR код), 36 = Карты РФ, 43 = SberPay
     KASSA_AI_PAYMENT_SYSTEM_ID: int = 44
+    # KassaAI sub-methods displayed as separate options/buttons
+    KASSA_AI_SBP_ENABLED: bool = False
+    KASSA_AI_SBP_DISPLAY_NAME: str = 'SBP (KassaAI)'
+    KASSA_AI_CARD_ENABLED: bool = False
+    KASSA_AI_CARD_DISPLAY_NAME: str = 'Card (KassaAI)'
+    KASSA_AI_SBERPAY_ENABLED: bool = False
+    KASSA_AI_SBERPAY_DISPLAY_NAME: str = 'SberPay (KassaAI)'
+    # RioPay (api.riopay.online) v2.0.1
+    RIOPAY_ENABLED: bool = False
+    RIOPAY_API_TOKEN: str | None = None  # x-api-token header
+    RIOPAY_WEBHOOK_SECRET: str | None = None  # HMAC-SHA512 ключ для вебхуков (по умолчанию = API_TOKEN)
+    RIOPAY_DISPLAY_NAME: str = 'RioPay'
+    RIOPAY_CURRENCY: str = 'RUB'
+    RIOPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    RIOPAY_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000₽
+    RIOPAY_WEBHOOK_PATH: str = '/riopay-webhook'
+    RIOPAY_SUCCESS_URL: str | None = None
+    RIOPAY_FAIL_URL: str | None = None
+
+    # SeverPay (severpay.io)
+    SEVERPAY_ENABLED: bool = False
+    SEVERPAY_MID: int | None = None  # Merchant ID
+    SEVERPAY_TOKEN: str | None = None  # Secret token for HMAC-SHA256
+    SEVERPAY_DISPLAY_NAME: str = 'SeverPay'
+    SEVERPAY_CURRENCY: str = 'RUB'
+    SEVERPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    SEVERPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    SEVERPAY_WEBHOOK_PATH: str = '/severpay-webhook'
+    SEVERPAY_RETURN_URL: str | None = None
+    SEVERPAY_LIFETIME: int = 1440  # minutes, 30-4320
+
+    # PayPear (paypear.ru)
+    PAYPEAR_ENABLED: bool = False
+    PAYPEAR_SHOP_ID: str | None = None
+    PAYPEAR_SECRET_KEY: str | None = None
+    PAYPEAR_DISPLAY_NAME: str = 'PayPear'
+    PAYPEAR_CURRENCY: str = 'RUB'
+    PAYPEAR_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    PAYPEAR_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    PAYPEAR_WEBHOOK_PATH: str = '/paypear-webhook'
+    PAYPEAR_RETURN_URL: str | None = None
+    PAYPEAR_PAYMENT_METHOD: str = 'sbp'  # bank_card, sbp, sberpay, tpay
+
+    # RollyPay (rollypay.io)
+    ROLLYPAY_ENABLED: bool = False
+    ROLLYPAY_API_KEY: str | None = None  # X-API-Key header
+    ROLLYPAY_SIGNING_SECRET: str | None = None  # HMAC webhook verification
+    ROLLYPAY_DISPLAY_NAME: str = 'RollyPay'
+    ROLLYPAY_CURRENCY: str = 'RUB'
+    ROLLYPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    ROLLYPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    ROLLYPAY_WEBHOOK_PATH: str = '/rollypay-webhook'
+    ROLLYPAY_RETURN_URL: str | None = None
+
+    # Overpay (pay.overpay.io)
+    OVERPAY_ENABLED: bool = False
+    OVERPAY_API_URL: str = 'https://api.overpay.io'
+    OVERPAY_USERNAME: str | None = None
+    OVERPAY_PASSWORD: str | None = None
+    OVERPAY_PROJECT_ID: str | None = None
+    OVERPAY_P12_PATH: str | None = None
+    OVERPAY_P12_PASSPHRASE: str | None = None
+    OVERPAY_DISPLAY_NAME: str = 'Overpay'
+    OVERPAY_CURRENCY: str = 'RUB'
+    OVERPAY_MIN_AMOUNT_KOPEKS: int = 10000
+    OVERPAY_MAX_AMOUNT_KOPEKS: int = 10000000
+    OVERPAY_WEBHOOK_PATH: str = '/overpay-webhook'
+    OVERPAY_RETURN_URL: str | None = None
+    OVERPAY_LIFETIME_MINUTES: int = 1440
+    OVERPAY_PAYMENT_METHODS: str = 'card,fps'
+
+    # AuraPay (aurapay.tech)
+    AURAPAY_ENABLED: bool = False
+    AURAPAY_API_KEY: str | None = None  # X-ApiKey header
+    AURAPAY_SHOP_ID: str | None = None  # X-ShopId header (UUID)
+    AURAPAY_SECRET_KEY: str | None = None  # Secret key #2 for webhook HMAC
+    AURAPAY_DISPLAY_NAME: str = 'AuraPay'
+    AURAPAY_CURRENCY: str = 'RUB'
+    AURAPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    AURAPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    AURAPAY_WEBHOOK_PATH: str = '/aurapay-webhook'
+    AURAPAY_RETURN_URL: str | None = None
+    AURAPAY_PAYMENT_LIFETIME_MINUTES: int = 60
+    AURAPAY_SBP_ENABLED: bool = False
+    AURAPAY_SBP_DISPLAY_NAME: str = 'СБП (AuraPay)'
+    AURAPAY_CARD_ENABLED: bool = False
+    AURAPAY_CARD_DISPLAY_NAME: str = 'Карта (AuraPay)'
+
+    # Antilopay (lk.antilopay.com)
+    ANTILOPAY_ENABLED: bool = False
+    ANTILOPAY_SECRET_ID: str | None = None
+    ANTILOPAY_PRIVATE_KEY: str | None = None
+    ANTILOPAY_PUBLIC_KEY: str | None = None
+    ANTILOPAY_PROJECT_ID: str | None = None
+    ANTILOPAY_DISPLAY_NAME: str = 'Antilopay'
+    ANTILOPAY_PRODUCT_NAME: str = 'VPN подписка'
+    ANTILOPAY_PRODUCT_TYPE: str = 'services'
+    ANTILOPAY_CURRENCY: str = 'RUB'
+    ANTILOPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    ANTILOPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    ANTILOPAY_WEBHOOK_PATH: str = '/antilopay-webhook'
+    ANTILOPAY_RETURN_URL: str | None = None
+    ANTILOPAY_PAYMENT_LIFETIME_MINUTES: int = 60
+    ANTILOPAY_SBP_ENABLED: bool = False
+    ANTILOPAY_SBP_DISPLAY_NAME: str = 'СБП (Antilopay)'
+    ANTILOPAY_CARD_ENABLED: bool = False
+    ANTILOPAY_CARD_DISPLAY_NAME: str = 'Карта (Antilopay)'
+    # Antilopay требует подтвердить владение сайтом одним из двух способов:
+    #   (1) META-тегом `<meta name="apay-tag" content="...">` в <head> главной страницы;
+    #   (2) файлом `apay-meta-file.txt` в корне сайта.
+    # Кабинет автоматически отрендерит meta-тег и отдаст текстовый файл, если
+    # сюда положить выданное Antilopay значение (см. lk.antilopay.com → Проект →
+    # Верификация). Пустая строка/None — фича отключена.
+    ANTILOPAY_APAY_VERIFICATION_TAG: str | None = None
+
+    ANTILOPAY_SBERPAY_ENABLED: bool = False
+    ANTILOPAY_SBERPAY_DISPLAY_NAME: str = 'SberPay (Antilopay)'
+
+    # Jupiter (FPGate P2P v2.1, app.juppiter.tech)
+    JUPITER_ENABLED: bool = False
+    JUPITER_TOKEN: str | None = None
+    JUPITER_SECRET: str | None = None
+    JUPITER_BASE_URL: str = 'https://app.juppiter.tech'
+    JUPITER_METHOD_ID: str | None = None
+    JUPITER_METHOD_DESCRIPTION: str = 'SBP'
+    JUPITER_DISPLAY_NAME: str = 'Jupiter'
+    JUPITER_CURRENCY: str = 'RUB'
+    JUPITER_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    JUPITER_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    JUPITER_WEBHOOK_PATH: str = '/jupiter-webhook'
+    JUPITER_RETURN_URL: str | None = None
+    JUPITER_PAYMENT_LIFETIME_MINUTES: int = 60
+    JUPITER_FALLBACK_EMAIL: str = 'user@vpn.bot'
+    JUPITER_FALLBACK_PHONE: str = '0000000000'
+    JUPITER_FALLBACK_NAME: str = 'User'
+    JUPITER_SBP_ENABLED: bool = False
+    JUPITER_SBP_DISPLAY_NAME: str = 'СБП (Jupiter)'
+
+    # Donut (Donut P2P, gw.donut.business)
+    DONUT_ENABLED: bool = False
+    DONUT_TOKEN: str | None = None
+    DONUT_SECRET: str | None = None
+    DONUT_BASE_URL: str = 'https://gw.donut.business'
+    DONUT_METHOD_ID: str | None = None
+    DONUT_DISPLAY_NAME: str = 'Donut'
+    DONUT_CURRENCY: str = 'RUB'
+    DONUT_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    DONUT_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    DONUT_WEBHOOK_PATH: str = '/donut-webhook'
+    DONUT_RETURN_URL: str | None = None
+    DONUT_PAYMENT_LIFETIME_MINUTES: int = 60
+    # Sub-методы Donut (description в PayIn запросе)
+    DONUT_CARD_ENABLED: bool = False
+    DONUT_CARD_DISPLAY_NAME: str = 'Карта (Donut)'
+    DONUT_SBP_ENABLED: bool = False
+    DONUT_SBP_DISPLAY_NAME: str = 'СБП (Donut)'
+    DONUT_SBP_QR_ENABLED: bool = False
+    DONUT_SBP_QR_DISPLAY_NAME: str = 'СБП QR (Donut)'
+
+    # Lava (Lava Business API, api.lava.ru)
+    LAVA_ENABLED: bool = False
+    LAVA_BASE_URL: str = 'https://api.lava.ru'
+    LAVA_SHOP_ID: str | None = None  # UUID проекта
+    LAVA_SECRET_KEY: str | None = None  # secret_key — для подписи запросов
+    LAVA_WEBHOOK_SECRET: str | None = None  # secret_key_2 — для проверки подписи webhook
+    LAVA_DISPLAY_NAME: str = 'Lava'
+    LAVA_CURRENCY: str = 'RUB'
+    LAVA_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    LAVA_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    LAVA_WEBHOOK_PATH: str = '/lava-webhook'
+    LAVA_RETURN_URL: str | None = None
+    LAVA_PAYMENT_LIFETIME_MINUTES: int = 60  # макс 7200 минут (5 дней)
+    # Sub-методы Lava (фильтр через includeService/excludeService на стороне Lava)
+    LAVA_CARD_ENABLED: bool = False
+    LAVA_CARD_DISPLAY_NAME: str = 'Карта (Lava)'
+    LAVA_SBP_ENABLED: bool = False
+    LAVA_SBP_DISPLAY_NAME: str = 'СБП (Lava)'
+
+    # Etoplatezhi (paymentpage.etoplatezhi.ru)
+    ETOPLATEZHI_ENABLED: bool = False
+    ETOPLATEZHI_PROJECT_ID: int | None = None
+    ETOPLATEZHI_SECRET_KEY: str | None = None
+    ETOPLATEZHI_DISPLAY_NAME: str = 'Etoplatezhi'
+    ETOPLATEZHI_CURRENCY: str = 'RUB'
+    ETOPLATEZHI_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    ETOPLATEZHI_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    ETOPLATEZHI_WEBHOOK_PATH: str = '/etoplatezhi-webhook'
+    ETOPLATEZHI_RETURN_URL: str | None = None
+    ETOPLATEZHI_PAYMENT_LIFETIME_MINUTES: int = 60
+    ETOPLATEZHI_SBP_ENABLED: bool = False
+    ETOPLATEZHI_SBP_DISPLAY_NAME: str = 'СБП (Etoplatezhi)'
+    ETOPLATEZHI_CARD_ENABLED: bool = False
+    ETOPLATEZHI_CARD_DISPLAY_NAME: str = 'Карта (Etoplatezhi)'
 
     MAIN_MENU_MODE: str = 'default'  # 'default' | 'cabinet'
     # Стиль кнопок Cabinet: primary (синий), success (зелёный), danger (красный), '' (по умолчанию для каждой секции)
@@ -1828,6 +2021,301 @@ class Settings(BaseSettings):
 
     def get_kassa_ai_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_display_name())
+
+    def is_riopay_enabled(self) -> bool:
+        return self.RIOPAY_ENABLED and self.RIOPAY_API_TOKEN is not None
+
+    def get_riopay_display_name(self) -> str:
+        name = (self.RIOPAY_DISPLAY_NAME or '').strip()
+        return name or 'RioPay'
+
+    def get_riopay_display_name_html(self) -> str:
+        return html.escape(self.get_riopay_display_name())
+
+    def is_severpay_enabled(self) -> bool:
+        return self.SEVERPAY_ENABLED and self.SEVERPAY_MID is not None and self.SEVERPAY_TOKEN is not None
+
+    def get_severpay_display_name(self) -> str:
+        name = (self.SEVERPAY_DISPLAY_NAME or '').strip()
+        return name if name else 'SeverPay'
+
+    def get_severpay_display_name_html(self) -> str:
+        return html.escape(self.get_severpay_display_name())
+
+    def is_paypear_enabled(self) -> bool:
+        return self.PAYPEAR_ENABLED and self.PAYPEAR_SHOP_ID is not None and self.PAYPEAR_SECRET_KEY is not None
+
+    def get_paypear_display_name(self) -> str:
+        name = (self.PAYPEAR_DISPLAY_NAME or '').strip()
+        return name if name else 'PayPear'
+
+    def get_paypear_display_name_html(self) -> str:
+        return html.escape(self.get_paypear_display_name())
+
+    def is_rollypay_enabled(self) -> bool:
+        return self.ROLLYPAY_ENABLED and self.ROLLYPAY_API_KEY is not None and self.ROLLYPAY_SIGNING_SECRET is not None
+
+    def get_rollypay_display_name(self) -> str:
+        name = (self.ROLLYPAY_DISPLAY_NAME or '').strip()
+        return name if name else 'RollyPay'
+
+    def get_rollypay_display_name_html(self) -> str:
+        return html.escape(self.get_rollypay_display_name())
+
+    def is_overpay_enabled(self) -> bool:
+        return (
+            self.OVERPAY_ENABLED
+            and self.OVERPAY_USERNAME is not None
+            and self.OVERPAY_PASSWORD is not None
+            and self.OVERPAY_PROJECT_ID is not None
+        )
+
+    def get_overpay_display_name(self) -> str:
+        name = (self.OVERPAY_DISPLAY_NAME or '').strip()
+        return name if name else 'Overpay'
+
+    def get_overpay_display_name_html(self) -> str:
+        return html.escape(self.get_overpay_display_name())
+
+    def is_aurapay_enabled(self) -> bool:
+        return (
+            self.AURAPAY_ENABLED
+            and self.AURAPAY_API_KEY is not None
+            and self.AURAPAY_SHOP_ID is not None
+            and self.AURAPAY_SECRET_KEY is not None
+        )
+
+    def get_aurapay_display_name(self) -> str:
+        name = (self.AURAPAY_DISPLAY_NAME or '').strip()
+        return name if name else 'AuraPay'
+
+    def get_aurapay_display_name_html(self) -> str:
+        return html.escape(self.get_aurapay_display_name())
+
+    def is_aurapay_sbp_enabled(self) -> bool:
+        return self.AURAPAY_SBP_ENABLED and self.is_aurapay_enabled()
+
+    def get_aurapay_sbp_display_name(self) -> str:
+        name = (self.AURAPAY_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (AuraPay)'
+
+    def get_aurapay_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_aurapay_sbp_display_name())
+
+    def is_aurapay_card_enabled(self) -> bool:
+        return self.AURAPAY_CARD_ENABLED and self.is_aurapay_enabled()
+
+    def get_aurapay_card_display_name(self) -> str:
+        name = (self.AURAPAY_CARD_DISPLAY_NAME or '').strip()
+        return name or 'Карта (AuraPay)'
+
+    def get_aurapay_card_display_name_html(self) -> str:
+        return html.escape(self.get_aurapay_card_display_name())
+
+    def is_antilopay_enabled(self) -> bool:
+        return (
+            self.ANTILOPAY_ENABLED
+            and self.ANTILOPAY_SECRET_ID is not None
+            and self.ANTILOPAY_PRIVATE_KEY is not None
+            and self.ANTILOPAY_PUBLIC_KEY is not None
+            and self.ANTILOPAY_PROJECT_ID is not None
+        )
+
+    def get_antilopay_display_name(self) -> str:
+        name = (self.ANTILOPAY_DISPLAY_NAME or '').strip()
+        return name if name else 'Antilopay'
+
+    def get_antilopay_display_name_html(self) -> str:
+        return html.escape(self.get_antilopay_display_name())
+
+    def is_antilopay_sbp_enabled(self) -> bool:
+        return self.ANTILOPAY_SBP_ENABLED and self.is_antilopay_enabled()
+
+    def get_antilopay_sbp_display_name(self) -> str:
+        name = (self.ANTILOPAY_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (Antilopay)'
+
+    def get_antilopay_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_antilopay_sbp_display_name())
+
+    def is_antilopay_card_enabled(self) -> bool:
+        return self.ANTILOPAY_CARD_ENABLED and self.is_antilopay_enabled()
+
+    def get_antilopay_card_display_name(self) -> str:
+        name = (self.ANTILOPAY_CARD_DISPLAY_NAME or '').strip()
+        return name or 'Карта (Antilopay)'
+
+    def get_antilopay_card_display_name_html(self) -> str:
+        return html.escape(self.get_antilopay_card_display_name())
+
+    def is_antilopay_sberpay_enabled(self) -> bool:
+        return self.ANTILOPAY_SBERPAY_ENABLED and self.is_antilopay_enabled()
+
+    def get_antilopay_sberpay_display_name(self) -> str:
+        name = (self.ANTILOPAY_SBERPAY_DISPLAY_NAME or '').strip()
+        return name or 'SberPay (Antilopay)'
+
+    def get_antilopay_sberpay_display_name_html(self) -> str:
+        return html.escape(self.get_antilopay_sberpay_display_name())
+
+    def is_jupiter_enabled(self) -> bool:
+        return self.JUPITER_ENABLED and self.JUPITER_TOKEN is not None and self.JUPITER_SECRET is not None
+
+    def get_jupiter_display_name(self) -> str:
+        name = (self.JUPITER_DISPLAY_NAME or '').strip()
+        return name if name else 'Jupiter'
+
+    def get_jupiter_display_name_html(self) -> str:
+        return html.escape(self.get_jupiter_display_name())
+
+    def is_jupiter_sbp_enabled(self) -> bool:
+        return self.JUPITER_SBP_ENABLED and self.is_jupiter_enabled()
+
+    def get_jupiter_sbp_display_name(self) -> str:
+        name = (self.JUPITER_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (Jupiter)'
+
+    def get_jupiter_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_jupiter_sbp_display_name())
+
+    def is_donut_enabled(self) -> bool:
+        return self.DONUT_ENABLED and self.DONUT_TOKEN is not None and self.DONUT_SECRET is not None
+
+    def get_donut_display_name(self) -> str:
+        name = (self.DONUT_DISPLAY_NAME or '').strip()
+        return name if name else 'Donut'
+
+    def get_donut_display_name_html(self) -> str:
+        return html.escape(self.get_donut_display_name())
+
+    def is_donut_card_enabled(self) -> bool:
+        return self.DONUT_CARD_ENABLED and self.is_donut_enabled()
+
+    def get_donut_card_display_name(self) -> str:
+        name = (self.DONUT_CARD_DISPLAY_NAME or '').strip()
+        return name or 'Карта (Donut)'
+
+    def get_donut_card_display_name_html(self) -> str:
+        return html.escape(self.get_donut_card_display_name())
+
+    def is_donut_sbp_enabled(self) -> bool:
+        return self.DONUT_SBP_ENABLED and self.is_donut_enabled()
+
+    def get_donut_sbp_display_name(self) -> str:
+        name = (self.DONUT_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (Donut)'
+
+    def get_donut_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_donut_sbp_display_name())
+
+    def is_donut_sbp_qr_enabled(self) -> bool:
+        return self.DONUT_SBP_QR_ENABLED and self.is_donut_enabled()
+
+    def get_donut_sbp_qr_display_name(self) -> str:
+        name = (self.DONUT_SBP_QR_DISPLAY_NAME or '').strip()
+        return name or 'СБП QR (Donut)'
+
+    def get_donut_sbp_qr_display_name_html(self) -> str:
+        return html.escape(self.get_donut_sbp_qr_display_name())
+
+    def is_lava_enabled(self) -> bool:
+        return (
+            self.LAVA_ENABLED
+            and self.LAVA_SHOP_ID is not None
+            and self.LAVA_SECRET_KEY is not None
+            and self.LAVA_WEBHOOK_SECRET is not None
+        )
+
+    def get_lava_display_name(self) -> str:
+        name = (self.LAVA_DISPLAY_NAME or '').strip()
+        return name if name else 'Lava'
+
+    def get_lava_display_name_html(self) -> str:
+        return html.escape(self.get_lava_display_name())
+
+    def is_lava_card_enabled(self) -> bool:
+        return self.LAVA_CARD_ENABLED and self.is_lava_enabled()
+
+    def get_lava_card_display_name(self) -> str:
+        name = (self.LAVA_CARD_DISPLAY_NAME or '').strip()
+        return name or 'Карта (Lava)'
+
+    def get_lava_card_display_name_html(self) -> str:
+        return html.escape(self.get_lava_card_display_name())
+
+    def is_lava_sbp_enabled(self) -> bool:
+        return self.LAVA_SBP_ENABLED and self.is_lava_enabled()
+
+    def get_lava_sbp_display_name(self) -> str:
+        name = (self.LAVA_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (Lava)'
+
+    def get_lava_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_lava_sbp_display_name())
+
+    def is_etoplatezhi_enabled(self) -> bool:
+        return (
+            self.ETOPLATEZHI_ENABLED
+            and self.ETOPLATEZHI_PROJECT_ID is not None
+            and self.ETOPLATEZHI_SECRET_KEY is not None
+        )
+
+    def get_etoplatezhi_display_name(self) -> str:
+        name = (self.ETOPLATEZHI_DISPLAY_NAME or '').strip()
+        return name if name else 'Etoplatezhi'
+
+    def get_etoplatezhi_display_name_html(self) -> str:
+        return html.escape(self.get_etoplatezhi_display_name())
+
+    def is_etoplatezhi_sbp_enabled(self) -> bool:
+        return self.ETOPLATEZHI_SBP_ENABLED and self.is_etoplatezhi_enabled()
+
+    def get_etoplatezhi_sbp_display_name(self) -> str:
+        name = (self.ETOPLATEZHI_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (Etoplatezhi)'
+
+    def get_etoplatezhi_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_etoplatezhi_sbp_display_name())
+
+    def is_etoplatezhi_card_enabled(self) -> bool:
+        return self.ETOPLATEZHI_CARD_ENABLED and self.is_etoplatezhi_enabled()
+
+    def get_etoplatezhi_card_display_name(self) -> str:
+        name = (self.ETOPLATEZHI_CARD_DISPLAY_NAME or '').strip()
+        return name or 'Карта (Etoplatezhi)'
+
+    def get_etoplatezhi_card_display_name_html(self) -> str:
+        return html.escape(self.get_etoplatezhi_card_display_name())
+
+    def is_kassa_ai_sbp_enabled(self) -> bool:
+        return self.KASSA_AI_SBP_ENABLED and self.is_kassa_ai_enabled()
+
+    def get_kassa_ai_sbp_display_name(self) -> str:
+        name = (self.KASSA_AI_SBP_DISPLAY_NAME or '').strip()
+        return name if name else 'СБП (KassaAI)'
+
+    def get_kassa_ai_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_kassa_ai_sbp_display_name())
+
+    def is_kassa_ai_card_enabled(self) -> bool:
+        return self.KASSA_AI_CARD_ENABLED and self.is_kassa_ai_enabled()
+
+    def get_kassa_ai_card_display_name(self) -> str:
+        name = (self.KASSA_AI_CARD_DISPLAY_NAME or '').strip()
+        return name if name else 'Карта (KassaAI)'
+
+    def get_kassa_ai_card_display_name_html(self) -> str:
+        return html.escape(self.get_kassa_ai_card_display_name())
+
+    def is_kassa_ai_sberpay_enabled(self) -> bool:
+        return self.KASSA_AI_SBERPAY_ENABLED and self.is_kassa_ai_enabled()
+
+    def get_kassa_ai_sberpay_display_name(self) -> str:
+        name = (self.KASSA_AI_SBERPAY_DISPLAY_NAME or '').strip()
+        return name if name else 'SberPay (KassaAI)'
+
+    def get_kassa_ai_sberpay_display_name_html(self) -> str:
+        return html.escape(self.get_kassa_ai_sberpay_display_name())
 
     def is_payment_verification_auto_check_enabled(self) -> bool:
         return self.PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from importlib import import_module
@@ -25,11 +24,12 @@ class KassaAiPaymentMixin:
         self,
         db: AsyncSession,
         *,
-        user_id: int,
+        user_id: int | None,
         amount_kopeks: int,
         description: str = 'Пополнение баланса',
         email: str | None = None,
         language: str = 'ru',
+        payment_system_id: int | None = None,
     ) -> dict[str, Any] | None:
         """
         Создает платеж KassaAI.
@@ -68,8 +68,8 @@ class KassaAiPaymentMixin:
 
         # Получаем telegram_id пользователя для order_id
         payment_module = import_module('app.services.payment_service')
-        user = await payment_module.get_user_by_id(db, user_id)
-        tg_id = user.telegram_id if user else user_id
+        user = await payment_module.get_user_by_id(db, user_id) if user_id is not None else None
+        tg_id = user.telegram_id if user else (user_id or 'guest')
 
         # Генерируем уникальный order_id с telegram_id для удобного поиска
         order_id = f'k{tg_id}_{uuid.uuid4().hex[:6]}'
@@ -90,12 +90,16 @@ class KassaAiPaymentMixin:
 
         try:
             # Используем API для создания заказа
+            target_email = email or (f'{user.telegram_id}@telegram.org' if user and user.telegram_id else None)
+
             result = await kassa_ai_service.create_order(
                 order_id=order_id,
                 amount=amount_rubles,
                 currency=currency,
-                email=email,
-                payment_system_id=settings.KASSA_AI_PAYMENT_SYSTEM_ID,
+                email=target_email,
+                payment_system_id=payment_system_id
+                if payment_system_id is not None
+                else settings.KASSA_AI_PAYMENT_SYSTEM_ID,
             )
 
             payment_url = result.get('location')
@@ -117,9 +121,11 @@ class KassaAiPaymentMixin:
                 currency=currency,
                 description=description,
                 payment_url=payment_url,
-                payment_system_id=settings.KASSA_AI_PAYMENT_SYSTEM_ID,
+                payment_system_id=payment_system_id
+                if payment_system_id is not None
+                else settings.KASSA_AI_PAYMENT_SYSTEM_ID,
                 expires_at=expires_at,
-                metadata_json=json.dumps(metadata, ensure_ascii=False),
+                metadata_json=metadata,
             )
 
             logger.info(

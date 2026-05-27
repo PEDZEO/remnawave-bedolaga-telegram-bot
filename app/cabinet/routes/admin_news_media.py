@@ -6,7 +6,7 @@ import asyncio
 import re
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, status
 
 from app.config import settings
 from app.database.models import User
@@ -131,7 +131,7 @@ async def upload_media(
 async def delete_media(
     filename: str,
     admin: User = Depends(require_permission('news:delete')),
-) -> None:
+) -> Response:
     """Delete a previously uploaded media file."""
     if not _SAFE_FILENAME_RE.match(filename):
         raise HTTPException(
@@ -149,3 +149,4 @@ async def delete_media(
         )
 
     logger.info('Media deleted', filename=filename, admin_id=admin.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

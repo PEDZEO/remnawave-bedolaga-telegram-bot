@@ -134,7 +134,119 @@ def _get_method_defaults() -> dict:
             'is_configured': settings.is_kassa_ai_enabled(),
             'default_min': settings.KASSA_AI_MIN_AMOUNT_KOPEKS,
             'default_max': settings.KASSA_AI_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'sbp', 'name': 'СБП'},
+                {'id': 'card', 'name': 'Карта'},
+                {'id': 'sberpay', 'name': 'SberPay'},
+            ],
+        },
+        'riopay': {
+            'default_display_name': settings.get_riopay_display_name(),
+            'is_configured': settings.is_riopay_enabled(),
+            'default_min': settings.RIOPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.RIOPAY_MAX_AMOUNT_KOPEKS,
             'available_sub_options': None,
+        },
+        'severpay': {
+            'default_display_name': settings.get_severpay_display_name(),
+            'is_configured': settings.is_severpay_enabled(),
+            'default_min': settings.SEVERPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.SEVERPAY_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': None,
+        },
+        'paypear': {
+            'default_display_name': settings.get_paypear_display_name(),
+            'is_configured': settings.is_paypear_enabled(),
+            'default_min': settings.PAYPEAR_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.PAYPEAR_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'bank_card', 'name': 'Карта'},
+                {'id': 'sbp', 'name': 'СБП'},
+                {'id': 'sberpay', 'name': 'SberPay'},
+                {'id': 'tpay', 'name': 'T-Pay'},
+            ],
+        },
+        'rollypay': {
+            'default_display_name': settings.get_rollypay_display_name(),
+            'is_configured': settings.is_rollypay_enabled(),
+            'default_min': settings.ROLLYPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.ROLLYPAY_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'sbp', 'name': 'СБП'},
+                {'id': 'card', 'name': 'Карта'},
+                {'id': 'crypto', 'name': 'Криптовалюта'},
+            ],
+        },
+        'overpay': {
+            'default_display_name': settings.get_overpay_display_name(),
+            'is_configured': settings.is_overpay_enabled(),
+            'default_min': settings.OVERPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.OVERPAY_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'card', 'name': 'Карта'},
+                {'id': 'fps', 'name': 'СБП'},
+            ],
+        },
+        'aurapay': {
+            'default_display_name': settings.get_aurapay_display_name(),
+            'is_configured': settings.is_aurapay_enabled(),
+            'default_min': settings.AURAPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.AURAPAY_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'card', 'name': 'Карта'},
+                {'id': 'sbp', 'name': 'СБП'},
+            ],
+        },
+        'etoplatezhi': {
+            'default_display_name': settings.get_etoplatezhi_display_name(),
+            'is_configured': settings.is_etoplatezhi_enabled(),
+            'default_min': settings.ETOPLATEZHI_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.ETOPLATEZHI_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'card', 'name': 'Карта'},
+                {'id': 'sbp', 'name': 'СБП'},
+            ],
+        },
+        'antilopay': {
+            'default_display_name': settings.get_antilopay_display_name(),
+            'is_configured': settings.is_antilopay_enabled(),
+            'default_min': settings.ANTILOPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.ANTILOPAY_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'card', 'name': 'Карта'},
+                {'id': 'sbp', 'name': 'СБП'},
+                {'id': 'sberpay', 'name': 'SberPay'},
+            ],
+        },
+        'jupiter': {
+            'default_display_name': settings.get_jupiter_display_name(),
+            'is_configured': settings.is_jupiter_enabled(),
+            'default_min': settings.JUPITER_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.JUPITER_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'sbp', 'name': 'СБП'},
+            ],
+        },
+        'donut': {
+            'default_display_name': settings.get_donut_display_name(),
+            'is_configured': settings.is_donut_enabled(),
+            'default_min': settings.DONUT_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.DONUT_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'card', 'name': 'Карта'},
+                {'id': 'sbp', 'name': 'СБП'},
+                {'id': 'sbp_qr', 'name': 'СБП QR'},
+            ],
+        },
+        'lava': {
+            'default_display_name': settings.get_lava_display_name(),
+            'is_configured': settings.is_lava_enabled(),
+            'default_min': settings.LAVA_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.LAVA_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'card', 'name': 'Карта'},
+                {'id': 'sbp', 'name': 'СБП'},
+            ],
         },
     }
 
@@ -176,6 +288,17 @@ DEFAULT_METHOD_ORDER = [
     'freekassa_card',
     'cloudpayments',
     'kassa_ai',
+    'riopay',
+    'severpay',
+    'paypear',
+    'rollypay',
+    'overpay',
+    'aurapay',
+    'etoplatezhi',
+    'antilopay',
+    'jupiter',
+    'donut',
+    'lava',
 ]
 
 
