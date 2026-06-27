@@ -77,6 +77,8 @@ class ReferralTermsResponse(BaseModel):
     minimum_topup_rubles: float
     first_topup_bonus_kopeks: int
     first_topup_bonus_rubles: float
+    first_topup_bonus_days: int = 0
     inviter_bonus_kopeks: int
     inviter_bonus_rubles: float
+    inviter_bonus_days: int = 0
     partner_section_visible: bool = True

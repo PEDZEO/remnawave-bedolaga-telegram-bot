@@ -322,8 +322,12 @@ class MiniAppReferralTerms(BaseModel):
     minimum_topup_label: str | None = None
     first_topup_bonus_kopeks: int = 0
     first_topup_bonus_label: str | None = None
+    first_topup_bonus_days: int = 0
+    first_topup_bonus_days_label: str | None = None
     inviter_bonus_kopeks: int = 0
     inviter_bonus_label: str | None = None
+    inviter_bonus_days: int = 0
+    inviter_bonus_days_label: str | None = None
     commission_percent: float = 0.0
 
 

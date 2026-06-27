@@ -34,7 +34,9 @@ async def build_referral_info(
 
     minimum_topup_kopeks = int(referral_settings.get('minimum_topup_kopeks') or 0)
     first_topup_bonus_kopeks = int(referral_settings.get('first_topup_bonus_kopeks') or 0)
+    first_topup_bonus_days = int(referral_settings.get('first_topup_bonus_days') or 0)
     inviter_bonus_kopeks = int(referral_settings.get('inviter_bonus_kopeks') or 0)
+    inviter_bonus_days = int(referral_settings.get('inviter_bonus_days') or 0)
     commission_percent = float(
         get_effective_referral_commission_percent(user) if user else referral_settings.get('commission_percent') or 0
     )
@@ -44,8 +46,12 @@ async def build_referral_info(
         minimum_topup_label=settings.format_price(minimum_topup_kopeks),
         first_topup_bonus_kopeks=first_topup_bonus_kopeks,
         first_topup_bonus_label=settings.format_price(first_topup_bonus_kopeks),
+        first_topup_bonus_days=first_topup_bonus_days,
+        first_topup_bonus_days_label=f'{first_topup_bonus_days} дн.' if first_topup_bonus_days > 0 else None,
         inviter_bonus_kopeks=inviter_bonus_kopeks,
         inviter_bonus_label=settings.format_price(inviter_bonus_kopeks),
+        inviter_bonus_days=inviter_bonus_days,
+        inviter_bonus_days_label=f'{inviter_bonus_days} дн.' if inviter_bonus_days > 0 else None,
         commission_percent=commission_percent,
     )
 

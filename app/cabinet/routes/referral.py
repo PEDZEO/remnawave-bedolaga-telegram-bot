@@ -240,7 +240,9 @@ async def get_referral_terms():
         minimum_topup_rubles=settings.REFERRAL_MINIMUM_TOPUP_KOPEKS / 100,
         first_topup_bonus_kopeks=settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS,
         first_topup_bonus_rubles=settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS / 100,
+        first_topup_bonus_days=settings.REFERRAL_FIRST_TOPUP_BONUS_DAYS,
         inviter_bonus_kopeks=settings.REFERRAL_INVITER_BONUS_KOPEKS,
         inviter_bonus_rubles=settings.REFERRAL_INVITER_BONUS_KOPEKS / 100,
+        inviter_bonus_days=settings.REFERRAL_INVITER_BONUS_DAYS,
         partner_section_visible=settings.REFERRAL_PARTNER_SECTION_VISIBLE,
     )

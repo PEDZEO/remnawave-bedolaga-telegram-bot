@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.referral import create_referral_earning, get_user_campaign_id
+from app.database.crud.subscription import extend_subscription, get_subscription_by_user_id
 from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.models import ReferralEarning, TransactionType, User
 from app.services.notification_delivery_service import (
@@ -57,6 +58,47 @@ async def send_referral_notification(
         logger.info('✅ Уведомление отправлено пользователю', telegram_id=telegram_id)
     except Exception as e:
         logger.error('❌ Ошибка отправки уведомления пользователю', telegram_id=telegram_id, error=e)
+
+
+async def _extend_referral_subscription_days(
+    db: AsyncSession,
+    user: User,
+    days: int,
+    reason: str,
+) -> bool:
+    if days <= 0:
+        return False
+
+    subscription = await get_subscription_by_user_id(db, user.id)
+    if not subscription:
+        logger.info(
+            'Referral bonus days skipped: user has no subscription',
+            user_id=user.id,
+            days=days,
+            reason=reason,
+        )
+        return False
+
+    try:
+        await extend_subscription(db, subscription, days)
+        logger.info(
+            'Referral bonus days applied',
+            user_id=user.id,
+            subscription_id=subscription.id,
+            days=days,
+            reason=reason,
+        )
+        return True
+    except Exception as exc:
+        await db.rollback()
+        logger.error(
+            'Failed to apply referral bonus days',
+            user_id=user.id,
+            days=days,
+            reason=reason,
+            error=exc,
+        )
+        return False
 
 
 async def process_referral_registration(db: AsyncSession, new_user_id: int, referrer_id: int, bot: Bot = None):
@@ -274,8 +316,29 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                         bonus_kopeks=settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS,
                     )
 
+            if settings.REFERRAL_FIRST_TOPUP_BONUS_DAYS > 0:
+                days_ok = await _extend_referral_subscription_days(
+                    db,
+                    user,
+                    settings.REFERRAL_FIRST_TOPUP_BONUS_DAYS,
+                    'referral_first_topup_bonus_days',
+                )
+                if days_ok and bot:
+                    days_notification = (
+                        f'🎁 <b>Дни подписки добавлены!</b>\n\n'
+                        f'За первое пополнение по реферальной программе вы получили '
+                        f'+{settings.REFERRAL_FIRST_TOPUP_BONUS_DAYS} дн. к подписке.'
+                    )
+                    await send_referral_notification(
+                        bot,
+                        user.telegram_id,
+                        days_notification,
+                        user=user,
+                    )
+
             commission_amount = int(topup_amount_kopeks * commission_percent / 100)
             inviter_bonus = max(settings.REFERRAL_INVITER_BONUS_KOPEKS, commission_amount)
+            inviter_bonus_days = max(0, settings.REFERRAL_INVITER_BONUS_DAYS)
 
             if inviter_bonus > 0:
                 balance_ok = await add_user_balance(
@@ -323,6 +386,38 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                         referrer_id=referrer.id,
                         inviter_bonus=inviter_bonus,
                     )
+
+            if inviter_bonus_days > 0:
+                days_ok = await _extend_referral_subscription_days(
+                    db,
+                    referrer,
+                    inviter_bonus_days,
+                    'referral_inviter_first_topup_bonus_days',
+                )
+                if days_ok:
+                    if inviter_bonus <= 0:
+                        await create_referral_earning(
+                            db=db,
+                            user_id=referrer.id,
+                            referral_id=user.id,
+                            amount_kopeks=0,
+                            reason='referral_first_topup_days',
+                            campaign_id=campaign_id,
+                        )
+
+                    if bot:
+                        inviter_days_notification = (
+                            f'🎁 <b>Реферальный бонус к подписке!</b>\n\n'
+                            f'Ваш реферал <b>{user.full_name}</b> сделал первое пополнение.\n\n'
+                            f'К вашей подписке добавлено +{inviter_bonus_days} дн.'
+                        )
+                        await send_referral_notification(
+                            bot,
+                            referrer.telegram_id,
+                            inviter_days_notification,
+                            user=referrer,
+                            referral_name=user.full_name,
+                        )
 
         elif commission_amount > 0:
             balance_ok = await add_user_balance(

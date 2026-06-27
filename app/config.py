@@ -222,7 +222,9 @@ class Settings(BaseSettings):
 
     REFERRAL_MINIMUM_TOPUP_KOPEKS: int = 10000
     REFERRAL_FIRST_TOPUP_BONUS_KOPEKS: int = 10000
+    REFERRAL_FIRST_TOPUP_BONUS_DAYS: int = 0
     REFERRAL_INVITER_BONUS_KOPEKS: int = 10000
+    REFERRAL_INVITER_BONUS_DAYS: int = 0
     REFERRAL_COMMISSION_PERCENT: int = 25
 
     REFERRAL_PROGRAM_ENABLED: bool = True
@@ -310,6 +312,7 @@ class Settings(BaseSettings):
     SUBSCRIPTION_RENEWAL_BALANCE_THRESHOLD_KOPEKS: int = 20000
 
     MONITORING_INTERVAL: int = 60
+    INACTIVE_USER_AUTO_DELETE_ENABLED: bool = False
     INACTIVE_USER_DELETE_MONTHS: int = 3
 
     MAINTENANCE_MODE: bool = False
@@ -2664,7 +2667,9 @@ class Settings(BaseSettings):
             'program_enabled': self.is_referral_program_enabled(),
             'minimum_topup_kopeks': self.REFERRAL_MINIMUM_TOPUP_KOPEKS,
             'first_topup_bonus_kopeks': self.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS,
+            'first_topup_bonus_days': self.REFERRAL_FIRST_TOPUP_BONUS_DAYS,
             'inviter_bonus_kopeks': self.REFERRAL_INVITER_BONUS_KOPEKS,
+            'inviter_bonus_days': self.REFERRAL_INVITER_BONUS_DAYS,
             'commission_percent': self.REFERRAL_COMMISSION_PERCENT,
             'notifications_enabled': self.REFERRAL_NOTIFICATIONS_ENABLED,
             'withdrawal_enabled': self.REFERRAL_WITHDRAWAL_ENABLED,
