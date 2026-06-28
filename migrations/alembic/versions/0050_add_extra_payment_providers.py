@@ -17,6 +17,31 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _has_table(table_name: str) -> bool:
+    inspector = sa.inspect(op.get_bind())
+    return table_name in inspector.get_table_names()
+
+
+def _has_column(table_name: str, column_name: str) -> bool:
+    if not _has_table(table_name):
+        return False
+
+    inspector = sa.inspect(op.get_bind())
+    return column_name in {column['name'] for column in inspector.get_columns(table_name)}
+
+
+def _create_table_if_missing(table_name: str, *columns: sa.Column) -> None:
+    if _has_table(table_name):
+        return
+
+    op.create_table(table_name, *columns)
+
+
+def _drop_table_if_exists(table_name: str) -> None:
+    if _has_table(table_name):
+        op.drop_table(table_name)
+
+
 def _payment_table(
     table_name: str,
     provider_id_column: sa.Column,
@@ -25,7 +50,7 @@ def _payment_table(
     user_ondelete: str | None = 'SET NULL',
 ) -> None:
     user_fk = sa.ForeignKey('users.id', ondelete=user_ondelete) if user_ondelete else sa.ForeignKey('users.id')
-    op.create_table(
+    _create_table_if_missing(
         table_name,
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column('user_id', sa.Integer(), user_fk, nullable=user_nullable, index=True),
@@ -49,13 +74,14 @@ def _payment_table(
 
 
 def upgrade() -> None:
-    op.alter_column('kassa_ai_payments', 'user_id', existing_type=sa.Integer(), nullable=True)
+    if _has_column('kassa_ai_payments', 'user_id'):
+        op.alter_column('kassa_ai_payments', 'user_id', existing_type=sa.Integer(), nullable=True)
 
     _payment_table(
         'riopay_payments',
         sa.Column('riopay_order_id', sa.String(64), unique=True, nullable=True, index=True),
     )
-    op.create_table(
+    _create_table_if_missing(
         'severpay_payments',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True),
@@ -129,6 +155,7 @@ def downgrade() -> None:
         'severpay_payments',
         'riopay_payments',
     ):
-        op.drop_table(table_name)
+        _drop_table_if_exists(table_name)
 
-    op.alter_column('kassa_ai_payments', 'user_id', existing_type=sa.Integer(), nullable=False)
+    if _has_column('kassa_ai_payments', 'user_id'):
+        op.alter_column('kassa_ai_payments', 'user_id', existing_type=sa.Integer(), nullable=False)
