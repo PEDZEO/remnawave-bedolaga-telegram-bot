@@ -17,6 +17,8 @@ from app.database.crud.server_squad import (
 from app.database.crud.subscription import (
     add_subscription_servers,
     create_paid_subscription,
+    get_subscription_base_traffic_limit,
+    get_subscription_total_with_purchased_traffic,
 )
 from app.database.crud.subscription_conversion import (
     create_subscription_conversion,
@@ -376,7 +378,7 @@ class MiniAppSubscriptionPurchaseService:
         if settings.is_traffic_fixed():
             fixed_traffic_value = settings.get_fixed_traffic_limit()
         elif subscription and subscription.traffic_limit_gb is not None and not is_trial_subscription:
-            fixed_traffic_value = subscription.traffic_limit_gb
+            fixed_traffic_value = get_subscription_base_traffic_limit(subscription)
 
         default_period_days = available_periods[0] if available_periods else 30
 
@@ -1083,7 +1085,10 @@ class MiniAppSubscriptionPurchaseService:
 
             subscription.is_trial = False
             subscription.status = SubscriptionStatus.ACTIVE.value
-            subscription.traffic_limit_gb = pricing.selection.traffic_value
+            subscription.traffic_limit_gb = get_subscription_total_with_purchased_traffic(
+                pricing.selection.traffic_value,
+                subscription,
+            )
             subscription.device_limit = pricing.selection.devices
             subscription.connected_squads = pricing.selection.servers
 

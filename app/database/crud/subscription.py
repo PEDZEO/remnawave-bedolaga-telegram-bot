@@ -75,6 +75,48 @@ def is_active_paid_subscription(subscription: Subscription | None) -> bool:
     )
 
 
+def get_subscription_base_traffic_limit(subscription: Subscription | None) -> int:
+    """Return subscription traffic without temporary top-up packages.
+
+    `Subscription.traffic_limit_gb` stores the effective panel limit, so active
+    traffic purchases are already included in it. Subscription purchases and
+    renewals must use only the base portion; otherwise temporary top-ups become
+    part of the paid plan.
+    """
+    if subscription is None:
+        return settings.DEFAULT_TRAFFIC_LIMIT_GB
+
+    total_limit = int(getattr(subscription, 'traffic_limit_gb', 0) or 0)
+    if total_limit <= 0:
+        return 0
+
+    purchased_traffic = max(0, int(getattr(subscription, 'purchased_traffic_gb', 0) or 0))
+    if purchased_traffic <= 0:
+        return total_limit
+
+    base_limit = total_limit - purchased_traffic
+    if base_limit <= 0:
+        logger.warning(
+            'Purchased traffic is not below total limit; falling back to total traffic as base',
+            subscription_id=getattr(subscription, 'id', None),
+            traffic_limit_gb=total_limit,
+            purchased_traffic_gb=purchased_traffic,
+        )
+        return total_limit
+
+    return base_limit
+
+
+def get_subscription_total_with_purchased_traffic(base_traffic_limit_gb: int, subscription: Subscription | None) -> int:
+    """Return base traffic plus active temporary top-ups for panel limits."""
+    base_limit = max(0, int(base_traffic_limit_gb or 0))
+    if base_limit <= 0:
+        return 0
+
+    purchased_traffic = max(0, int(getattr(subscription, 'purchased_traffic_gb', 0) or 0))
+    return base_limit + purchased_traffic
+
+
 async def get_subscription_by_user_id(db: AsyncSession, user_id: int) -> Subscription | None:
     result = await db.execute(
         select(Subscription)
@@ -1481,26 +1523,12 @@ async def get_subscription_renewal_cost(
         total_servers_discount = servers_discount_per_month * months_in_period
 
         # В режиме fixed_with_topup при продлении используем фиксированный лимит
-        purchased_traffic = subscription.purchased_traffic_gb or 0
         if settings.is_traffic_fixed():
             traffic_price_per_month = settings.get_traffic_price(settings.get_fixed_traffic_limit())
-        # Separate base traffic from purchased to avoid wrong tier lookup
-        elif purchased_traffic > 0:
-            base_traffic_gb = (subscription.traffic_limit_gb or 0) - purchased_traffic
-            if base_traffic_gb <= 0:
-                logger.warning(
-                    'Purchased traffic >= total limit, pricing purchased portion only',
-                    subscription_id=subscription.id,
-                    traffic_limit_gb=subscription.traffic_limit_gb,
-                    purchased_traffic_gb=purchased_traffic,
-                )
-                traffic_price_per_month = settings.get_traffic_price(purchased_traffic)
-            else:
-                traffic_price_per_month = settings.get_traffic_price(base_traffic_gb) + settings.get_traffic_price(
-                    purchased_traffic
-                )
         else:
-            traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
+            traffic_price_per_month = settings.get_traffic_price(
+                get_subscription_base_traffic_limit(subscription),
+            )
         traffic_discount_percent = _get_discount_percent(
             user,
             promo_group,

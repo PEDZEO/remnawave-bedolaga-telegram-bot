@@ -18,6 +18,7 @@ from app.database.crud.subscription import (
     add_subscription_servers,
     calculate_subscription_total_cost,
     extend_subscription,
+    get_subscription_base_traffic_limit,
 )
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
@@ -330,25 +331,8 @@ class SubscriptionRenewalService:
             traffic_limit = settings.get_fixed_traffic_limit()
         # Separate base traffic from purchased to avoid wrong tier lookup
         # e.g. 25GB base + 100GB purchased = 125GB total → would round up to 250GB tier
-        elif purchased_traffic > 0:
-            base_traffic = (subscription.traffic_limit_gb or 0) - purchased_traffic
-            if base_traffic <= 0:
-                logger.warning(
-                    'Purchased traffic >= total limit, pricing purchased portion only',
-                    subscription_id=subscription.id,
-                    traffic_limit_gb=subscription.traffic_limit_gb,
-                    purchased_traffic_gb=purchased_traffic,
-                )
-                # All traffic is purchased; pass it as sole traffic_limit
-                # and clear purchased_traffic to avoid double-counting below
-                traffic_limit = purchased_traffic
-                purchased_traffic = 0
-            else:
-                traffic_limit = base_traffic
         else:
-            traffic_limit = subscription.traffic_limit_gb
-            if traffic_limit is None:
-                traffic_limit = settings.DEFAULT_TRAFFIC_LIMIT_GB
+            traffic_limit = get_subscription_base_traffic_limit(subscription)
 
         devices_limit = subscription.device_limit
         if devices_limit is None:
@@ -365,19 +349,9 @@ class SubscriptionRenewalService:
 
         months = details.get('months_in_period') or calculate_months_from_days(period_days)
 
-        # Add purchased traffic cost separately (uses its own tier price, same discount %)
-        if purchased_traffic > 0 and not settings.is_traffic_fixed():
-            purchased_price_per_month = settings.get_traffic_price(purchased_traffic)
-            traffic_discount_pct = details.get('traffic_discount_percent', 0)
-            purchased_disc_per_month = purchased_price_per_month * traffic_discount_pct // 100
-            discounted_purchased_per_month = purchased_price_per_month - purchased_disc_per_month
-            purchased_total = discounted_purchased_per_month * months
-            purchased_disc_total = purchased_disc_per_month * months
-
-            total_cost += purchased_total
-            details['traffic_price_per_month'] = details.get('traffic_price_per_month', 0) + purchased_price_per_month
-            details['total_traffic_price'] = details.get('total_traffic_price', 0) + purchased_total
-            details['traffic_discount_total'] = details.get('traffic_discount_total', 0) + purchased_disc_total
+        if purchased_traffic > 0:
+            details['temporary_purchased_traffic_gb'] = purchased_traffic
+            details['temporary_purchased_traffic_excluded'] = True
 
         base_original_total = (
             details.get('base_price_original', 0)
