@@ -698,20 +698,6 @@ async def purchase_traffic(
     # Добавляем трафик
     await add_subscription_traffic(db, subscription, request.gb)
 
-    # Обновляем purchased_traffic_gb
-    current_purchased = getattr(subscription, 'purchased_traffic_gb', 0) or 0
-    subscription.purchased_traffic_gb = current_purchased + request.gb
-
-    # Устанавливаем дату сброса трафика (только при первой докупке)
-    # При повторной докупке дата НЕ продлевается
-    if not subscription.traffic_reset_at:
-        subscription.traffic_reset_at = datetime.now(UTC) + timedelta(days=30)
-        logger.info(
-            'Set traffic_reset_at for subscription',
-            subscription_id=subscription.id,
-            traffic_reset_at=subscription.traffic_reset_at,
-        )
-
     # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
     from app.database.crud.subscription import reactivate_subscription
 

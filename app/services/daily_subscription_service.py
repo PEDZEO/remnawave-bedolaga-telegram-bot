@@ -46,13 +46,25 @@ class DailySubscriptionService:
         """Устанавливает бота для отправки уведомлений."""
         self._bot = bot
 
+    def is_daily_charges_enabled(self) -> bool:
+        """Return True when daily tariff auto-charging is enabled."""
+        return getattr(settings, 'DAILY_SUBSCRIPTIONS_ENABLED', True)
+
+    def is_traffic_resets_enabled(self) -> bool:
+        """Return True when purchased traffic expiry processing is enabled."""
+        return getattr(settings, 'TRAFFIC_TOPUP_EXPIRY_ENABLED', True)
+
     def is_enabled(self) -> bool:
         """Проверяет, включен ли сервис суточных подписок."""
-        return getattr(settings, 'DAILY_SUBSCRIPTIONS_ENABLED', True)
+        return self.is_daily_charges_enabled() or self.is_traffic_resets_enabled()
 
     def get_check_interval_minutes(self) -> int:
         """Возвращает интервал проверки в минутах."""
         return getattr(settings, 'DAILY_SUBSCRIPTIONS_CHECK_INTERVAL_MINUTES', 30)
+
+    def get_traffic_reset_check_interval_seconds(self) -> int:
+        """Return traffic top-up expiry check interval."""
+        return max(10, int(getattr(settings, 'TRAFFIC_TOPUP_EXPIRY_CHECK_INTERVAL_SECONDS', 60) or 60))
 
     async def process_daily_charges(self) -> dict:
         """
@@ -361,8 +373,29 @@ class DailySubscriptionService:
 
         # Считаем сколько ГБ нужно убрать
         total_expired_gb = sum(p.traffic_gb for p in expired_purchases)
-        old_limit = subscription.traffic_limit_gb
+        old_limit = subscription.traffic_limit_gb or 0
         old_purchased = subscription.purchased_traffic_gb or 0
+
+        now = datetime.now(UTC)
+        remaining_query = (
+            select(TrafficPurchase)
+            .where(TrafficPurchase.subscription_id == subscription_id)
+            .where(TrafficPurchase.expires_at > now)
+        )
+        remaining_result = await db.execute(remaining_query)
+        remaining_purchases = remaining_result.scalars().all()
+        remaining_purchased_gb = sum(p.traffic_gb for p in remaining_purchases)
+        actual_purchased_before_reset = total_expired_gb + remaining_purchased_gb
+
+        if actual_purchased_before_reset != old_purchased:
+            logger.warning(
+                'Purchased traffic counter mismatch; recalculating from TrafficPurchase rows',
+                subscription_id=subscription.id,
+                old_purchased=old_purchased,
+                actual_purchased_before_reset=actual_purchased_before_reset,
+                expired_gb=total_expired_gb,
+                remaining_gb=remaining_purchased_gb,
+            )
 
         # КРИТИЧЕСКАЯ ПРОВЕРКА: защита от некорректных данных
         if total_expired_gb > old_purchased:
@@ -373,10 +406,9 @@ class DailySubscriptionService:
                 old_purchased=old_purchased,
                 old_purchased_2=old_purchased,
             )
-            total_expired_gb = old_purchased
 
         # Рассчитываем базовый лимит тарифа (без докупок)
-        base_limit = old_limit - old_purchased
+        base_limit = old_limit - actual_purchased_before_reset
 
         # Получаем базовый лимит из тарифа для проверки
         if subscription.tariff_id:
@@ -403,7 +435,7 @@ class DailySubscriptionService:
             await db.delete(purchase)
 
         # Рассчитываем новый лимит
-        new_purchased = old_purchased - total_expired_gb
+        new_purchased = remaining_purchased_gb
         new_limit = base_limit + new_purchased
 
         # Двойная защита: новый лимит не может быть меньше базового
@@ -419,16 +451,6 @@ class DailySubscriptionService:
         # Обновляем подписку
         subscription.traffic_limit_gb = max(0, new_limit)
         subscription.purchased_traffic_gb = max(0, new_purchased)
-
-        # Проверяем, остались ли активные докупки
-        now = datetime.now(UTC)
-        remaining_query = (
-            select(TrafficPurchase)
-            .where(TrafficPurchase.subscription_id == subscription_id)
-            .where(TrafficPurchase.expires_at > now)
-        )
-        remaining_result = await db.execute(remaining_query)
-        remaining_purchases = remaining_result.scalars().all()
 
         if not remaining_purchases:
             # Нет больше активных докупок - сбрасываем дату
@@ -500,14 +522,35 @@ class DailySubscriptionService:
     async def start_monitoring(self):
         """Запускает периодическую проверку суточных подписок и сброса трафика."""
         self._running = True
-        interval_minutes = self.get_check_interval_minutes()
+        daily_interval_seconds = self.get_check_interval_minutes() * 60
+        traffic_interval_seconds = self.get_traffic_reset_check_interval_seconds()
+        last_daily_check_at: datetime | None = None
+        last_traffic_reset_check_at: datetime | None = None
 
-        logger.info('🔄 Запуск сервиса суточных подписок (интервал: мин)', interval_minutes=interval_minutes)
+        logger.info(
+            '🔄 Запуск сервиса суточных подписок',
+            interval_minutes=self.get_check_interval_minutes(),
+            traffic_reset_interval_seconds=traffic_interval_seconds,
+        )
 
         while self._running:
             try:
                 # Обработка суточных списаний
-                stats = await self.process_daily_charges()
+                now = datetime.now(UTC)
+                should_process_daily = self.is_daily_charges_enabled() and (
+                    last_daily_check_at is None
+                    or (now - last_daily_check_at).total_seconds() >= daily_interval_seconds
+                )
+                should_process_traffic = self.is_traffic_resets_enabled() and (
+                    last_traffic_reset_check_at is None
+                    or (now - last_traffic_reset_check_at).total_seconds() >= traffic_interval_seconds
+                )
+
+                if should_process_daily:
+                    stats = await self.process_daily_charges()
+                    last_daily_check_at = now
+                else:
+                    stats = {'checked': 0, 'charged': 0, 'suspended': 0, 'errors': 0}
 
                 if stats['charged'] > 0 or stats['suspended'] > 0:
                     logger.info(
@@ -519,7 +562,11 @@ class DailySubscriptionService:
                     )
 
                 # Обработка сброса докупленного трафика
-                traffic_stats = await self.process_traffic_resets()
+                if should_process_traffic:
+                    traffic_stats = await self.process_traffic_resets()
+                    last_traffic_reset_check_at = now
+                else:
+                    traffic_stats = {'checked': 0, 'reset': 0, 'errors': 0}
                 if traffic_stats['reset'] > 0:
                     logger.info(
                         '📊 Сброс трафика: проверено=, сброшено=, ошибок',
@@ -530,7 +577,11 @@ class DailySubscriptionService:
             except Exception as e:
                 logger.error('Ошибка в цикле проверки суточных подписок', error=e, exc_info=True)
 
-            await asyncio.sleep(interval_minutes * 60)
+            sleep_seconds = min(
+                daily_interval_seconds if self.is_daily_charges_enabled() else traffic_interval_seconds,
+                traffic_interval_seconds if self.is_traffic_resets_enabled() else daily_interval_seconds,
+            )
+            await asyncio.sleep(max(10, sleep_seconds))
 
     def stop_monitoring(self):
         """Останавливает периодическую проверку."""
