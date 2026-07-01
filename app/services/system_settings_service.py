@@ -322,6 +322,7 @@ class BotConfigurationService:
         'REMNAWAVE_USER_USERNAME_TEMPLATE': 'REMNAWAVE',
         'REMNAWAVE_AUTO_SYNC_ENABLED': 'REMNAWAVE',
         'REMNAWAVE_AUTO_SYNC_TIMES': 'REMNAWAVE',
+        'SKIP_REFERRAL_CODE': 'REFERRAL',
         'CABINET_REMNA_SUB_CONFIG': 'MINIAPP',
     }
 
@@ -594,6 +595,138 @@ class BotConfigurationService:
             'format': 'Целое число от 0 и выше.',
             'example': '3',
             'warning': 'При 0 RemnaWave не получит лимит устройств, пользователям не показываются цифры в интерфейсе.',
+        },
+        'REFERRAL_PROGRAM_ENABLED': {
+            'description': 'Глобально включает реферальную программу для пользователей бота и кабинета.',
+            'format': 'Булево значение.',
+            'example': 'true',
+            'warning': 'При выключении пользователи не смогут пользоваться реферальными ссылками и разделом рефералов.',
+        },
+        'SKIP_REFERRAL_CODE': {
+            'description': (
+                'Пропускает вопрос о реферальном или промокоде при первом запуске. '
+                'Полезно, если вы не хотите показывать отдельный шаг регистрации.'
+            ),
+            'format': 'Булево значение.',
+            'example': 'false',
+            'warning': 'При включении пользователь сможет пройти старт без ручного ввода реферального кода.',
+        },
+        'REFERRAL_MINIMUM_TOPUP_KOPEKS': {
+            'description': 'Минимальное первое пополнение реферала, после которого начисляются стартовые бонусы.',
+            'format': 'Сумма в копейках.',
+            'example': '10000 = 100 ₽',
+            'warning': 'Слишком высокий порог снижает конверсию реферальной программы.',
+        },
+        'REFERRAL_FIRST_TOPUP_BONUS_KOPEKS': {
+            'description': 'Денежный бонус на баланс новичку за первое пополнение по реферальной программе.',
+            'format': 'Сумма в копейках. 0 отключает денежный бонус новичку.',
+            'example': '10000 = 100 ₽',
+        },
+        'REFERRAL_FIRST_TOPUP_BONUS_DAYS': {
+            'description': 'Сколько дней подписки добавить новичку за первое пополнение по реферальной программе.',
+            'format': 'Целое число дней. 0 отключает бонус днями.',
+            'example': '5',
+        },
+        'REFERRAL_INVITER_BONUS_KOPEKS': {
+            'description': 'Минимальный денежный бонус пригласившему за первое пополнение его реферала.',
+            'format': 'Сумма в копейках. 0 отключает фиксированный бонус пригласившему.',
+            'example': '10000 = 100 ₽',
+            'warning': 'Фактический бонус может быть выше, если комиссия с пополнения больше фиксированной суммы.',
+        },
+        'REFERRAL_INVITER_BONUS_DAYS': {
+            'description': 'Сколько дней подписки добавить пригласившему за первое пополнение его реферала.',
+            'format': 'Целое число дней. 0 отключает бонус днями.',
+            'example': '5',
+        },
+        'REFERRAL_COMMISSION_PERCENT': {
+            'description': 'Процент комиссии, который пригласивший получает с покупок и пополнений реферала.',
+            'format': 'Процент от 0 до 100.',
+            'example': '25',
+            'warning': 'Высокий процент увеличивает расходы на реферальную программу.',
+        },
+        'REFERRAL_NOTIFICATIONS_ENABLED': {
+            'description': 'Отправляет уведомления участникам реферальной программы о начислениях и событиях.',
+            'format': 'Булево значение.',
+            'example': 'true',
+        },
+        'REFERRAL_NOTIFICATION_RETRY_ATTEMPTS': {
+            'description': 'Сколько раз повторять отправку реферального уведомления при временной ошибке Telegram.',
+            'format': 'Целое число от 0 и выше.',
+            'example': '3',
+            'dependencies': 'REFERRAL_NOTIFICATIONS_ENABLED',
+        },
+        'REFERRAL_PARTNER_SECTION_VISIBLE': {
+            'description': 'Показывает партнёрский раздел в кабинете, включая статистику и заявки на вывод.',
+            'format': 'Булево значение.',
+            'example': 'true',
+            'warning': 'Если скрыть раздел, партнёры не увидят интерфейс управления выводом в кабинете.',
+        },
+        'REFERRAL_CONTESTS_ENABLED': {
+            'description': 'Включает дополнительные конкурсные механики реферальной программы, если они настроены в проекте.',
+            'format': 'Булево значение.',
+            'example': 'false',
+        },
+        'REFERRAL_WITHDRAWAL_ENABLED': {
+            'description': 'Разрешает партнёрам запрашивать вывод накопленного реферального баланса.',
+            'format': 'Булево значение.',
+            'example': 'false',
+            'warning': 'Перед включением настройте минимальную сумму, кулдаун, реквизиты и канал уведомлений.',
+        },
+        'REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS': {
+            'description': 'Минимальная сумма, с которой пользователь может оформить заявку на вывод.',
+            'format': 'Сумма в копейках.',
+            'example': '100000 = 1000 ₽',
+            'dependencies': 'REFERRAL_WITHDRAWAL_ENABLED',
+        },
+        'REFERRAL_WITHDRAWAL_COOLDOWN_DAYS': {
+            'description': 'Минимальный интервал между заявками одного пользователя на вывод средств.',
+            'format': 'Целое число дней.',
+            'example': '30',
+            'dependencies': 'REFERRAL_WITHDRAWAL_ENABLED',
+        },
+        'REFERRAL_WITHDRAWAL_ONLY_REFERRAL_BALANCE': {
+            'description': 'Ограничивает вывод только суммой, заработанной по реферальной программе.',
+            'format': 'Булево значение.',
+            'example': 'true',
+            'warning': 'Если выключить, к выводу может учитываться не только реферальный баланс пользователя.',
+        },
+        'REFERRAL_WITHDRAWAL_REQUISITES_TEXT': {
+            'description': 'Текст-подсказка, который пользователь видит при вводе реквизитов для вывода.',
+            'format': 'Обычный текст. Оставьте пустым, чтобы использовать стандартную подсказку.',
+            'example': 'Укажите банк, номер карты или СБП и имя получателя.',
+        },
+        'REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID': {
+            'description': 'ID топика в админском чате, куда отправляются уведомления о заявках на вывод.',
+            'format': 'Числовой ID топика Telegram. Пусто = общий чат уведомлений.',
+            'example': '123',
+            'dependencies': 'REFERRAL_WITHDRAWAL_ENABLED, ADMIN_NOTIFICATIONS_CHAT_ID',
+        },
+        'REFERRAL_WITHDRAWAL_TEST_MODE': {
+            'description': 'Тестовый режим вывода: заявки можно проверять без реального списания доступного баланса.',
+            'format': 'Булево значение.',
+            'example': 'false',
+            'warning': 'Не оставляйте включённым в продакшене, если выводы должны списывать баланс.',
+        },
+        'REFERRAL_WITHDRAWAL_SUSPICIOUS_MIN_DEPOSIT_KOPEKS': {
+            'description': 'Минимальная сумма пополнения одного реферала, которая участвует в антифрод-проверках вывода.',
+            'format': 'Сумма в копейках.',
+            'example': '50000 = 500 ₽',
+            'dependencies': 'REFERRAL_WITHDRAWAL_ENABLED',
+        },
+        'REFERRAL_WITHDRAWAL_SUSPICIOUS_MAX_DEPOSITS_PER_MONTH': {
+            'description': 'Сколько пополнений от одного реферала за месяц считается нормой для антифрод-проверки.',
+            'format': 'Целое число от 1 и выше.',
+            'example': '10',
+            'dependencies': 'REFERRAL_WITHDRAWAL_ENABLED',
+        },
+        'REFERRAL_WITHDRAWAL_SUSPICIOUS_NO_PURCHASES_RATIO': {
+            'description': (
+                'Коэффициент антифрода: если реферал пополнил баланс заметно больше, чем потратил на покупки, '
+                'заявка может попасть в подозрительные.'
+            ),
+            'format': 'Дробное число. Например, 2.0 означает “пополнил в 2 раза больше, чем потратил”.',
+            'example': '2.0',
+            'dependencies': 'REFERRAL_WITHDRAWAL_ENABLED',
         },
         'CRYPTOBOT_ENABLED': {
             'description': 'Разрешает принимать криптоплатежи через CryptoBot.',

@@ -18,3 +18,37 @@ def test_ultima_account_linking_mode_has_operator_hint() -> None:
 
     assert 'Сохранение доступа' in hint['description']
     assert 'safe-merge' in hint['warning']
+
+
+def test_referral_settings_are_grouped_with_russian_hints() -> None:
+    referral_keys = [
+        'REFERRAL_PROGRAM_ENABLED',
+        'SKIP_REFERRAL_CODE',
+        'REFERRAL_MINIMUM_TOPUP_KOPEKS',
+        'REFERRAL_FIRST_TOPUP_BONUS_KOPEKS',
+        'REFERRAL_FIRST_TOPUP_BONUS_DAYS',
+        'REFERRAL_INVITER_BONUS_KOPEKS',
+        'REFERRAL_INVITER_BONUS_DAYS',
+        'REFERRAL_COMMISSION_PERCENT',
+        'REFERRAL_NOTIFICATIONS_ENABLED',
+        'REFERRAL_NOTIFICATION_RETRY_ATTEMPTS',
+        'REFERRAL_PARTNER_SECTION_VISIBLE',
+        'REFERRAL_CONTESTS_ENABLED',
+        'REFERRAL_WITHDRAWAL_ENABLED',
+        'REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS',
+        'REFERRAL_WITHDRAWAL_COOLDOWN_DAYS',
+        'REFERRAL_WITHDRAWAL_ONLY_REFERRAL_BALANCE',
+        'REFERRAL_WITHDRAWAL_REQUISITES_TEXT',
+        'REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID',
+        'REFERRAL_WITHDRAWAL_TEST_MODE',
+        'REFERRAL_WITHDRAWAL_SUSPICIOUS_MIN_DEPOSIT_KOPEKS',
+        'REFERRAL_WITHDRAWAL_SUSPICIOUS_MAX_DEPOSITS_PER_MONTH',
+        'REFERRAL_WITHDRAWAL_SUSPICIOUS_NO_PURCHASES_RATIO',
+    ]
+
+    BotConfigurationService._definitions = {}
+    BotConfigurationService.initialize_definitions()
+
+    for key in referral_keys:
+        assert BotConfigurationService.get_definition(key).category_key == 'REFERRAL'
+        assert BotConfigurationService.SETTING_HINTS[key]['description']
