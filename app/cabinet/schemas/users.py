@@ -387,6 +387,37 @@ class UpdateReferralCommissionResponse(BaseModel):
     message: str
 
 
+class UpdateUserReferralsAction(StrEnum):
+    """How to apply the referral user IDs."""
+
+    REPLACE = 'replace'
+    ADD = 'add'
+    REMOVE = 'remove'
+
+
+class UpdateUserReferralsRequest(BaseModel):
+    """Request to update users attached as referrals."""
+
+    action: UpdateUserReferralsAction = Field(
+        default=UpdateUserReferralsAction.REPLACE,
+        description='How to apply referral_user_ids',
+    )
+    referral_user_ids: list[int] = Field(
+        default_factory=list,
+        description='User IDs to attach, detach, or use as the full referrals list',
+    )
+
+
+class UpdateUserReferralsResponse(BaseModel):
+    """Response after user referrals update."""
+
+    success: bool
+    added: int = 0
+    removed: int = 0
+    total: int = 0
+    message: str
+
+
 class DeviceInfo(BaseModel):
     """Individual device info."""
 

@@ -606,7 +606,7 @@ class UserService:
         user_id: int,
         referral_user_ids: list[int],
         admin_id: int,
-    ) -> tuple[bool, dict[str, int]]:
+    ) -> tuple[bool, dict[str, Any]]:
         try:
             user = await get_user_by_id(db, user_id)
             if not user:
@@ -618,6 +618,26 @@ class UserService:
                     continue
                 if referral_id not in unique_ids:
                     unique_ids.append(referral_id)
+
+            if unique_ids:
+                existing_ids_result = await db.execute(select(User.id).where(User.id.in_(unique_ids)))
+                existing_ids = set(existing_ids_result.scalars().all())
+                missing_ids = [referral_id for referral_id in unique_ids if referral_id not in existing_ids]
+                if missing_ids:
+                    return False, {'error': 'referral_users_not_found', 'missing_ids': missing_ids}
+
+                referrer_chain_ids: set[int] = set()
+                next_referrer_id = user.referred_by_id
+                while next_referrer_id and next_referrer_id not in referrer_chain_ids:
+                    referrer_chain_ids.add(next_referrer_id)
+                    parent_result = await db.execute(
+                        select(User.referred_by_id).where(User.id == next_referrer_id)
+                    )
+                    next_referrer_id = parent_result.scalar_one_or_none()
+
+                cyclic_ids = [referral_id for referral_id in unique_ids if referral_id in referrer_chain_ids]
+                if cyclic_ids:
+                    return False, {'error': 'referral_cycle', 'cyclic_ids': cyclic_ids}
 
             current_referrals = await get_referrals(db, user_id)
             current_ids = {ref.id for ref in current_referrals}

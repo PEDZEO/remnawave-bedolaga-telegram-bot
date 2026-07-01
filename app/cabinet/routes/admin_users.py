@@ -80,6 +80,9 @@ from ..schemas.users import (
     UpdateRestrictionsResponse,
     UpdateSubscriptionRequest,
     UpdateSubscriptionResponse,
+    UpdateUserReferralsAction,
+    UpdateUserReferralsRequest,
+    UpdateUserReferralsResponse,
     UpdateUserStatusRequest,
     UpdateUserStatusResponse,
     UserAvailableTariffItem,
@@ -2145,6 +2148,87 @@ async def get_user_referrals(
         total=total,
         offset=offset,
         limit=limit,
+    )
+
+
+@router.post('/{user_id}/referrals', response_model=UpdateUserReferralsResponse)
+async def update_user_referrals(
+    user_id: int,
+    request: UpdateUserReferralsRequest,
+    admin: User = Depends(require_permission('users:referral')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Attach, detach, or replace users referred by this user."""
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='User not found',
+        )
+
+    if len(request.referral_user_ids) > 500:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Too many referral users in one request',
+        )
+
+    current_referrals = await get_referrals(db, user.id)
+    current_ids = [referral.id for referral in current_referrals]
+
+    if request.action == UpdateUserReferralsAction.ADD:
+        desired_ids = current_ids + request.referral_user_ids
+    elif request.action == UpdateUserReferralsAction.REMOVE:
+        removed_ids = set(request.referral_user_ids)
+        desired_ids = [referral_id for referral_id in current_ids if referral_id not in removed_ids]
+    else:
+        desired_ids = request.referral_user_ids
+
+    from app.services.user_service import UserService
+
+    user_service = UserService()
+    success, details = await user_service.update_user_referrals(db, user_id, desired_ids, admin.id)
+
+    if not success:
+        error_code = details.get('error')
+        if error_code == 'user_not_found':
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+        if error_code == 'referral_users_not_found':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    'code': 'referral_users_not_found',
+                    'missing_ids': details.get('missing_ids', []),
+                },
+            )
+        if error_code == 'referral_cycle':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    'code': 'referral_cycle',
+                    'cyclic_ids': details.get('cyclic_ids', []),
+                },
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Failed to update referrals',
+        )
+
+    logger.info(
+        'Admin updated user referrals from cabinet',
+        admin_id=admin.id,
+        user_id=user_id,
+        action=request.action,
+        added=details.get('added', 0),
+        removed=details.get('removed', 0),
+        total=details.get('total', 0),
+    )
+
+    return UpdateUserReferralsResponse(
+        success=True,
+        added=details.get('added', 0),
+        removed=details.get('removed', 0),
+        total=details.get('total', 0),
+        message='User referrals updated',
     )
 
 
